@@ -193,7 +193,7 @@ export function suggestEnhancedColumnMappings(
       
       // 5. Determine confidence level based on total score
       let confidenceLevel: 'High' | 'Medium' | 'Low';
-      if (totalScore >= 0.8) {
+      if (totalScore >= 0.9) {
         confidenceLevel = 'High';
       } else if (totalScore >= 0.5) {
         confidenceLevel = 'Medium';
@@ -205,7 +205,7 @@ export function suggestEnhancedColumnMappings(
       if (totalScore > 0.3) {
         columnSuggestions.push({
           dbColumn: dbCol.name,
-          similarityScore: totalScore,
+          confidenceScore: totalScore,
           isTypeCompatible: typeCompatibility > 0,
           confidenceLevel
         });
@@ -213,7 +213,7 @@ export function suggestEnhancedColumnMappings(
     });
     
     // Sort suggestions by score descending
-    columnSuggestions.sort((a, b) => b.similarityScore - a.similarityScore);
+    columnSuggestions.sort((a, b) => b.confidenceScore - a.confidenceScore);
     
     // Create the final suggestion object for this column
     suggestions[excelHeader] = {
@@ -287,19 +287,19 @@ export function createBatchColumnMappingsFromSuggestions(
     
     if (topSuggestion) {
       // If we have a high confidence match, suggest mapping
-      if (topSuggestion.confidenceLevel === 'High' && topSuggestion.similarityScore > 0.8) {
+      if (topSuggestion.confidenceLevel === 'High' && topSuggestion.confidenceScore > 0.9) {
         action = 'map';
         mappedColumn = topSuggestion.dbColumn;
         status = 'suggested';
-      } 
+      }
       // If we have a medium confidence match, suggest mapping but require review
-      else if (topSuggestion.confidenceLevel === 'Medium' && topSuggestion.similarityScore > 0.5) {
+      else if (topSuggestion.confidenceLevel === 'Medium' && topSuggestion.confidenceScore > 0.5) {
         action = 'map';
         mappedColumn = topSuggestion.dbColumn;
         status = 'pending';
       }
       // For low confidence, suggest creating a new column
-      else if (topSuggestion.similarityScore < 0.4) {
+      else if (topSuggestion.confidenceScore < 0.4) {
         action = 'create';
         mappedColumn = null;
         status = 'pending';
@@ -331,18 +331,19 @@ export function createBatchColumnMappingsFromSuggestions(
       header: excelHeader,
       sampleValue,
       mappedColumn,
-      confidenceScore: topSuggestion?.similarityScore,
+      confidenceScore: topSuggestion?.confidenceScore,
       confidenceLevel: topSuggestion?.confidenceLevel,
       suggestedColumns: columnSuggestion.suggestions.map(s => ({
         columnName: s.dbColumn,
-        similarityScore: s.similarityScore,
+        confidenceScore: s.confidenceScore,
         isTypeCompatible: s.isTypeCompatible,
         confidenceLevel: s.confidenceLevel || 'Low'
       })),
       inferredDataType: columnSuggestion.inferredDataType,
       action,
       newColumnProposal,
-      status
+      status,
+      reviewStatus: 'pending' // Add the missing reviewStatus property
     };
   });
   
@@ -375,7 +376,7 @@ export function suggestTableMappings(
       
       // Determine confidence level
       let confidenceLevel: 'High' | 'Medium' | 'Low';
-      if (similarityScore >= 0.8) {
+      if (similarityScore >= 0.9) {
         confidenceLevel = 'High';
       } else if (similarityScore >= 0.5) {
         confidenceLevel = 'Medium';
@@ -387,14 +388,15 @@ export function suggestTableMappings(
       if (similarityScore > 0.3) {
         sheetSuggestions.push({
           tableName,
-          similarityScore,
-          confidenceLevel
+          confidenceScore: similarityScore,
+          confidenceLevel,
+          matchType: similarityScore >= 0.9 ? 'exact' : similarityScore >= 0.5 ? 'partial' : 'fuzzy'
         });
       }
     });
     
     // Sort suggestions by score descending
-    sheetSuggestions.sort((a, b) => b.similarityScore - a.similarityScore);
+    sheetSuggestions.sort((a, b) => b.confidenceScore - a.confidenceScore);
     
     // Store the suggestions for this sheet
     suggestions[sheetName] = sheetSuggestions;
@@ -425,12 +427,13 @@ export function createInitialSheetProcessingStates(
       sheetName,
       headers: sheet.columns,
       sampleData: sheet.previewRows,
-      selectedTable: topSuggestion && topSuggestion.confidenceLevel === 'High' ? 
+      selectedTable: topSuggestion && topSuggestion.confidenceLevel === 'High' ?
         topSuggestion.tableName : null,
-      tableConfidenceScore: topSuggestion?.similarityScore,
+      tableConfidenceScore: topSuggestion?.confidenceScore,
       tableSuggestions: suggestions,
       columnMappings: {}, // Will be populated later
       status: 'pending',
+      sheetReviewStatus: 'pending', // Add the missing property
       rowCount: sheet.previewRows.length
     };
   });

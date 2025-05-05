@@ -32,14 +32,12 @@ export const useSchemaInfo = () => {
         try {
           infoMap[tableName] = await dbService.getTableInfo(tableName);
         } catch (infoError) {
-          console.warn(`Failed to preload info for ${tableName}:`, infoError);
           // Optionally store partial results or handle errors differently
         }
       }
       setTableInfoMap(infoMap);
       setSchemaCacheStatus('ready');
     } catch (error) {
-      console.error('Error loading schema info:', error);
       setStoreError(`Error loading database schema: ${error instanceof Error ? error.message : String(error)}`);
       setSchemaCacheStatus('error');
     } finally {
@@ -79,43 +77,21 @@ export const useBatchImportWorker = (
     // Initialize worker and setup message/error handlers
     useEffect(() => {
         workerRef.current = new Worker(new URL('./workers/batchImport.worker.ts', import.meta.url), { type: 'module' });
-        console.log('[DEBUG useBatchImportWorker] Worker initialized.');
 
         workerRef.current.onmessage = (event: MessageEvent<any>) => {
-            console.log('[DEBUG useBatchImportWorker] Received message from worker:', {
-                status: event.data?.status,
-                sheetName: event.data?.sheetProcessingState?.sheetName,
-                tableSuggestionsCount: event.data?.sheetProcessingState?.tableSuggestions?.length,
-                columnMappingsCount: event.data?.sheetProcessingState?.columnMappings ? Object.keys(event.data.sheetProcessingState.columnMappings).length : 0,
-                hasTableConfidenceScore: event.data?.sheetProcessingState?.tableConfidenceScore !== undefined,
-                hasSchemaProposals: event.data?.sheetProcessingState?.sheetSchemaProposals !== undefined,
-                error: event.data?.error
-            });
             
             // Destructure based on the actual worker result structure
             const { sheetProcessingState, status, error } = event.data;
 
             if (!sheetProcessingState && status !== 'error') {
-                console.error('[DEBUG useBatchImportWorker] Received invalid message structure from worker:', event.data);
                 _setError('Received invalid data from processing worker.');
                 return;
             }
 
             const sheetName = sheetProcessingState?.sheetName || 'unknown sheet'; // Get sheetName safely
-            console.log(`[DEBUG useBatchImportWorker] Processing result for sheet: ${sheetName}, Status: ${status}`);
 
-            if (status === 'processed' && sheetProcessingState) {
-                console.log(`[DEBUG useBatchImportWorker] Calling _updateSheetSuggestions for ${sheetName}`, {
-                    tableSuggestions: sheetProcessingState.tableSuggestions?.map((s: RankedTableSuggestion) => ({
-                        tableName: s.tableName,
-                        confidenceScore: s.confidenceScore,
-                        confidenceLevel: s.confidenceLevel,
-                        isNewTableProposal: s.isNewTableProposal
-                    })),
-                    tableConfidenceScore: sheetProcessingState.tableConfidenceScore,
-                    hasColumnMappings: !!sheetProcessingState.columnMappings,
-                    hasSchemaProposals: !!sheetProcessingState.sheetSchemaProposals
-                });
+           if (status === 'processed' && sheetProcessingState) {
+               
                 
                 // Call store action with correct arguments from sheetProcessingState
                 _updateSheetSuggestions(
@@ -132,19 +108,15 @@ export const useBatchImportWorker = (
 
                  // Update sheet status based on worker result (e.g., needsReview, ready)
                  // This might be redundant if _updateSheetSuggestions already sets it to 'needsReview'
-                 console.log(`[DEBUG useBatchImportWorker] Calling _setSheetCommitStatus for ${sheetName} with status: ${sheetProcessingState.status}`);
-                 _setSheetCommitStatus(sheetProcessingState.sheetName, sheetProcessingState.status); // Use status from worker result
+                _setSheetCommitStatus(sheetProcessingState.sheetName, sheetProcessingState.status); // Use status from worker result
 
-            } else if (status === 'error') {
-                console.error(`[DEBUG useBatchImportWorker] Worker reported error for sheet ${sheetName}:`, error);
-                _setSheetCommitStatus(sheetName, 'error', `Worker processing failed: ${error}`);
-            } else {
-                 console.warn(`[DEBUG useBatchImportWorker] Received unhandled message status: ${status} for sheet ${sheetName}`);
-            }
+           } else if (status === 'error') {
+               _setSheetCommitStatus(sheetName, 'error', `Worker processing failed: ${error}`);
+           } else {
+           }
         };
 
         workerRef.current.onerror = (error) => {
-            console.error('[DEBUG useBatchImportWorker] Worker onerror:', error);
             _setError(`Worker error: ${error.message}`);
             // Potentially set global status to error?
         };
@@ -152,7 +124,6 @@ export const useBatchImportWorker = (
         return () => {
             if (workerRef.current) {
                 workerRef.current.terminate();
-                console.log('[DEBUG useBatchImportWorker] Worker terminated.');
                 workerRef.current = null;
             }
         };
@@ -161,7 +132,6 @@ export const useBatchImportWorker = (
     // Function to post a single task to the worker
     const postWorkerTask = useCallback((sheet: SheetProcessingState) => {
         if (workerRef.current && schemaCacheStatus === 'ready') {
-            console.log(`[DEBUG useBatchImportWorker] Posting task for sheet "${sheet.sheetName}" to worker. Selected Table: ${sheet.selectedTable}`);
             const schemaCacheData = { tables: tableInfoMap }; // Use passed argument
             const taskData = {
                 sheetName: sheet.sheetName,
@@ -171,13 +141,10 @@ export const useBatchImportWorker = (
                 selectedTable: sheet.selectedTable, // Pass the current selected table
             };
             // Log task data without large arrays
-            console.log('[DEBUG useBatchImportWorker] Task Data:', { ...taskData, sampleData: `(${taskData.sampleData?.length ?? 0} rows)`, schemaCache: `(${Object.keys(taskData.schemaCache?.tables ?? {}).length} tables)` });
             workerRef.current.postMessage(taskData);
             // Optionally update sheet status to 'processing'
-            console.log(`[DEBUG useBatchImportWorker] Setting sheet "${sheet.sheetName}" status to 'processing'`);
             _setSheetCommitStatus(sheet.sheetName, 'processing'); // Set status to processing
         } else {
-            console.warn(`[DEBUG useBatchImportWorker] Cannot post task for "${sheet.sheetName}". Worker ready: ${!!workerRef.current}, Schema ready: ${schemaCacheStatus === 'ready'}`);
             // Optionally set sheet status to error if it couldn't be posted?
             // _setSheetCommitStatus(sheet.sheetName, 'error', 'Failed to initiate processing.');
         }
@@ -185,11 +152,8 @@ export const useBatchImportWorker = (
 
     // Effect to automatically post tasks when file reading is complete and schema is ready
     useEffect(() => {
-        console.log(`[DEBUG useBatchImportWorker] Checking conditions for auto-posting tasks - Schema: ${schemaCacheStatus}, Global Status: ${globalStatus}`);
-        
         // Only proceed if schema is ready and global status indicates file reading is complete
         if (schemaCacheStatus === 'ready' && globalStatus === 'fileReadComplete') {
-            console.log('[DEBUG useBatchImportWorker] Schema ready and file reading complete. Checking for pending sheets...');
             
             // Get the current sheets from the store
             const currentSheets = Object.values(sheets);
@@ -198,17 +162,13 @@ export const useBatchImportWorker = (
             // Post tasks for all pending sheets
             currentSheets.forEach(sheet => {
                 if (sheet.status === 'pending') {
-                    console.log(`[DEBUG useBatchImportWorker] Auto-posting task for pending sheet: "${sheet.sheetName}"`);
                     postWorkerTask(sheet);
                     tasksPosted++;
                 }
             });
             
-            console.log(`[DEBUG useBatchImportWorker] Auto-posted ${tasksPosted} tasks after file read completion.`);
-            
             // If tasks were posted, update global status to analyzing
             if (tasksPosted > 0) {
-                console.log('[DEBUG useBatchImportWorker] Setting global status to analyzing');
                 useBatchImportStore.getState().setGlobalStatus('analyzing');
             }
         }

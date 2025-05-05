@@ -185,6 +185,23 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
 
   // More flexible update function
   const handleMappingUpdate = (excelCol: string, changes: Partial<BatchColumnMapping>) => {
+      // Check if we need to open the new column dialog
+      if ((changes.action === 'create' && !changes.newColumnProposal) ||
+          (changes.action === 'create' && (changes as any).openDialog)) {
+          // Open the dialog for creating a new column
+          setCurrentExcelColumn(excelCol);
+          const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+          setNewColumnName(suggestedName);
+          setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
+          setNewColumnDialogOpen(true);
+          // We'll still update the mapping state to reflect the 'create' action
+          
+          // Remove the openDialog flag as it's not part of the BatchColumnMapping type
+          if ((changes as any).openDialog) {
+              delete (changes as any).openDialog;
+          }
+      }
+
       setMappings(prev => {
           // Define the default structure separately to avoid self-reference issues
           const defaultMapping: BatchColumnMapping = {
@@ -246,6 +263,9 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           setNewColumnName(suggestedName);
           setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
           setNewColumnDialogOpen(true);
+          
+          // Also update the mapping state to reflect the 'create' action
+          handleMappingUpdate(excelCol, { action: 'create' });
       } else if (!selectedValue) {
           // Handle 'Skip this column' selection
           handleMappingUpdate(excelCol, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });

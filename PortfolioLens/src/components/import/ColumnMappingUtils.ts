@@ -40,6 +40,9 @@ export function generateMappingsFromMatches(
 ): Record<string, ColumnMapping> {
   const mappings: Record<string, ColumnMapping> = {};
   
+  // Track which database columns have already been mapped to prevent duplicates
+  const mappedDbColumns = new Set<string>();
+  
   // Single debug log at start
   console.debug('Generating mappings for:', sheetInfo?.name, 'to', tableInfo?.tableName || tableInfo?.name);
   
@@ -167,10 +170,6 @@ export function generateMappingsFromMatches(
       // Force string type for fields with leading zeros
       type = 'string';
       console.debug(`[generateMappingsFromMatches] Type for "${excelCol}": Forced 'string' due to leading zeros.`);
-    } else if (inferDataTypes && sheetInfo.columnTypes && sheetInfo.columnTypes[excelCol]) {
-      // Use the type already inferred by the main dataTypeInference function
-      type = sheetInfo.columnTypes[excelCol] as ColumnType;
-      console.debug(`[generateMappingsFromMatches] Type for "${excelCol}": Using pre-inferred type '${type}' from sheetInfo.`);
     } else if (inferDataTypes) {
       // Fallback to field name inference if type wasn't pre-inferred
       try {
@@ -194,13 +193,26 @@ export function generateMappingsFromMatches(
     // Removed per-column logging
     
     // Always map all columns - either with a matched DB column or just as-is
-    if (bestMatchScore > 0.5 && bestMatch) {
-      // We found a good DB column match
-      mappings[excelCol] = {
-        excelColumn: excelCol,
-        dbColumn: bestMatch,
-        type
-      };
+    if (bestMatchScore > 0.9 && bestMatch) {
+      // We found a good DB column match with high confidence (>90%)
+      // Check if this database column has already been mapped to prevent duplicates
+      if (!mappedDbColumns.has(bestMatch)) {
+        mappings[excelCol] = {
+          excelColumn: excelCol,
+          dbColumn: bestMatch,
+          type
+        };
+        // Add to the set of mapped columns to prevent duplicates
+        mappedDbColumns.add(bestMatch);
+      } else {
+        // This database column is already mapped, use the Excel column name instead
+        console.debug(`Column "${bestMatch}" already mapped, using Excel column name for "${excelCol}" instead`);
+        mappings[excelCol] = {
+          excelColumn: excelCol,
+          dbColumn: excelCol.toLowerCase().replace(/\s+/g, '_'),
+          type
+        };
+      }
     } else {
       // No match found, but still add column with inferred type
       // Use the Excel column name as the DB column name (will be created if needed)
@@ -238,6 +250,9 @@ export function suggestColumnMappings(
   sampleData: Record<string, any>[]
 ): Record<string, ColumnMappingSuggestions> {
   const suggestions: Record<string, ColumnMappingSuggestions> = {};
+  
+  // Track which database columns have already been mapped to prevent duplicates
+  const mappedDbColumns = new Set<string>();
 
   // Normalize database columns for easier comparison
   const normalizedDbColumns = dbColumns.map(col => ({
@@ -293,7 +308,7 @@ export function suggestColumnMappings(
       
       // 5. Determine confidence level based on total score
       let confidenceLevel: 'High' | 'Medium' | 'Low';
-      if (totalScore >= 0.8) {
+      if (totalScore >= 0.9) {
         confidenceLevel = 'High';
       } else if (totalScore >= 0.5) {
         confidenceLevel = 'Medium';
@@ -315,14 +330,27 @@ export function suggestColumnMappings(
     // Sort suggestions by score descending
     columnSuggestions.sort((a, b) => b.confidenceScore - a.confidenceScore);
     
-    // Convert RankedColumnSuggestion[] to ColumnSuggestion[] for type compatibility
-    const convertedSuggestions: ColumnSuggestion[] = columnSuggestions.map(suggestion => ({
-      dbColumn: suggestion.columnName,
-      confidenceScore: suggestion.confidenceScore,
-      isTypeCompatible: suggestion.isTypeCompatible,
-      confidenceLevel: suggestion.confidenceLevel,
-      isCreateNewField: false
-    }));
+    // Filter out suggestions for columns that have already been mapped
+    // and mark columns that would be duplicates
+    const convertedSuggestions: ColumnSuggestion[] = columnSuggestions
+      .map(suggestion => {
+        const isDuplicate = mappedDbColumns.has(suggestion.columnName);
+        return {
+          dbColumn: suggestion.columnName,
+          confidenceScore: isDuplicate ? suggestion.confidenceScore * 0.5 : suggestion.confidenceScore, // Reduce score for duplicates
+          isTypeCompatible: suggestion.isTypeCompatible,
+          confidenceLevel: isDuplicate ? 'Low' : suggestion.confidenceLevel, // Lower confidence for duplicates
+          isCreateNewField: isDuplicate, // Suggest creating a new field for duplicates
+          isDuplicate: isDuplicate // Add flag to indicate this is a duplicate
+        };
+      });
+    
+    // If the top suggestion has high confidence and is not a duplicate, mark it as mapped
+    if (convertedSuggestions.length > 0 &&
+        convertedSuggestions[0].confidenceLevel === 'High' &&
+        !convertedSuggestions[0].isDuplicate) {
+      mappedDbColumns.add(convertedSuggestions[0].dbColumn);
+    }
 
     // Create the final suggestion object for this column
     suggestions[excelHeader] = {

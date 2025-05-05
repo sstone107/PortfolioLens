@@ -82,7 +82,6 @@ function rankTableSuggestions(sheetName: string, headers: string[], sampleData: 
 function calculateTypeCompatibilityScoreForTable(headers: string[], sampleData: Record<string, any>[], dbTable: CachedDbTable): number {
   // Logic to analyze sample data types for each header and compare with dbTable column types
   // Return a score (e.g., average compatibility across columns)
-  console.warn("calculateTypeCompatibilityScoreForTable not implemented");
   return 0; // Placeholder
 }
 
@@ -90,7 +89,6 @@ function calculateTypeCompatibilityScoreForTable(headers: string[], sampleData: 
 function calculateContentPatternScoreForTable(headers: string[], sampleData: Record<string, any>[], dbTable: CachedDbTable): number {
   // Logic to analyze content patterns in sample data for each header and compare with dbTable column patterns/expectations
   // Return a score
-  console.warn("calculateContentPatternScoreForTable not implemented");
   return 0; // Placeholder
 }
 
@@ -98,7 +96,6 @@ function calculateContentPatternScoreForTable(headers: string[], sampleData: Rec
 function calculateContentPatternScoreForColumn(sampleValues: any[], dbColumn: CachedDbColumn): number {
   // Logic to analyze content patterns in sampleValues and compare with dbColumn patterns/expectations
   // Return a score (0.0 to 1.0)
-  console.warn("calculateContentPatternScoreForColumn not implemented");
   return 0; // Placeholder
 }
 
@@ -215,7 +212,6 @@ function performAutoMapping(
  */
 function mapColumnTypeToSql(columnType: ColumnType | null): string {
     if (!columnType) {
-        console.warn("mapColumnTypeToSql received null columnType, defaulting to TEXT");
         return 'TEXT';
     }
     switch (columnType) {
@@ -254,26 +250,21 @@ function checkTypeCompatibility(sourceType: ColumnType | null, dbType: string): 
 
 // Main worker logic
 self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
-  console.log(`[DEBUG Worker] Received task:`, { ...event.data, sampleData: '...', schemaCache: '...' }); // Log received task data
   // Destructure selectedTable from event data
   const { sheetName, headers, sampleData, schemaCache, selectedTable: preSelectedTable } = event.data;
 
   try {
     // Convert schemaCache tables to array for AnalysisEngine
     const availableTables = Object.values(schemaCache?.tables || {}); // Add null check for schemaCache
-    console.log(`[DEBUG Worker ${sheetName}] Available tables count: ${availableTables.length}`);
 
     // 1. Generate table suggestions (always useful for the dropdown)
     const { suggestions: tableSuggestions, confidenceScore: calculatedTableConfidence } =
       AnalysisEngine.generateTableSuggestions(sheetName, headers, availableTables);
     
-    console.log(`[DEBUG Worker ${sheetName}] Generated table suggestions:`, tableSuggestions);
-
     // 2. Determine the target table: Prioritize preSelectedTable if provided
     let targetTableName: string | null = null;
     let isCreatingTable = false;
     if (preSelectedTable) {
-        console.log(`[DEBUG Worker ${sheetName}] Received preSelectedTable: ${preSelectedTable}`);
         if (preSelectedTable.startsWith('new:')) {
             targetTableName = preSelectedTable; // Keep the 'new:' prefix for identification
             isCreatingTable = true;
@@ -282,26 +273,22 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
             if (schemaCache?.tables[preSelectedTable]) {
                 targetTableName = preSelectedTable;
             } else {
-                 console.warn(`[DEBUG Worker ${sheetName}] Pre-selected table "${preSelectedTable}" not found in schema cache. Falling back to suggestions.`);
                  // Clear preSelectedTable so we fall back in the next block
                  targetTableName = null; // Explicitly nullify here
             }
         }
-        console.log(`[DEBUG Worker ${sheetName}] Using pre-selected table logic result: ${targetTableName}`);
     }
 
     // Fallback to top suggestion if no valid pre-selection or pre-selected table not found
     if (!targetTableName) {
         const topSuggestion = tableSuggestions.length > 0 ? tableSuggestions[0] : null;
         targetTableName = topSuggestion ? topSuggestion.tableName : null;
-        console.log(`[DEBUG Worker ${sheetName}] Using top suggested table: ${targetTableName}`);
     }
 
     // Use the calculated confidence score if falling back to suggestion, otherwise it might be irrelevant if user selected manually
     // Recalculate preSelectedTable validity for confidence score logic
     const wasPreSelected = !!(preSelectedTable && (preSelectedTable.startsWith('new:') || schemaCache?.tables[preSelectedTable]));
     const finalTableConfidenceScore = wasPreSelected ? undefined : calculatedTableConfidence;
-    console.log(`[DEBUG Worker ${sheetName}] Final target table: ${targetTableName}, Is Creating: ${isCreatingTable}, Confidence: ${finalTableConfidenceScore}`);
 
     // 3. Perform Column Mapping based on the determined target table
     let columnMappings: { [header: string]: BatchColumnMapping } = {};
@@ -309,7 +296,6 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
 
     // Only generate mappings if a table is selected (either existing or new)
     if (targetTableName && !isCreatingTable) {
-        console.log(`[DEBUG Worker ${sheetName}] Generating mappings for EXISTING table: ${targetTableName}`);
         // Generate mappings for an existing table
         columnMappings = AnalysisEngine.generateColumnMappings(
             headers,
@@ -324,7 +310,6 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
             availableTables // Pass available tables to look up by name
         );
     } else if (isCreatingTable) {
-        console.log(`[DEBUG Worker ${sheetName}] Generating mappings for NEW table: ${targetTableName}`);
         // For a new table, suggest creating all columns
         headers.forEach(header => {
             const inferredDataType = inferDataType(sampleData.map(row => row[header]), header);
@@ -369,7 +354,6 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
             }
         });
     } else {
-      console.log(`[DEBUG Worker ${sheetName}] No target table. Creating empty/skip mappings.`);
       // If no table selected or suggested, create empty mappings
       headers.forEach(header => {
         columnMappings[header] = {
@@ -384,9 +368,6 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
         };
       });
     }
-    
-    console.log(`[DEBUG Worker ${sheetName}] Final column mappings count: ${Object.keys(columnMappings).length}`);
-    console.log(`[DEBUG Worker ${sheetName}] Final schema proposals count: ${sheetSchemaProposals.length}`);
 
     // 4. Construct SheetProcessingState
     // Recalculate preSelectedTable validity for status logic
@@ -396,7 +377,6 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
                          : (sheetSchemaProposals.length > 0 || Object.values(columnMappings).some(m => m.action === 'skip' || (m.action === 'map' && m.confidenceLevel !== 'High')))
                            ? 'needsReview'
                            : 'ready';
-    console.log(`[DEBUG Worker ${sheetName}] Determined final status: ${finalStatus} (wasPreSelected: ${wasPreSelectedForStatus})`);
 
     const sheetProcessingState: SheetProcessingState = {
         sheetName,
@@ -412,37 +392,17 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
         sheetReviewStatus: 'pending' // Add sheetReviewStatus property
     };
 
-
-    // 5. Post results back to the main thread
-    console.log(`[DEBUG Worker ${sheetName}] Posting result back to main thread:`, {
-      sheetName: sheetProcessingState.sheetName,
-      selectedTable: sheetProcessingState.selectedTable,
-      tableConfidenceScore: sheetProcessingState.tableConfidenceScore,
-      tableSuggestionsCount: sheetProcessingState.tableSuggestions?.length || 0,
-      tableSuggestions: sheetProcessingState.tableSuggestions?.map(s => ({
-        tableName: s.tableName,
-        confidenceScore: s.confidenceScore,
-        confidenceLevel: s.confidenceLevel,
-        isNewTableProposal: s.isNewTableProposal
-      })),
-      columnMappingsCount: Object.keys(sheetProcessingState.columnMappings || {}).length,
-      status: sheetProcessingState.status
-    });
-    
     // Ensure tableSuggestions is properly initialized
     if (!sheetProcessingState.tableSuggestions) {
-      console.warn(`[DEBUG Worker ${sheetName}] tableSuggestions is undefined or null, initializing to empty array`);
       sheetProcessingState.tableSuggestions = [];
     }
     
     // Ensure each suggestion has a confidenceScore and confidenceLevel
     sheetProcessingState.tableSuggestions.forEach((suggestion, index) => {
       if (suggestion.confidenceScore === undefined) {
-        console.warn(`[DEBUG Worker ${sheetName}] Suggestion ${index} (${suggestion.tableName}) missing confidenceScore, setting to 0`);
         suggestion.confidenceScore = 0;
       }
       if (!suggestion.confidenceLevel) {
-        console.warn(`[DEBUG Worker ${sheetName}] Suggestion ${index} (${suggestion.tableName}) missing confidenceLevel, setting based on score`);
         suggestion.confidenceLevel = AnalysisEngine.getConfidenceLevel(suggestion.confidenceScore);
       }
     });
@@ -454,7 +414,6 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
     self.postMessage(result);
 
   } catch (error: any) {
-    console.error(`[DEBUG Worker ${sheetName}] Error processing sheet:`, error);
     const result: WorkerResultData = {
       status: 'error',
       error: error.message || 'Unknown worker error',
@@ -462,8 +421,6 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
     self.postMessage(result);
   }
 };
-
-console.log(`[Worker ${self.name || ''}] Initialized.`);
 
 // Ensure TypeScript knows this is a worker
 export default null;

@@ -114,7 +114,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
   const importSteps = ['Upload file', 'Map sheets to tables', 'Map columns', 'Review and import'];
 
   const goToNextStep = useCallback(() => {
-    console.log('[DEBUG BatchImporter] goToNextStep called.');
+    
     setImportStep(current => Math.min(current + 1, importSteps.length - 1));
   }, []);
 
@@ -124,7 +124,6 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
   }, []);
 
   const handleFileLoaded = useCallback(async (workbookInfo: WorkbookInfo, fileObj: File) => {
-    console.log('[DEBUG BatchImporter] handleFileLoaded:', fileObj.name);
     _resetState();
     _setFile(fileObj);
     _setGlobalStatus('readingFile');
@@ -135,11 +134,9 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
 
       const sheetDataPromises = workbookInfo.sheets.map(async (sheet) => {
         try {
-          console.log(`[DEBUG BatchImporter] Reading sheet: ${sheet.name}`);
           const fullSheetData = await FileReader.getSheetData(fileObj, sheet.name);
           const headers = fullSheetData.length > 0 ? Object.keys(fullSheetData[0]) : [];
           const sampleData = fullSheetData.slice(0, 25); // Increased sample size to 25
-          console.log(`[DEBUG BatchImporter] Calling _setSheetData for ${sheet.name} with ${sampleData.length} sample rows.`);
           _setSheetData(sheet.name, headers, sampleData, sheet.rowCount);
           initialLocalSelected[sheet.name] = true;
           initialLocalSkipped[sheet.name] = false;
@@ -150,7 +147,6 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
       });
 
       await Promise.all(sheetDataPromises);
-      console.log('[DEBUG BatchImporter] Finished reading all sheets.');
 
       setLocalSelectedSheets(initialLocalSelected);
       setLocalSkippedSheets(initialLocalSkipped);
@@ -170,12 +166,10 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
       setSnackbarOpen(true);
 
       // Set status to indicate file reading is done, let the useEffect handle processing start
-      console.log('[DEBUG BatchImporter] Setting globalStatus to fileReadComplete.');
       
       // Ensure schema cache status is ready before setting fileReadComplete
       const currentSchemaStatus = useBatchImportStore.getState().schemaCacheStatus;
       if (currentSchemaStatus !== 'ready') {
-        console.log(`[DEBUG BatchImporter] Schema cache status is ${currentSchemaStatus}, setting to ready.`);
         _setSchemaCacheStatus('ready');
       }
       

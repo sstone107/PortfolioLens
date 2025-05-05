@@ -622,6 +622,9 @@ export class MappingService {
       return false; // Types are not compatible
     };
 
+    // Track which database columns have already been mapped to prevent duplicates
+    const mappedDbColumns = new Set<string>();
+
     // Process each Excel column
     for (const excelCol of excelColumns) {
       const sampleValues = sheetData.map(row => row[excelCol]);
@@ -640,7 +643,7 @@ export class MappingService {
 
         // Determine confidence level
         let confidenceLevel: 'High' | 'Medium' | 'Low';
-        if (combinedScore >= 0.8 && typeCompatible) {
+        if (combinedScore >= 0.9 && typeCompatible) {
           confidenceLevel = 'High';
         } else if (combinedScore >= 0.5) {
           confidenceLevel = 'Medium';
@@ -648,11 +651,22 @@ export class MappingService {
           confidenceLevel = 'Low';
         }
 
+        // Check if this database column has already been mapped
+        const isDuplicate = mappedDbColumns.has(dbCol.columnName);
+        
+        // If it's a duplicate, reduce the confidence score and level
+        const adjustedScore = isDuplicate ? combinedScore * 0.5 : combinedScore;
+        let adjustedConfidenceLevel = confidenceLevel;
+        if (isDuplicate) {
+          adjustedConfidenceLevel = 'Low'; // Lower confidence for duplicates
+        }
+        
         suggestions.push({
           dbColumn: dbCol.columnName,
-          confidenceScore: combinedScore,
+          confidenceScore: adjustedScore,
           isTypeCompatible: typeCompatible,
-          confidenceLevel: confidenceLevel,
+          confidenceLevel: adjustedConfidenceLevel,
+          isDuplicate: isDuplicate // Add flag to indicate this is a duplicate
         });
       }
 
@@ -667,6 +681,15 @@ export class MappingService {
 
       // Sort suggestions by combined score in descending order
       suggestions.sort((a, b) => b.confidenceScore - a.confidenceScore);
+
+      // If the top suggestion has high confidence and is not a duplicate, mark it as mapped
+      const topSuggestion = suggestions[0];
+      if (topSuggestion &&
+          topSuggestion.confidenceLevel === 'High' &&
+          !topSuggestion.isDuplicate &&
+          !topSuggestion.isCreateNewField) {
+        mappedDbColumns.add(topSuggestion.dbColumn);
+      }
 
       // Store the suggestions for this Excel column
       columnSuggestions[excelCol] = {

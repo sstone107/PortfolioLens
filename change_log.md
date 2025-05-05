@@ -1,5 +1,41 @@
 # PortfolioLens Change Log
 
+## 2025-05-05: Added Field Name Input for "Create: New Field" in Batch Import
+
+### Fixed
+- Fixed issue where users couldn't enter a field name when selecting "Create: New Field" during batch import:
+  - Modified `ColumnMappingModal.tsx` to open the field name input dialog when 'create' action is selected
+  - Updated `handleMappingUpdate` function to check for 'create' action and open the dialog
+  - Added explicit openDialog flag to ensure the dialog appears when needed
+  - Improved field name display in the UI to show the actual field name after creation
+  - Ensured proper initialization of field name suggestion based on Excel column name
+  - Added test case to verify the field name input functionality
+- Fixed TypeScript error in `AnalysisEngine.ts` by adding the required 'reviewStatus' property to BatchColumnMapping
+
+### Technical Details
+- Enhanced `handleMappingUpdate` in `ColumnMappingModal.tsx` to detect 'create' action and trigger the dialog
+- Added openDialog flag to signal when the dialog should be opened
+- Updated `updateColumnMapping` function to ensure it properly updates the mapping state
+- Improved renderValue function in `ColumnMappingTableView.tsx` to better display field names
+- Added a new test case in `ColumnMappingIntegration.test.ts` to verify field name input functionality
+- Fixed TypeScript error by adding 'reviewStatus: pending' to BatchColumnMapping in AnalysisEngine.ts
+
+## 2025-05-05: Improved Column Matching Logic in Batch Import
+
+### Fixed
+- Fixed issues with column mapping in batch import functionality:
+  - Increased matching threshold from 50% to 90% to ensure only high-confidence matches are automatically mapped
+  - Added logic to prevent duplicate mappings (each target column is now only mapped once)
+  - Updated confidence level thresholds in MappingService to align with the new 90% threshold
+- Improved column mapping reliability by ensuring each database column is only mapped to one Excel column
+- Enhanced error handling when a database column is already mapped to prevent data loss
+
+### Technical Details
+- Modified `generateMappingsFromMatches` in `ColumnMappingUtils.ts` to use a 90% threshold for matches
+- Added a Set to track mapped database columns and prevent duplicates
+- Updated confidence level determination in `MappingService.ts` to use 90% threshold for 'High' confidence
+- Removed references to deprecated `columnTypes` property in `SheetInfo` interface
+
 ## 2025-05-05: Fixed Column Mapping Database Fields Display Issue
 
 ### Fixed

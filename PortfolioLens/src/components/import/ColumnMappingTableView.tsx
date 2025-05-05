@@ -138,8 +138,11 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                       onChange={(e) => {
                           const selectedValue = e.target.value as string;
                           if (selectedValue === 'create-new-column') {
-                              // Signal intent to create - parent modal handles dialog
-                              onMappingUpdate(excelCol, { action: 'create' });
+                              // For 'create-new-column', we need to pass a special flag to trigger the dialog
+                              onMappingUpdate(excelCol, {
+                                  action: 'create',
+                                  openDialog: true // Add this flag to signal that the dialog should be opened
+                              });
                           } else if (!selectedValue) { // Empty value means skip
                               onMappingUpdate(excelCol, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });
                           } else { // Map to existing column
@@ -157,7 +160,11 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                       }}
                       renderValue={(selectedValue) => {
                         if (mapping.action === 'skip' || !selectedValue) return <em>Skip Column</em>;
-                        if (mapping.action === 'create') return `✨ Create: ${mapping.newColumnProposal?.columnName || 'New Field'}`;
+                        if (mapping.action === 'create') {
+                          // Show the field name if available, otherwise show a placeholder
+                          const fieldName = mapping.newColumnProposal?.columnName || mapping.mappedColumn;
+                          return `✨ Create: ${fieldName || 'New Field'}`;
+                        }
                         // selectedValue should be the db column name if action is 'map'
                         return selectedValue;
                       }}

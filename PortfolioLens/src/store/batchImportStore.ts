@@ -106,16 +106,8 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
   startProcessingSheets: () => set({ globalStatus: 'analyzing' }), // Corrected status
 
   updateSheetSuggestions: (sheetName, tableSuggestions, columnMappings, tableConfidenceScore, sheetSchemaProposals) => set((state) => {
-      console.log(`[DEBUG Store] updateSheetSuggestions called for sheet: ${sheetName}`, {
-          tableSuggestionsCount: tableSuggestions?.length || 0,
-          columnMappingsCount: Object.keys(columnMappings || {}).length,
-          hasTableConfidenceScore: tableConfidenceScore !== undefined,
-          hasSchemaProposals: sheetSchemaProposals !== undefined
-      });
-      
       const sheet = state.sheets[sheetName];
       if (!sheet) {
-          console.error(`[DEBUG Store] Sheet ${sheetName} not found in state!`);
           return {};
       }
 
@@ -123,16 +115,6 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
       const topExistingSuggestion = tableSuggestions.find(s => !s.isNewTableProposal);
       const newTableSuggestion = tableSuggestions.find(s => s.isNewTableProposal);
       
-      console.log(`[DEBUG Store] Processing suggestions for ${sheetName}:`, {
-          topExistingSuggestion: topExistingSuggestion ? {
-              tableName: topExistingSuggestion.tableName,
-              confidenceScore: topExistingSuggestion.confidenceScore,
-              confidenceLevel: topExistingSuggestion.confidenceLevel
-          } : 'None',
-          hasNewTableSuggestion: !!newTableSuggestion,
-          newTableName: newTableSuggestion?.tableName
-      });
-
       let autoSelectedTable: string | null = null;
       let autoSelectedScore: number | undefined = undefined;
       let isNewTableSelected = false;
@@ -141,29 +123,20 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
       if (topExistingSuggestion && topExistingSuggestion.confidenceScore >= 0.8) {
           autoSelectedTable = topExistingSuggestion.tableName;
           autoSelectedScore = topExistingSuggestion.confidenceScore;
-          console.log(`[DEBUG Store] Auto-selected high-confidence existing table: ${autoSelectedTable} (score: ${autoSelectedScore})`);
       }
       // If no high-confidence existing table, consider the new table proposal if it exists
       else if (newTableSuggestion) {
           autoSelectedTable = newTableSuggestion.tableName;
           autoSelectedScore = undefined; // Score not applicable for new
           isNewTableSelected = true;
-          console.log(`[DEBUG Store] Auto-selected new table proposal: ${autoSelectedTable}`);
       }
       // Otherwise, select the best existing suggestion, even if low confidence
       else if (topExistingSuggestion) {
           autoSelectedTable = topExistingSuggestion.tableName;
           autoSelectedScore = topExistingSuggestion.confidenceScore;
-          console.log(`[DEBUG Store] Auto-selected best existing table (low confidence): ${autoSelectedTable} (score: ${autoSelectedScore})`);
       }
-      else {
-          console.log(`[DEBUG Store] No table suggestions available for auto-selection`);
-      }
-
 
       // Initialize review status for columns
-      console.log(`[DEBUG Store] Initializing review status for ${Object.keys(columnMappings).length} column mappings`);
-      
       const reviewedColumnMappings = Object.entries(columnMappings).reduce((acc, [header, mapping]) => {
           acc[header] = {
               ...mapping,
@@ -172,9 +145,6 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           return acc;
       }, {} as { [header: string]: BatchColumnMapping });
       
-      console.log(`[DEBUG Store] Initialized ${Object.keys(reviewedColumnMappings).length} column mappings with 'pending' review status`);
-
-
       const updatedSheet: SheetProcessingState = {
           ...sheet,
           tableSuggestions,
@@ -187,23 +157,12 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           sheetReviewStatus: 'pending', // Reset sheet review status on new suggestions
       };
       
-      console.log(`[DEBUG Store] Updated sheet state for ${sheetName}:`, {
-          selectedTable: updatedSheet.selectedTable,
-          isNewTable: updatedSheet.isNewTable,
-          tableConfidenceScore: updatedSheet.tableConfidenceScore,
-          status: updatedSheet.status,
-          sheetReviewStatus: updatedSheet.sheetReviewStatus,
-          hasSchemaProposals: !!updatedSheet.sheetSchemaProposals && updatedSheet.sheetSchemaProposals.length > 0
-      });
-
       const updatedSheets = { ...state.sheets, [sheetName]: updatedSheet };
 
       // Check if all sheets have finished analysis to move to global review state
       const allSheetsAnalyzed = Object.values(updatedSheets)
           .every(s => s.status !== 'pending' && s.status !== 'analyzing');
           
-      console.log(`[DEBUG Store] All sheets analyzed: ${allSheetsAnalyzed}, Setting global status: ${allSheetsAnalyzed ? 'review' : state.globalStatus}`);
-
       return {
           sheets: updatedSheets,
           globalStatus: allSheetsAnalyzed ? 'review' : state.globalStatus,
@@ -349,7 +308,6 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                       key = `new_table:${proposal.tableName}`;
                   } else {
                       // Should not happen with current types, but good for safety
-                      console.warn("Unknown proposal type encountered:", proposal);
                       return; // Skip unknown proposal types
                   }
 
@@ -510,12 +468,12 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
 
   approveAllHighConfidenceSheets: () => set((state) => {
       const updatedSheets = { ...state.sheets };
-      let changed = false;
+      
+      // Process each sheet
       Object.entries(updatedSheets).forEach(([sheetName, sheet]) => {
-          const confidenceLevel = sheet.tableConfidenceScore ? AnalysisEngine.getConfidenceLevel(sheet.tableConfidenceScore) : 'Low'; // Use imported AnalysisEngine
-          if (sheet.sheetReviewStatus === 'pending' && confidenceLevel === 'High' && !sheet.isNewTable) { // Only approve existing high-confidence tables automatically
-              changed = true;
-              // Approve all columns within the sheet that are pending or modified
+          // Only auto-approve sheets with high confidence
+          if (sheet.tableConfidenceScore && sheet.tableConfidenceScore >= 0.8) {
+              // Approve all pending/modified columns within the sheet
               const approvedColumnMappings = Object.entries(sheet.columnMappings).reduce((acc, [header, mapping]) => {
                   acc[header] = {
                       ...mapping,
@@ -523,89 +481,120 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                   };
                   return acc;
               }, {} as { [header: string]: BatchColumnMapping });
-
+              
+              // Update the sheet
               updatedSheets[sheetName] = {
                   ...sheet,
                   columnMappings: approvedColumnMappings,
-                  sheetReviewStatus: determineSheetReviewStatus(approvedColumnMappings), // Recalculate based on columns
-                  status: 'ready', // Mark as ready
+                  sheetReviewStatus: 'approved',
+                  status: 'ready', // Mark sheet as ready for commit
               };
           }
       });
-      // Important: Return the state update correctly for Zustand
-      return changed ? { sheets: updatedSheets } : state; // Return original state if no changes
+      
+      return { sheets: updatedSheets };
   }),
 
   approveAllColumnsInSheet: (sheetName) => set((state) => {
       const sheet = state.sheets[sheetName];
       if (!sheet) return {};
+      
       const approvedColumnMappings = Object.entries(sheet.columnMappings).reduce((acc, [header, mapping]) => {
-          acc[header] = { ...mapping, reviewStatus: 'approved' as ReviewStatus }; // Ensure type
+          acc[header] = { ...mapping, reviewStatus: 'approved' };
           return acc;
       }, {} as { [header: string]: BatchColumnMapping });
-      const newSheetState: SheetProcessingState = { ...sheet, columnMappings: approvedColumnMappings, sheetReviewStatus: 'approved' };
+      
       return {
           sheets: {
               ...state.sheets,
-              [sheetName]: newSheetState
-          }
+              [sheetName]: {
+                  ...sheet,
+                  columnMappings: approvedColumnMappings,
+                  sheetReviewStatus: 'approved',
+                  status: 'ready', // Mark sheet as ready for commit
+              },
+          },
       };
   }),
 
   rejectAllColumnsInSheet: (sheetName) => set((state) => {
       const sheet = state.sheets[sheetName];
       if (!sheet) return {};
+      
       const rejectedColumnMappings = Object.entries(sheet.columnMappings).reduce((acc, [header, mapping]) => {
-          acc[header] = { ...mapping, reviewStatus: 'rejected' as ReviewStatus }; // Ensure type
+          acc[header] = { ...mapping, reviewStatus: 'rejected' };
           return acc;
       }, {} as { [header: string]: BatchColumnMapping });
-      const newSheetState: SheetProcessingState = { ...sheet, columnMappings: rejectedColumnMappings, sheetReviewStatus: 'rejected' };
+      
       return {
           sheets: {
               ...state.sheets,
-              [sheetName]: newSheetState
-          }
+              [sheetName]: {
+                  ...sheet,
+                  columnMappings: rejectedColumnMappings,
+                  sheetReviewStatus: 'rejected',
+                  status: 'ready', // Still 'ready' in terms of processing, but won't be committed
+              },
+          },
       };
   }),
 
   setSheetReviewStatus: (sheetName, status) => set((state) => {
       const sheet = state.sheets[sheetName];
       if (!sheet) return {};
-      const newSheetState: SheetProcessingState = { ...sheet, sheetReviewStatus: status };
+      
       return {
-          sheets: { ...state.sheets, [sheetName]: newSheetState }
+          sheets: {
+              ...state.sheets,
+              [sheetName]: {
+                  ...sheet,
+                  sheetReviewStatus: status,
+              },
+          },
       };
   }),
 
   setColumnReviewStatus: (sheetName, header, status) => set((state) => {
       const sheet = state.sheets[sheetName];
       if (!sheet || !sheet.columnMappings[header]) return {};
+      
       const updatedMappings = {
           ...sheet.columnMappings,
-          [header]: { ...sheet.columnMappings[header], reviewStatus: status as ReviewStatus }, // Ensure type
+          [header]: { ...sheet.columnMappings[header], reviewStatus: status },
       };
-      const newSheetState: SheetProcessingState = {
-          ...sheet,
-          columnMappings: updatedMappings,
-          sheetReviewStatus: determineSheetReviewStatus(updatedMappings),
-      };
+      
       return {
           sheets: {
               ...state.sheets,
-              [sheetName]: newSheetState,
+              [sheetName]: {
+                  ...sheet,
+                  columnMappings: updatedMappings,
+                  sheetReviewStatus: determineSheetReviewStatus(updatedMappings),
+              },
           },
       };
   }),
-
 }));
 
-// Helper function to determine the overall sheet review status based on its columns
+// Helper function to determine sheet review status based on column review statuses
 const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchColumnMapping }): SheetReviewStatus => { // Ensure correct return type
-    const statuses = Object.values(columnMappings).map(m => m.reviewStatus);
-    if (statuses.every(s => s === 'approved')) return 'approved';
-    if (statuses.every(s => s === 'rejected')) return 'rejected';
-    if (statuses.some(s => s === 'approved') && statuses.some(s => s !== 'approved')) return 'partiallyApproved'; // Mix of approved and others
-    if (statuses.some(s => s === 'rejected') && statuses.some(s => s !== 'rejected')) return 'partiallyApproved'; // Or mix of rejected and others
-    if (statuses.some(s => s === 'modified')) return 'pending'; // If any are modified, overall is pending review
-    return 'pending'; // Default if all are pending
+    const columnStatuses = Object.values(columnMappings).map(m => m.reviewStatus);
+    
+    // If any column is rejected, the sheet is partially approved
+    if (columnStatuses.includes('rejected')) {
+        return 'partiallyApproved';
+    }
+    
+    // If all columns are approved, the sheet is approved
+    if (columnStatuses.every(s => s === 'approved')) {
+        return 'approved';
+    }
+    
+    // If any column is modified, the sheet is pending
+    if (columnStatuses.includes('modified')) {
+        return 'pending';
+    }
+    
+    // Default to pending
+    return 'pending';
 };
