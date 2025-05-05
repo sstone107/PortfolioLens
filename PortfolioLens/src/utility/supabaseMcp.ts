@@ -207,7 +207,7 @@ export async function executeSql(
     const { supabaseClient } = await import('./supabaseClient');
     
     // Always use 'exec_sql' for consistency (the server expects this name)
-    // Attempt 2: Direct Supabase RPC ('exec_sql_secure') - Corrected
+    // Attempt 2: Direct Supabase RPC ('exec_sql_secure')
     const { data, error } = await supabaseClient.rpc('exec_sql_secure', {
       query_text: query,
       parameters: params // Corrected parameter name

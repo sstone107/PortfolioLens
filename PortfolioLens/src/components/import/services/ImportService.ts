@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { ImportJob, ColumnMapping, MissingColumnInfo, ColumnType } from '../types';
+import { ImportJob, ColumnMapping, MissingColumnInfo, ColumnType, NewColumnProposal } from '../types'; // Added NewColumnProposal
 import { supabaseClient } from '../../../utility';
 import { MetadataService } from './MetadataService';
 import { executeSql, applyMigration } from '../../../utility/supabaseMcp';
@@ -22,11 +22,15 @@ export class ImportService {
   private client: SupabaseClient | undefined;
   private metadataService: MetadataService;
   
-  constructor(metadataService?: MetadataService, customClient?: SupabaseClient) {
-    this.client = customClient;
-    this.metadataService = metadataService || new MetadataService(this.client);
+  // Constructor now requires MetadataService
+  constructor(metadataService: MetadataService, customClient?: SupabaseClient) {
+    this.client = customClient; // Keep client for potential direct use if needed, though MCP is preferred
+    if (!metadataService) {
+      throw new Error("ImportService requires a MetadataService instance.");
+    }
+    this.metadataService = metadataService;
   }
-  
+
   /**
    * Process batch import of multiple sheets to multiple tables
    * @param jobs - Array of ImportJob objects with import configuration
@@ -54,40 +58,38 @@ export class ImportService {
           };
           continue;
         }
-        
-        // Check for missing columns if needed
-        let missingColumns: MissingColumnInfo[] = [];
-        if (createMissingColumns) {
-          missingColumns = await this.metadataService.detectMissingColumns(
-            job.tableName,
-            job.mapping
-          );
-          
-          if (missingColumns.length > 0) {
-            // Create missing columns
-            const createResult = await this.metadataService.createMissingColumns(
-              job.tableName,
-              missingColumns
-            );
-            
-            if (!createResult.success) {
-              results[job.sheetName] = {
-                success: false,
-                message: `Failed to create missing columns: ${createResult.message}`,
-                rowCount: 0
-              };
-              continue;
-            }
+
+        // --- Apply Schema Changes based on Proposals ---
+        let columnsCreated: string[] = [];
+        if (job.newColumnProposals && job.newColumnProposals.length > 0) {
+          console.log(`[ImportService] Applying schema changes for ${job.tableName} based on ${job.newColumnProposals.length} proposals.`);
+          const schemaResult = await this.applySchemaChanges(job.tableName, job.newColumnProposals);
+
+          if (!schemaResult.success) {
+            results[job.sheetName] = {
+              success: false,
+              message: `Failed to apply schema changes: ${schemaResult.message}`,
+              rowCount: 0
+            };
+            // Update job status with schema failure
+            await this.updateJobStatus(job.id, 'failed', 0, `Schema change failed: ${schemaResult.message}`);
+            continue; // Stop processing this job if schema changes fail
           }
+          columnsCreated = schemaResult.columnsCreated || [];
+          console.log(`[ImportService] Schema changes applied successfully for ${job.tableName}. Columns created: ${columnsCreated.join(', ')}`);
+        } else {
+           console.log(`[ImportService] No new column proposals for ${job.tableName}.`);
         }
-        
-        // Process the data
+        // --- End Schema Changes ---
+
+        // Process the data, passing proposals to handle createStructureOnly
         const importResult = await this.importData(
           job.tableName,
           sheetData,
-          job.mapping
+          job.mapping,
+          job.newColumnProposals // Pass proposals
         );
-        
+
         // Update job status
         await this.updateJobStatus(
           job.id,
@@ -96,11 +98,11 @@ export class ImportService {
           importResult.success ? undefined : importResult.message
         );
         
-        // Add created columns to result if any
-        if (missingColumns.length > 0) {
-          importResult.columnsCreated = missingColumns.map(col => col.columnName);
+        // Add created columns to result if any were created
+        if (columnsCreated.length > 0) {
+          importResult.columnsCreated = columnsCreated;
         }
-        
+
         results[job.sheetName] = importResult;
       } catch (error: any) {
         console.error(`Error processing import job for ${job.sheetName}:`, error);
@@ -134,9 +136,17 @@ export class ImportService {
   private async importData(
     tableName: string,
     data: Record<string, any>[],
-    mapping: Record<string, ColumnMapping>
+    mapping: Record<string, ColumnMapping>,
+    newColumnProposals?: NewColumnProposal[] // Add proposals parameter
   ): Promise<ImportResult> {
     try {
+      // Create a set of columns that should only have structure created
+      const structureOnlyColumns = new Set(
+        (newColumnProposals || [])
+          .filter(p => p.createStructureOnly)
+          .map(p => p.columnName)
+      );
+
       if (!data.length) {
         return {
           success: false,
@@ -149,12 +159,16 @@ export class ImportService {
       const transformedData = data.map(row => {
         const transformedRow: Record<string, any> = {};
         
-        // Process each mapping
+        // Process each mapping, skipping structure-only columns
         Object.values(mapping).forEach(map => {
-          if (!map.dbColumn) return;
-          
+          // Skip if no dbColumn or if it's marked as structure-only
+          if (!map.dbColumn || structureOnlyColumns.has(map.dbColumn)) {
+             console.log(`[ImportService] Skipping data import for column: ${map.dbColumn} (Structure only or no mapping)`);
+             return;
+          }
+
           let value = row[map.excelColumn];
-          
+
           // Apply type conversion
           if (value !== null && value !== undefined) {
             switch (map.type) {
@@ -296,7 +310,58 @@ export class ImportService {
     
     return insertedCount;
   }
-  
+
+  /**
+   * Apply schema changes (add columns) based on proposals.
+   * @param tableName - Target table name
+   * @param proposals - Array of NewColumnProposal objects
+   * @returns Result indicating success and columns created
+   */
+  private async applySchemaChanges(
+    tableName: string,
+    proposals: NewColumnProposal[]
+  ): Promise<{ success: boolean; message: string; columnsCreated?: string[] }> {
+    if (!proposals || proposals.length === 0) {
+      return { success: true, message: 'No schema changes proposed.' };
+    }
+
+    // Filter out any proposals that might already exist (though ideally proposals are pre-filtered)
+    // This requires fetching current table columns - consider if this check is needed here or earlier
+    // For now, assume proposals are for genuinely new columns
+
+    // Generate ALTER TABLE clauses
+    const addColumnClauses = proposals.map(col =>
+        // Ensure proper quoting for column names and use proposed SQL type
+        `ADD COLUMN "${col.columnName}" ${col.sqlType || 'TEXT'} ${col.isNullable === false ? 'NOT NULL' : ''} ${col.defaultValue ? `DEFAULT ${col.defaultValue}` : ''}`
+    ).join(',\n');
+
+    const migrationName = `add_cols_${tableName}_${Date.now()}`;
+    const sql = `ALTER TABLE public."${tableName}"\n${addColumnClauses};`;
+
+    console.log(`[ImportService] Applying migration to add columns: ${migrationName}`);
+    console.log(sql);
+
+    try {
+      // Use applyMigration for schema changes (delegated via DatabaseService)
+      // Assuming applyMigration is available or called through an injected service/utility
+      const result = await applyMigration(migrationName, sql); // Use the imported MCP function
+      console.log('[ImportService] Add columns migration result:', result);
+
+      // Check result format - adjust based on actual applyMigration response
+      if (result && (result.success || !result.error)) { // Example check
+           const createdColumns = proposals.map(p => p.columnName);
+           return { success: true, message: `Successfully added ${proposals.length} columns to ${tableName}.`, columnsCreated: createdColumns };
+      } else {
+           const errorMsg = result?.error?.message || JSON.stringify(result);
+           console.error(`[ImportService] Failed to add columns to ${tableName}: ${errorMsg}`);
+           return { success: false, message: `Failed to add columns to ${tableName}: ${errorMsg}` };
+      }
+    } catch (error) {
+      console.error(`[ImportService] Error applying schema changes for ${tableName}:`, error);
+      return { success: false, message: `Error applying schema changes: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
   /**
    * Update import job status
    * @param jobId - Job ID

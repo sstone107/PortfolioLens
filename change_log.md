@@ -1,5 +1,23 @@
 # PortfolioLens Change Log
 
+## 2025-05-05: Fixed Column Mapping Database Fields Display Issue
+
+### Fixed
+- Fixed critical issue where existing database columns weren't loading in the column mapping interface:
+  - Corrected SQL query syntax in `DatabaseService.getColumns()` to properly use single quotes for string literals
+  - Fixed error where table names were incorrectly being treated as column identifiers
+  - Implemented proper SQL string escaping for table names to prevent SQL injection
+- Removed debug logging statements from:
+  - `DatabaseService.ts`
+  - `supabaseMcp.ts`
+  - `BatchImporterHooks.ts`
+
+### Technical Details
+- Modified `getColumns()` method in `DatabaseService.ts` to use proper SQL string literal syntax:
+  - Changed from using double quotes (identifier quoting) to single quotes (string literals)
+  - Added proper escaping for any single quotes within table names
+  - Fixed PostgreSQL error 42703 ("column does not exist") that was occurring when querying information_schema
+
 ## 2025-05-04: Completely Refactored Field Type Inference Logic
 
 ### Fixed

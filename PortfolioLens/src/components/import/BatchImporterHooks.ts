@@ -1,4 +1,4 @@
-import { SheetProcessingState } from './types'; // <-- ADDED Import
+import { SheetProcessingState, RankedTableSuggestion } from './types'; // <-- ADDED Import + RankedTableSuggestion
 import * as React from 'react'; // <-- ADDED React import
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { DatabaseService } from './services/DatabaseService';
@@ -38,7 +38,6 @@ export const useSchemaInfo = () => {
       }
       setTableInfoMap(infoMap);
       setSchemaCacheStatus('ready');
-      console.log('Schema info loaded.');
     } catch (error) {
       console.error('Error loading schema info:', error);
       setStoreError(`Error loading database schema: ${error instanceof Error ? error.message : String(error)}`);

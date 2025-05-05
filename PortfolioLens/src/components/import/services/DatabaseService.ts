@@ -282,14 +282,18 @@ export class DatabaseService {
    * @returns Promise resolving to array of column info objects
    */
   async getColumns(tableName: string): Promise<DbColumnInfo[]> {
+     // Ensure table name is properly escaped and single-quoted for SQL literal
+     const escapedTableName = tableName.replace(/'/g, "''"); // Escape single quotes
+
      return this.executeWithConnectionPool(async () => {
         const columnSql = `
             SELECT column_name, data_type, is_nullable, column_default
             FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = $1
+            WHERE table_schema = 'public' AND table_name = '${escapedTableName}' -- Use interpolated single-quoted name
             ORDER BY ordinal_position;
         `;
-        const columnsData = await this.executeSQL(columnSql, { '1': tableName });
+        // Remove parameters object as it's now interpolated
+        const columnsData = await this.executeSQL(columnSql);
 
         // Fetch primary keys separately
         const pkSql = `
@@ -300,9 +304,11 @@ export class DatabaseService {
               AND tc.table_schema = kcu.table_schema
             WHERE tc.constraint_type = 'PRIMARY KEY'
               AND tc.table_schema = 'public'
-              AND tc.table_name = $1;
+              AND tc.table_name = '${escapedTableName}'; -- Use interpolated single-quoted name
         `;
-        const pkResult = await this.executeSQL(pkSql, { '1': tableName });
+        // Remove parameters object
+
+        const pkResult = await this.executeSQL(pkSql);
         const primaryKeys = new Set(pkResult.map((row: any) => row.column_name));
 
         // Map results to DbColumnInfo type

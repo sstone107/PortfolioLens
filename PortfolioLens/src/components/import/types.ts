@@ -114,7 +114,8 @@ export interface ImportJob {
   fileName: string;
   tableName: string;
   sheetName: string;
-  mapping: Record<string, ColumnMapping>;
+  mapping: Record<string, ColumnMapping>; // Columns to MAP data into
+  newColumnProposals?: NewColumnProposal[]; // Columns to CREATE
   globalAttributes?: Record<string, any>;
   subServicerTags?: string[];
   templateId?: string;
@@ -282,6 +283,7 @@ export interface NewColumnProposal {
   // Add source sheet/column info for context if needed
   sourceSheet?: string;
   sourceHeader?: string;
+  createStructureOnly?: boolean; // Flag to indicate only creating the column structure, not importing data
 }
 
 /**

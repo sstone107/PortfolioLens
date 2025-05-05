@@ -18,14 +18,17 @@ import {
   FormControlLabel,
   FormLabel,
   Tab,
-  Tabs
+  Tabs,
+  Checkbox // <-- Import Checkbox
 } from '@mui/material';
 import {
   Close as CloseIcon,
   Check as CheckIcon,
   Search as SearchIcon,
   ViewList as ViewListIcon,
-  ViewModule as ViewModuleIcon
+  ViewModule as ViewModuleIcon,
+  CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
+  CheckBox as CheckBoxIcon
 } from '@mui/icons-material';
 import {
     ColumnType,
@@ -110,11 +113,12 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   // Update the state type to potentially hold the full structure
   const [mappings, setMappings] = useState<Record<string, BatchColumnMapping>>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'table'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'virtualized'>('table'); // <-- Allow both types
   const [newColumnDialogOpen, setNewColumnDialogOpen] = useState(false);
   const [currentExcelColumn, setCurrentExcelColumn] = useState<string>('');
   const [newColumnName, setNewColumnName] = useState<string>('');
   const [newColumnType, setNewColumnType] = useState<ColumnType>('string');
+  const [createStructureOnly, setCreateStructureOnly] = useState<boolean>(false); // State for the new checkbox
 
   const actualTableName = useMemo(() => {
       if (!sheetState?.selectedTable) return 'Unknown Table';
@@ -171,6 +175,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           // Reset other states
           setNewColumnDialogOpen(false);
           setSearchQuery('');
+          // Correctly set view mode based on header count
           setViewMode((sheetState.headers?.length || 0) > 30 ? 'virtualized' : 'table');
 
       } else if (open && !sheetState) {
@@ -181,17 +186,22 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   // More flexible update function
   const handleMappingUpdate = (excelCol: string, changes: Partial<BatchColumnMapping>) => {
       setMappings(prev => {
-          const current = prev[excelCol] || { // Ensure current exists
+          // Define the default structure separately to avoid self-reference issues
+          const defaultMapping: BatchColumnMapping = {
               header: excelCol,
               sampleValue: sheetState?.sampleData?.[0]?.[excelCol] ?? null,
-              // Use suggestedColumns from the potentially existing mapping, or default empty
-              suggestedColumns: current?.suggestedColumns || [], // Use current mapping's suggestions
-              inferredDataType: current?.inferredDataType || null, // Use current mapping's type
-              status: 'pending', // Default status if creating new entry
+              suggestedColumns: [],
+              inferredDataType: null,
+              status: 'pending',
               reviewStatus: 'pending',
-              action: 'skip', // Default action
+              action: 'skip',
               mappedColumn: null,
-          } as BatchColumnMapping;
+              confidenceScore: 0,
+              confidenceLevel: 'Low',
+          };
+
+          // Get the current mapping or use the default
+          const current: BatchColumnMapping = prev[excelCol] || defaultMapping;
 
           // If action changes, reset potentially conflicting fields
           const resetFields: Partial<BatchColumnMapping> = {};
@@ -273,6 +283,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         isNullable: true, // Default
         sourceSheet: sheetState?.sheetName,
         sourceHeader: currentExcelColumn,
+        createStructureOnly: createStructureOnly, // Include the checkbox state
     };
 
     // Update using the flexible handler
@@ -287,7 +298,8 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     setNewColumnDialogOpen(false);
     setNewColumnName('');
     setCurrentExcelColumn('');
-};
+    setCreateStructureOnly(false); // Reset checkbox state on close
+  };
 
   // Update handleSave to ensure it sends the full BatchColumnMapping
   const handleSave = () => {
@@ -443,7 +455,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               aria-label="data type"
               name="newColumnType"
               value={newColumnType}
-              onChange={(e) => setNewColumnType(e.target.value as ColumnType)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewColumnType(e.target.value as ColumnType)} // Add event type
             >
               <FormControlLabel value="string" control={<Radio />} label="Text" />
               <FormControlLabel value="number" control={<Radio />} label="Number" />
@@ -451,12 +463,26 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               <FormControlLabel value="boolean" control={<Radio />} label="True/False" />
             </RadioGroup>
           </FormControl>
-        </DialogContent>
+          {/* Correct placement for the Checkbox, after the RadioGroup's FormControl */}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={createStructureOnly}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreateStructureOnly(e.target.checked)}
+                name="createStructureOnly"
+                color="primary"
+              />
+            }
+            label="Create column structure only (do not import data)"
+            sx={{ mt: 1 }}
+          />
+          {/* Removed duplicate block */}
+        </DialogContent> {/* Correct closing tag for inner DialogContent */}
         <DialogActions>
-          <Button onClick={() => setNewColumnDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => { setNewColumnDialogOpen(false); setCreateStructureOnly(false); }}>Cancel</Button>
           <Button onClick={handleCreateNewColumn} variant="contained">Create Field</Button>
         </DialogActions>
-      </Dialog>
+      </Dialog> {/* Correct closing tag for inner Dialog */}
     </Dialog>
   );
 };

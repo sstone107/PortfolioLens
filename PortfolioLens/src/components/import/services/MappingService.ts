@@ -437,8 +437,9 @@ export class MappingService {
       
       const entries = await executeSql(query);
       
-      if (entries && entries.length > 0) {
-        return entries.map((entry: any) => ({
+      // Access the 'data' property of the result object
+      if (entries.data && entries.data.length > 0) {
+        return entries.data.map((entry: any) => ({
           ...entry,
           metadata: JSON.parse(entry.metadata || '{}'),
           timestamp: new Date(entry.timestamp)
@@ -613,7 +614,8 @@ export class MappingService {
       }
 
       // Allow number to string, date to string, boolean to string
-      if (inferredType !== 'string' && dbColumnType === 'string' as ColumnType) {
+      // Allow implicit conversion to string if the DB column is string type
+      if (dbColumnType === 'string') {
           return true;
       }
 
@@ -648,7 +650,7 @@ export class MappingService {
 
         suggestions.push({
           dbColumn: dbCol.columnName,
-          similarityScore: combinedScore,
+          confidenceScore: combinedScore,
           isTypeCompatible: typeCompatible,
           confidenceLevel: confidenceLevel,
         });
@@ -657,14 +659,14 @@ export class MappingService {
       // Add a suggestion to create a new field
       suggestions.push({
         dbColumn: excelCol, // Suggest the original Excel column name as the new field name
-        similarityScore: 0.1, // Low score to appear at the bottom
+        confidenceScore: 0.1, // Low score to appear at the bottom
         isTypeCompatible: true, // Assume compatible as we're creating it
         isCreateNewField: true,
         confidenceLevel: 'Low',
       });
 
       // Sort suggestions by combined score in descending order
-      suggestions.sort((a, b) => b.similarityScore - a.similarityScore);
+      suggestions.sort((a, b) => b.confidenceScore - a.confidenceScore);
 
       // Store the suggestions for this Excel column
       columnSuggestions[excelCol] = {
@@ -683,10 +685,10 @@ export class MappingService {
    * @returns Suggested table mappings
    */
   async getSuggestedTableMappings(sheetNames: string[]): Promise<TableMappingSuggestion[]> {
+    let suggestions: TableMappingSuggestion[] = []; // Declare outside try
     try {
       // Get available tables
-      const tables = await this.metadataService.getTables();
-      const suggestions: TableMappingSuggestion[] = [];
+      const tables = await this.metadataService.getCachedTableNames();
       
       // Define common mappings between Excel sheet names and database tables
       const commonMappings: Record<string, string> = {
@@ -721,8 +723,9 @@ export class MappingService {
       
       // Process each sheet
       for (const sheetName of sheetNames) {
-        let bestMatch = ''; // Revert variable name
-        let bestScore = 0; // Revert variable name
+        let bestMatch = '';
+        let bestScore = 0;
+        // let tableNameScore = 0; // Removed - will use bestScore consistently
         let matchType: 'exact' | 'partial' | 'fuzzy' | 'none' = 'none';
         
         // Normalize sheet name for better matching
@@ -791,9 +794,10 @@ export class MappingService {
               const commonWordCount = sheetWords.filter(w => tableWords.includes(w)).length;
               if (commonWordCount > 0) {
                 const wordScore = 0.5 * (commonWordCount / Math.max(sheetWords.length, tableWords.length));
-                if (wordScore > tableNameScore) {
-                  tableNameScore = wordScore;
-                  bestTableNameMatch = table;
+                // Use bestScore and bestMatch consistently
+                if (wordScore > bestScore) {
+                  bestScore = wordScore;
+                  bestMatch = table;
                   matchType = 'fuzzy';
                 }
               }
@@ -801,71 +805,36 @@ export class MappingService {
           }
         }
 
-        // --- START: Calculate Average Column Match Score ---
-        let avgColumnScore = 0;
-        if (bestTableNameMatch && sheetData && sheetData.length > 0) {
-          try {
-            const tableInfo = await this.metadataService.getTableInfo(bestTableNameMatch);
-            if (tableInfo && tableInfo.columns.length > 0) {
-              const columnSuggestionsResult = this.suggestColumnMappings(sheetData, tableInfo);
-              const excelColumns = Object.keys(columnSuggestionsResult);
+        // Removed avgColumnScore calculation block as sheetData is not available here.
+        // This function should focus solely on name-based table suggestions.
 
-              if (excelColumns.length > 0) {
-                let totalHighestScore = 0;
-                let mappedColumnCount = 0;
-
-                for (const excelCol of excelColumns) {
-                  const suggestionsForCol = columnSuggestionsResult[excelCol]?.suggestions;
-                  if (suggestionsForCol && suggestionsForCol.length > 0) {
-                    // Find the highest score, excluding the 'create new' suggestion
-                    const bestSuggestion = suggestionsForCol
-                      .filter(s => !s.isCreateNewField)
-                      .sort((a, b) => b.similarityScore - a.similarityScore)[0];
-
-                    if (bestSuggestion && bestSuggestion.similarityScore > 0.2) { // Only count reasonably good matches
-                      totalHighestScore += bestSuggestion.similarityScore;
-                      mappedColumnCount++;
-                    }
-                  }
-                }
-                avgColumnScore = mappedColumnCount > 0 ? totalHighestScore / mappedColumnCount : 0;
-                 console.log(`[Table Suggestion] Sheet: ${sheetName}, Table: ${bestTableNameMatch}, Avg Col Score: ${avgColumnScore.toFixed(2)} (${mappedColumnCount} cols)`);
-              }
-            }
-          } catch (colError) {
-            console.error(`Error calculating column score for ${sheetName} -> ${bestTableNameMatch}:`, colError);
-          }
-        }
-        // --- END: Calculate Average Column Match Score ---
-
-        // Combine scores (e.g., 50% name, 50% column avg)
-        const combinedScore = (tableNameScore * 0.5) + (avgColumnScore * 0.5);
-        
-        // Add the suggestion
+        // Add the suggestion based only on name matching score
         suggestions.push({
           sheetName,
-          tableName: bestTableNameMatch,
-          matchScore: combinedScore, // Use the combined score
+          tableName: bestMatch, // Use bestMatch
+          confidenceScore: bestScore, // Use bestScore directly
           matchType
         });
       }
       
       return suggestions;
     } catch (error) {
-      console.error('Error in table mapping suggestion:', error);
-      // Sort suggestions by combined score
-      suggestions.sort((a, b) => b.matchScore - a.matchScore);
-
-      return suggestions;
-    } catch (error) {
-      console.error('Error in table mapping suggestion:', error);
-      // Fallback in case of error
-      return Object.keys(sheetDataMap).map(sheetName => ({
-        sheetName,
-        tableName: '',
-        matchScore: 0,
-        matchType: 'none' as 'none'
-      }));
+      console.error('Error in initial table mapping suggestion:', error);
+      try {
+        // Attempt to sort suggestions even after an initial error
+        suggestions.sort((a: TableMappingSuggestion, b: TableMappingSuggestion) => b.confidenceScore - a.confidenceScore);
+        return suggestions;
+      } catch (sortError) {
+        console.error('Error sorting suggestions after initial error:', sortError);
+        // Fallback in case sorting also fails
+        // Use input sheetNames for fallback
+        return sheetNames.map(sheetName => ({
+          sheetName,
+          tableName: '',
+          confidenceScore: 0,
+          matchType: 'none' as 'none'
+        }));
+      }
     }
   }
 }

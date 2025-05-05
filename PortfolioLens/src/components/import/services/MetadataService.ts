@@ -1,7 +1,7 @@
 // PortfolioLens/src/components/import/services/MetadataService.ts
 import { SchemaCacheService } from './SchemaCacheService';
 import { calculateSimilarity, normalizeForMatching } from '../BatchImporterUtils';
-import { RankedTableSuggestion, SchemaCache } from '../types';
+import { RankedTableSuggestion, SchemaCache, CachedDbTable, ConfidenceLevel } from '../types'; // Added CachedDbTable, ConfidenceLevel
 
 // Constants
 const CREATE_NEW_TABLE_OPTION = 'Create new table...';
@@ -108,6 +108,18 @@ export class MetadataService {
     // Return a copy of the array to prevent external modification
     return this.cachedTableNames ? [...this.cachedTableNames] : [];
   }
+/**
+   * Retrieves the cached details for a specific table.
+   * Ensures the service is initialized first.
+   * @param tableName - The name of the table to retrieve info for.
+   * @returns Promise resolving to the CachedDbTable object or null if not found.
+   * @throws {Error} If initialization fails.
+   */
+  async getCachedTableInfo(tableName: string): Promise<CachedDbTable | null> {
+    await this.ensureInitialized(); // Wait for initialization
+    const schemaCache = await this.schemaCacheService.getOrFetchSchema(); // Get the full cache
+    return schemaCache?.tables[tableName] ?? null; // Return specific table or null
+  }
 
   /**
    * Generates ranked table suggestions for a given sheet name based on similarity
@@ -130,8 +142,9 @@ export class MetadataService {
       // Return only the "Create new" option
       return [{
         tableName: CREATE_NEW_TABLE_OPTION,
-        similarityScore: CREATE_NEW_TABLE_SCORE,
-        confidenceLevel: 'Low'
+        confidenceScore: CREATE_NEW_TABLE_SCORE,
+        confidenceLevel: 'Low',
+        matchType: 'new' // Explicitly mark as 'new'
       }];
     }
 
@@ -140,35 +153,43 @@ export class MetadataService {
     if (!normalizedSheetName) {
         return [{
           tableName: CREATE_NEW_TABLE_OPTION,
-          similarityScore: CREATE_NEW_TABLE_SCORE,
-          confidenceLevel: 'Low'
+          confidenceScore: CREATE_NEW_TABLE_SCORE,
+          confidenceLevel: 'Low',
+          matchType: 'new' // Explicitly mark as 'new'
         }];
     }
 
     // Calculate similarity scores for all cached tables
     const suggestions: RankedTableSuggestion[] = this.cachedTableNames.map(tableName => {
       const normalizedTableName = normalizeForMatching(tableName);
-      const similarityScore = calculateSimilarity(normalizedSheetName, normalizedTableName);
-      
-      // Determine confidence level based on similarity score
-      let confidenceLevel: 'High' | 'Medium' | 'Low';
-      if (similarityScore >= 0.8) {
-        confidenceLevel = 'High';
-      } else if (similarityScore >= 0.5) {
-        confidenceLevel = 'Medium';
+      const confidenceScore = calculateSimilarity(normalizedSheetName, normalizedTableName);
+
+      // Determine confidence level and match type based on score
+      let confidenceLevel: ConfidenceLevel;
+      let matchType: 'exact' | 'partial' | 'fuzzy' | 'none';
+      if (confidenceScore > 0.95) { // High confidence, likely exact or near-exact
+          confidenceLevel = 'High';
+          matchType = 'exact';
+      } else if (confidenceScore >= 0.8) {
+          confidenceLevel = 'High';
+          matchType = 'partial'; // High score, but maybe not exact
+      } else if (confidenceScore >= 0.5) {
+          confidenceLevel = 'Medium';
+          matchType = 'fuzzy'; // Medium score, likely fuzzy match
       } else {
-        confidenceLevel = 'Low';
+          confidenceLevel = 'Low';
+          matchType = 'fuzzy'; // Low score, still treat as fuzzy for sorting purposes
       }
-      
-      return { tableName, similarityScore, confidenceLevel };
+
+      return { tableName, confidenceScore, confidenceLevel, matchType };
     });
 
     // Sort suggestions by score in descending order
-    suggestions.sort((a, b) => b.similarityScore - a.similarityScore);
+    suggestions.sort((a, b) => b.confidenceScore - a.confidenceScore);
 
     // Filter out suggestions with very low scores (e.g., below 0.2)
     // Adjust this threshold based on desired sensitivity
-    const filteredSuggestions = suggestions.filter(s => s.similarityScore >= 0.2);
+    const filteredSuggestions = suggestions.filter(s => s.confidenceScore >= 0.2);
 
     // Limit the number of suggestions returned
     const topSuggestions = filteredSuggestions.slice(0, maxSuggestions);
@@ -178,8 +199,9 @@ export class MetadataService {
         ...topSuggestions,
         {
           tableName: CREATE_NEW_TABLE_OPTION,
-          similarityScore: CREATE_NEW_TABLE_SCORE,
-          confidenceLevel: 'Low'
+          confidenceScore: CREATE_NEW_TABLE_SCORE,
+          confidenceLevel: 'Low',
+          matchType: 'new' // Explicitly mark as 'new'
         }
     ];
 
@@ -190,7 +212,7 @@ export class MetadataService {
      );
 
      // Re-sort the final list to ensure correct order based on score
-     uniqueSuggestions.sort((a, b) => b.similarityScore - a.similarityScore);
+     uniqueSuggestions.sort((a, b) => b.confidenceScore - a.confidenceScore);
 
 
     return uniqueSuggestions;
