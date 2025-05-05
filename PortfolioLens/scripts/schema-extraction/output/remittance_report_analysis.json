@@ -1,0 +1,4764 @@
+{
+  "Loan Information": {
+    "sheetName": "Loan Information",
+    "rowCount": "36880",
+    "columnCount": 228,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "4730017533",
+          "8809087472",
+          "2822257707",
+          "3981345641",
+          "2781798830"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          4028982268,
+          4009546189,
+          6631918,
+          4028875879,
+          1715270962
+        ]
+      },
+      {
+        "columnName": "Property Address 1",
+        "inferredSqlType": "VARCHAR(48)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "18777 N 43RD AVE UNIT 15",
+          "3113 CASCADES TRL SE",
+          "10138 JONESTOWN RD",
+          "443 S LAMAR ST",
+          "24 WILDCAT RD"
+        ]
+      },
+      {
+        "columnName": "Property Address 2",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Property City",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "GLENDALE",
+          "RIO RANCHO",
+          "GRANTVILLE",
+          "LAKEWOOD",
+          "BURLINGTON"
+        ]
+      },
+      {
+        "columnName": "Property State",
+        "inferredSqlType": "VARCHAR(4)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "AZ",
+          "NM",
+          "PA",
+          "CO",
+          "CT"
+        ]
+      },
+      {
+        "columnName": "Property Zipcode",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "85308",
+          "87124",
+          "17028",
+          "80226",
+          "06013"
+        ]
+      },
+      {
+        "columnName": "Property Type",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CONDO",
+          "DETACHED",
+          "DETACHED",
+          "DETACHED",
+          "DETACHED"
+        ]
+      },
+      {
+        "columnName": "Property Occupancy Type",
+        "inferredSqlType": "VARCHAR(34)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PRIMARY_RESIDENCE",
+          "PRIMARY_RESIDENCE",
+          "PRIMARY_RESIDENCE",
+          "PRIMARY_RESIDENCE",
+          "PRIMARY_RESIDENCE"
+        ]
+      },
+      {
+        "columnName": "Property Occupancy",
+        "inferredSqlType": "VARCHAR(34)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "BORROWER_OCCUPIED",
+          "BORROWER_OCCUPIED",
+          "BORROWER_OCCUPIED",
+          "BORROWER_OCCUPIED",
+          "BORROWER_OCCUPIED"
+        ]
+      },
+      {
+        "columnName": "Legal Property Description",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Property Sale Price",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "443500.00",
+          "155000.00",
+          "0.00",
+          "587000.00",
+          "200000.00"
+        ]
+      },
+      {
+        "columnName": "Property Date Acquired",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Property Origination Appraisal Value",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "435000.00",
+          "300000.00",
+          "215000.00",
+          "524000.00",
+          "282000.00"
+        ]
+      },
+      {
+        "columnName": "Property Origination Appraisal Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2022-02-18",
+          "2013-06-07",
+          "2021-03-01",
+          "2022-02-08",
+          "2011-10-20"
+        ]
+      },
+      {
+        "columnName": "Property Last Appraisal Value",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "435000.00",
+          "300000.00",
+          "215000.00",
+          "524000.00",
+          "282000.00"
+        ]
+      },
+      {
+        "columnName": "Property Last Appraisal Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2022-02-18",
+          "2013-06-07",
+          "2021-03-01",
+          "2022-02-08",
+          "2011-10-20"
+        ]
+      },
+      {
+        "columnName": "Property Fee Simple or Leasehold",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FEESIMPLE",
+          "FEESIMPLE",
+          "FEESIMPLE",
+          "FEESIMPLE",
+          "FEESIMPLE"
+        ]
+      },
+      {
+        "columnName": "Number of Units",
+        "inferredSqlType": "VARCHAR(2)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1",
+          "1",
+          "1",
+          "1",
+          "1"
+        ]
+      },
+      {
+        "columnName": "Seller Servicer ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          283670015,
+          283670015,
+          214093,
+          283670015,
+          283670015
+        ]
+      },
+      {
+        "columnName": "Effective Transfer Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-10-01",
+          "2024-06-01",
+          "2024-07-01",
+          "2024-10-01",
+          "2024-06-01"
+        ]
+      },
+      {
+        "columnName": "Original Lender",
+        "inferredSqlType": "VARCHAR(56)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Your Lender",
+          "Farmers Bank  Trust",
+          "Freedom Mortgage Corporation",
+          "Your Lender",
+          "WEBSTER BANK NA"
+        ]
+      },
+      {
+        "columnName": "Portfolio SID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PORT87468946be5180c4cec019f2dfccad",
+          "PORT87468946be5180c4cec019f2dfccad",
+          "PORT0c68a69b89c8a304b2842be7f825cd",
+          "PORT87468946be5180c4cec019f2dfccad",
+          "PORTfdca30a93bdee155e85bd3306122c4"
+        ]
+      },
+      {
+        "columnName": "Previous Servicer Organization Sid",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CPNYc788bb50c043339e02453308440223",
+          "CPNY7a90cc58bf81e68846600d14f8fe38",
+          "CPNY3d9f13d61d59dd0cf551e6b5dd916a",
+          "CPNYc788bb50c043339e02453308440223",
+          "CPNY0bef1c62d8d226f50977b720ea5583"
+        ]
+      },
+      {
+        "columnName": "Previous Servicer Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0171224652",
+          "0440451957",
+          "4000089096",
+          "0171222847",
+          "4706001945"
+        ]
+      },
+      {
+        "columnName": "MERS ID",
+        "inferredSqlType": "VARCHAR(36)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "100944300014442173",
+          "100263490000588569",
+          "100073001258775483",
+          "100944300014469481",
+          "100092047060019450"
+        ]
+      },
+      {
+        "columnName": "MERS MIN Status",
+        "inferredSqlType": "VARCHAR(24)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ACTIVE",
+          "PAID_IN_FULL",
+          "PAID_IN_FULL",
+          "ACTIVE",
+          "PAID_IN_FULL"
+        ]
+      },
+      {
+        "columnName": "Is MOM",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "TRUE",
+          "TRUE",
+          "TRUE",
+          "TRUE",
+          "TRUE"
+        ]
+      },
+      {
+        "columnName": "MERS Originating Org ID",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1009443",
+          "1002634",
+          "1000730",
+          "1009443",
+          "1000920"
+        ]
+      },
+      {
+        "columnName": "Prior Investor MERS ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Document Custodian MERS ID",
+        "inferredSqlType": "VARCHAR(46)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Bank of New York Mellon",
+          "Bank of New York Mellon",
+          "Bank of New York Mellon",
+          "Bank of New York Mellon",
+          "Bank of New York Mellon"
+        ]
+      },
+      {
+        "columnName": "Lien Position",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FIRST_LIEN",
+          "FIRST_LIEN",
+          "FIRST_LIEN",
+          "FIRST_LIEN",
+          "FIRST_LIEN"
+        ]
+      },
+      {
+        "columnName": "Current Actual UPB",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          323723.98,
+          0,
+          0,
+          370935.07,
+          0
+        ]
+      },
+      {
+        "columnName": "Current Scheduled UPB",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Current Interest Rate",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "3.875%",
+          "2.625%",
+          "3.250%",
+          "3.875%",
+          "3.990%"
+        ]
+      },
+      {
+        "columnName": "Deferred Principal",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Last Due Date Paid",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-04-01",
+          "2025-01-01",
+          "2025-01-01",
+          "2025-03-01",
+          "2025-01-01"
+        ]
+      },
+      {
+        "columnName": "Next Due Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-05-01",
+          "2025-02-01",
+          "2025-02-01",
+          "2025-04-01",
+          "2025-02-01"
+        ]
+      },
+      {
+        "columnName": "Days Past Due",
+        "inferredSqlType": "VARCHAR(2)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0"
+        ]
+      },
+      {
+        "columnName": "Product Type",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FRM",
+          "FRM",
+          "FRM",
+          "FRM",
+          "FRM"
+        ]
+      },
+      {
+        "columnName": "Investor Type",
+        "inferredSqlType": "VARCHAR(22)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Fannie Mae",
+          "Fannie Mae",
+          "Freddie Mac",
+          "Fannie Mae",
+          "Fannie Mae"
+        ]
+      },
+      {
+        "columnName": "Government Insuring Agency Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Original Loan Amount",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "348000.00",
+          "155000.00",
+          "128700.00",
+          "393000.00",
+          "206000.00"
+        ]
+      },
+      {
+        "columnName": "Original Interest Rate",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "3.875%",
+          "2.625%",
+          "3.250%",
+          "3.875%",
+          "3.990%"
+        ]
+      },
+      {
+        "columnName": "Original Payment Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Original P&I",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1636.43",
+          "1042.67",
+          "560.12",
+          "1848.03",
+          "982.29"
+        ]
+      },
+      {
+        "columnName": "Origination Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2022-03-04",
+          "2013-06-07",
+          "2021-04-22",
+          "2022-02-18",
+          "2011-11-25"
+        ]
+      },
+      {
+        "columnName": "Original LTV",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "80.000%",
+          "51.667%",
+          "60.000%",
+          "75.000%",
+          "73.050%"
+        ]
+      },
+      {
+        "columnName": "Current LTV",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "74.419%",
+          "0.000%",
+          "0.000%",
+          "70.789%",
+          "0.000%"
+        ]
+      },
+      {
+        "columnName": "Original Front End DTI",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Original Back End DTI",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Amortization Term",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "360",
+          "180",
+          "360",
+          "360",
+          "360"
+        ]
+      },
+      {
+        "columnName": "Original Maturity Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2052-04-01",
+          "2028-07-01",
+          "2051-05-01",
+          "2052-03-01",
+          "2041-12-01"
+        ]
+      },
+      {
+        "columnName": "Current Maturity Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2052-04-01",
+          "2028-07-01",
+          "2051-05-01",
+          "2052-03-01",
+          "2041-12-01"
+        ]
+      },
+      {
+        "columnName": "First Payment Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2022-05-01",
+          "2013-08-01",
+          "2021-06-01",
+          "2022-04-01",
+          "2012-01-01"
+        ]
+      },
+      {
+        "columnName": "Payment Period",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY"
+        ]
+      },
+      {
+        "columnName": "Payment Day",
+        "inferredSqlType": "VARCHAR(2)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1",
+          "1",
+          "1",
+          "1",
+          "1"
+        ]
+      },
+      {
+        "columnName": "Current Payment Amount",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1825.25",
+          "0.00",
+          "0.00",
+          "2520.63",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Total Monthly Payment (PITI)",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1825.25",
+          "0.00",
+          "0.00",
+          "2520.63",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Current P&I",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1636.43",
+          "0.00",
+          "0.00",
+          "1848.03",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Current T&I",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "188.82",
+          "0.00",
+          "0.00",
+          "672.60",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Accrued Interest",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Interest Only Term",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Assumable",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Loan Purpose",
+        "inferredSqlType": "VARCHAR(30)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "NEW_ORIGINATION",
+          "NEW_ORIGINATION",
+          "REFINANCE",
+          "NEW_ORIGINATION",
+          "REFINANCE"
+        ]
+      },
+      {
+        "columnName": "Loan Documentation Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Interest Accrual Frequency",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY"
+        ]
+      },
+      {
+        "columnName": "Interest Accrual Method",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "THIRTY_360",
+          "THIRTY_360",
+          "THIRTY_360",
+          "THIRTY_360",
+          "THIRTY_360"
+        ]
+      },
+      {
+        "columnName": "Interest Collection Type",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ARREARS",
+          "ARREARS",
+          "ARREARS",
+          "ARREARS",
+          "ARREARS"
+        ]
+      },
+      {
+        "columnName": "Late Charge Grace Days",
+        "inferredSqlType": "VARCHAR(4)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "15",
+          "15",
+          "15",
+          "15",
+          "15"
+        ]
+      },
+      {
+        "columnName": "Late Charge Type",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PERCENT",
+          "PERCENT",
+          "PERCENT",
+          "PERCENT",
+          "PERCENT"
+        ]
+      },
+      {
+        "columnName": "Late Charge Rate",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "5.000%",
+          "5.000%",
+          "5.000%",
+          "5.000%",
+          "5.000%"
+        ]
+      },
+      {
+        "columnName": "Late Charge Min",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.01",
+          "0.00",
+          "0.00",
+          "0.01",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Late Charge Max",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "9999.99",
+          "9999.00",
+          "9999.99",
+          "9999.99",
+          "9999.99"
+        ]
+      },
+      {
+        "columnName": "Prepayment Penalty Term",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Prepayment Threshold Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Prepayment Threshold",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Prepayment Threshold Period",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Prepayment Penalty Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Prepayment Penalty Charge",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Demand Feature",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Late fee balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "NSF fee balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Other fee balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Subservicer escrow advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Master servicer escrow advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Investor escrow advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Escrow advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Subservicer interest advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Master interest advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Investor interest advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Subservicer principal advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Master principal advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Investor principal advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Subservicer servicing advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Master servicer servicing advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Investor servicing advance balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Suspense Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Escrow Pending Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Application Priority",
+        "inferredSqlType": "VARCHAR(24)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "AMORTIZATION",
+          "AMORTIZATION",
+          "AMORTIZATION",
+          "AMORTIZATION",
+          "AMORTIZATION"
+        ]
+      },
+      {
+        "columnName": "Payoff Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-03",
+          "2025-02-05",
+          "2025-02-03",
+          "2025-02-05",
+          "2025-02-03"
+        ]
+      },
+      {
+        "columnName": "Payoff Request Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-12-13",
+          "2024-11-13",
+          "2024-12-13",
+          "2024-11-14",
+          "2025-01-16"
+        ]
+      },
+      {
+        "columnName": "Payoff Reason",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PIF",
+          "PIF",
+          "PIF",
+          "PIF",
+          "PIF"
+        ]
+      },
+      {
+        "columnName": "ARM Lifetime Min Rate",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Lifetime Max Rate",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Margin",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM First Interest Rate Change Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Next Interest Rate Change Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Rate Change Frequency Thereafter",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Look Back Period (Days)",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Look Back Period (Months)",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Look Back Period Time Unit",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Min Rate After First Rate Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Max Rate After First Rate Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Subsequent Min Per Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Subsequent Max Per Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Carryover Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Carryover",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM First Payment Change Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Next Payment Change Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Payment Change Frequency Thereafter",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Min Payment After First Payment Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Max Payment After First Payment Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Min Subsequent Payment Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Max Subsequent Payment Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Index",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Index Round Method",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Index Rounding Factor",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Conversion Period",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "ARM Conversion Fee",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Offboarding Transfer Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Transferee Servicer Organization Sid",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Master Servicing Fee Rate",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.250%",
+          "0.250%",
+          "0.250%",
+          "0.250%",
+          "0.490%"
+        ]
+      },
+      {
+        "columnName": "Guaranty Fee Rate",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.0000%",
+          "0.0000%",
+          "0.0000%",
+          "0.0000%",
+          "0.2400%"
+        ]
+      },
+      {
+        "columnName": "MBA DQ Status",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CURRENT",
+          "CURRENT",
+          "CURRENT",
+          "CURRENT",
+          "CURRENT"
+        ]
+      },
+      {
+        "columnName": "30 DPD Count",
+        "inferredSqlType": "VARCHAR(2)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0"
+        ]
+      },
+      {
+        "columnName": "60 DPD Count",
+        "inferredSqlType": "VARCHAR(2)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0"
+        ]
+      },
+      {
+        "columnName": "90 DPD Count",
+        "inferredSqlType": "VARCHAR(2)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0",
+          "0",
+          "0",
+          "0",
+          "0"
+        ]
+      },
+      {
+        "columnName": "24 Month Pay History",
+        "inferredSqlType": "VARCHAR(48)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CCCCCCCCCCCCCCCCCCCCCCCC",
+          "CCCCCCCCCCCCCCCCCCCCCCCC",
+          "CCCCCCCCCCCCCCCCCCCCCCCC",
+          "CCCCCCCCCCCCCCCCCCCCCCCC",
+          "CCCCCCCCCCCCCCCCCCCCCCCC"
+        ]
+      },
+      {
+        "columnName": "FNMA Pool Number",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "AK0643",
+          "MA0140",
+          "AD3608",
+          "BH6804",
+          "AP2514"
+        ]
+      },
+      {
+        "columnName": "Remaining Months to Maturity",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "326",
+          "41",
+          "315",
+          "325",
+          "202"
+        ]
+      },
+      {
+        "columnName": "Debt to Income Ratio",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Loan Insurance Type",
+        "inferredSqlType": "VARCHAR(56)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CONVENTIONAL_RES_WITHOUT_PMI",
+          "CONVENTIONAL_RES_WITHOUT_PMI",
+          "CONVENTIONAL_RES_WITHOUT_PMI",
+          "CONVENTIONAL_RES_WITHOUT_PMI",
+          "CONVENTIONAL_RES_WITHOUT_PMI"
+        ]
+      },
+      {
+        "columnName": "Loan Age",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "34",
+          "139",
+          "45",
+          "35",
+          "158"
+        ]
+      },
+      {
+        "columnName": "ARM Indicator",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Remittance Code",
+        "inferredSqlType": "VARCHAR(38)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "SCHEDULED_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "SCHEDULED_SCHEDULED"
+        ]
+      },
+      {
+        "columnName": "Holding Type",
+        "inferredSqlType": "VARCHAR(46)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PORTFOLIO_MORTGAGE_LOAN",
+          "PORTFOLIO_MORTGAGE_LOAN",
+          "PORTFOLIO_MORTGAGE_LOAN",
+          "MBS_MORTGAGE_LOAN",
+          "PORTFOLIO_MORTGAGE_LOAN"
+        ]
+      },
+      {
+        "columnName": "Net Fee Rate",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.250%",
+          "0.250%",
+          "0.250%",
+          "0.250%",
+          "0.250%"
+        ]
+      },
+      {
+        "columnName": "Loan Mod Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Loan Mod Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Forbearance Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Number Of Times Delinquent",
+        "inferredSqlType": "VARCHAR(2)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0",
+          "9",
+          "8",
+          "4",
+          "9"
+        ]
+      },
+      {
+        "columnName": "Average Days Delinquent",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "7.67",
+          "7.75",
+          "5.25",
+          "7.67"
+        ]
+      },
+      {
+        "columnName": "Litigation Flag",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Loss Mitigation Flag",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Flag",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Flag",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "REO Status",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Last Completed Inspection Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Orig Occupancy",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Current Occupancy",
+        "inferredSqlType": "VARCHAR(34)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PRIMARY_RESIDENCE",
+          "PRIMARY_RESIDENCE",
+          "PRIMARY_RESIDENCE",
+          "PRIMARY_RESIDENCE",
+          "PRIMARY_RESIDENCE"
+        ]
+      },
+      {
+        "columnName": "County Tax Amount",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "813.90",
+          "1648.48",
+          "1623.86",
+          "1098.44",
+          "639.00"
+        ]
+      },
+      {
+        "columnName": "County Tax Amount Pending",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "813.90",
+          "1648.48",
+          "1623.86",
+          "3179.34",
+          "1098.44"
+        ]
+      },
+      {
+        "columnName": "City Tax Amount",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "3606.85",
+          "346.51",
+          "7256.13",
+          "2683.18",
+          "1655.41"
+        ]
+      },
+      {
+        "columnName": "City Tax Amount Pending",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "3606.85",
+          "346.51",
+          "7149.11",
+          "2683.18",
+          "1655.41"
+        ]
+      },
+      {
+        "columnName": "CLTV",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Client Entity",
+        "inferredSqlType": "VARCHAR(74)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Greenway Mortgage Funding Corporation",
+          "Greenway Mortgage Funding Corporation",
+          "Greenway Mortgage Funding Corporation",
+          "Greenway Mortgage Funding Corporation",
+          "Greenway Mortgage Funding Corporation"
+        ]
+      },
+      {
+        "columnName": "FHA Case Number",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Repurchase Effective Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Escrow Required",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "TRUE",
+          "FALSE",
+          "FALSE",
+          "TRUE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Current Escrow Balance",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          835.72,
+          0,
+          0,
+          839.98,
+          0
+        ]
+      },
+      {
+        "columnName": "Current Escrow Payment",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          188.82,
+          0,
+          0,
+          672.6,
+          0
+        ]
+      },
+      {
+        "columnName": "Current Target Escrow Balance",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Last Escrow Analysis Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-11-06",
+          "2025-02-10",
+          "2025-02-12",
+          "2025-03-12",
+          "2025-02-10"
+        ]
+      },
+      {
+        "columnName": "Escrow Analysis New Payment",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Escrow Analysis Start Date of New Payment",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Property Insurance Required",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "TRUE",
+          "TRUE",
+          "TRUE",
+          "TRUE",
+          "TRUE"
+        ]
+      },
+      {
+        "columnName": "Flood Insurance Required",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Wind Insurance Required",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "MI Required",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "MI Payer",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "BORROWER",
+          "BORROWER",
+          "BORROWER",
+          "BORROWER",
+          "BORROWER"
+        ]
+      },
+      {
+        "columnName": "MI Renewal Type",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CONSTANT",
+          "N_A",
+          "CONSTANT",
+          "CONSTANT",
+          "CONSTANT"
+        ]
+      },
+      {
+        "columnName": "MI Upfront Fee",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.51",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "MI Policy Number",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "42928318",
+          "71731388",
+          "1890113",
+          "1000562863",
+          "6277588389"
+        ]
+      },
+      {
+        "columnName": "MI Mid Point Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2036-01-01",
+          "2034-09-01",
+          "2037-07-01",
+          "2035-02-01",
+          "2032-07-01"
+        ]
+      },
+      {
+        "columnName": "MI Refund Policy",
+        "inferredSqlType": "VARCHAR(28)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "NOT_REFUNDABLE",
+          "NOT_REFUNDABLE",
+          "NOT_REFUNDABLE",
+          "NOT_REFUNDABLE",
+          "NOT_REFUNDABLE"
+        ]
+      },
+      {
+        "columnName": "MI Company SID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CPNYe6ecb6332e92f6aa8735859e976cfb",
+          "CPNY7e33fa3627c1e84964cecb618d2bb6",
+          "CPNY250c3abac24ce0a1fa5745bb9d37f0",
+          "CPNY330d4f634536a0b4b883d69fc45b90",
+          "CPNY05e0b395c14a8e6469e26815c953d8"
+        ]
+      },
+      {
+        "columnName": "MI Date Cancelled",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-11",
+          "2021-03-11",
+          "2025-02-11",
+          "2025-02-11",
+          "2025-02-13"
+        ]
+      },
+      {
+        "columnName": "MI Renewal Rate 1",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.25",
+          "0.66",
+          "1.42",
+          "0.38",
+          "0.47"
+        ]
+      },
+      {
+        "columnName": "MI Renewal Rate 2",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.25",
+          "0.66",
+          "1.42",
+          "0.38",
+          "0.47"
+        ]
+      },
+      {
+        "columnName": "MI Renewal Rate 3",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.20",
+          "0.20",
+          "0.20",
+          "0.20",
+          "0.20"
+        ]
+      },
+      {
+        "columnName": "MI Last Payment Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "MI Claim Filed Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "MI Coverage Percentage",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "MI Proceeds Received Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "MI Proceeds Received Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Tax Escrow Required",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "TRUE",
+          "TRUE",
+          "TRUE",
+          "TRUE",
+          "TRUE"
+        ]
+      },
+      {
+        "columnName": "CoreLogic Customer Number",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "30994",
+          "10820",
+          "30994",
+          "15114",
+          "30994"
+        ]
+      },
+      {
+        "columnName": "CoreLogic Contract ID",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "66619369",
+          "03196080",
+          "34554608",
+          "74974603",
+          "64758480"
+        ]
+      },
+      {
+        "columnName": "Prior Tax Provider",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Prior Tax Agency ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Tax Authority Name",
+        "inferredSqlType": "VARCHAR(58)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Maricopa County",
+          "Sandoval County",
+          "East Hanover Township (Lebnon",
+          "Jefferson County",
+          "Burlington Town_*"
+        ]
+      },
+      {
+        "columnName": "Tax ID",
+        "inferredSqlType": "VARCHAR(38)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "20614270 6",
+          "R053267",
+          "2122789163851960000",
+          "300060890",
+          "30188800"
+        ]
+      },
+      {
+        "columnName": "Tax Last Due Date Paid",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-09-01",
+          "2024-10-02",
+          "2024-07-02",
+          "2025-01-02",
+          "2024-11-01"
+        ]
+      },
+      {
+        "columnName": "Tax Last Payment Amount",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "813.90",
+          "1648.48",
+          "2806.83",
+          "1623.86",
+          "3472.80"
+        ]
+      },
+      {
+        "columnName": "Tax Next Due Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-05-01",
+          "2025-05-01",
+          "2025-04-01",
+          "2025-06-01",
+          "2025-08-01"
+        ]
+      },
+      {
+        "columnName": "Expected Number of Tax Installments",
+        "inferredSqlType": "VARCHAR(2)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2",
+          "2",
+          "2",
+          "2",
+          "2"
+        ]
+      },
+      {
+        "columnName": "Expected tax payment 1",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "$813.90",
+          "$1,648.48",
+          "$794.56",
+          "$1,623.86",
+          "$3,472.80"
+        ]
+      },
+      {
+        "columnName": "Expected tax payment 2",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "$813.90",
+          "$1,648.48",
+          "$2,806.83",
+          "$1,623.86",
+          "$3,472.80"
+        ]
+      },
+      {
+        "columnName": "Expected tax payment 3",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "$1,937.21",
+          "$213.64",
+          "$2,391.94",
+          "$967.58",
+          "$3,229.10"
+        ]
+      },
+      {
+        "columnName": "Expected tax payment 4",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "$1,937.21",
+          "$1,035.38",
+          "$387.46",
+          "$967.58",
+          "$347.48"
+        ]
+      },
+      {
+        "columnName": "Flood Certificate Number",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2202513774",
+          "1305500099",
+          "2103567138",
+          "2202088853",
+          "1110517016"
+        ]
+      },
+      {
+        "columnName": "Flood Certificate Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2022-02-14",
+          "2013-05-13",
+          "2021-03-10",
+          "2022-08-02",
+          "2011-10-18"
+        ]
+      },
+      {
+        "columnName": "Flood Map CID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Flood Map Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2020-09-18",
+          "2008-03-18",
+          "2020-07-08",
+          "2022-08-02",
+          "2008-09-26"
+        ]
+      },
+      {
+        "columnName": "Flood Map Number",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "04013C",
+          "35043C",
+          "42075C",
+          "08059C",
+          "09003C"
+        ]
+      },
+      {
+        "columnName": "Flood Map Panel #",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1270",
+          "1893",
+          "0095",
+          "0304",
+          "0456"
+        ]
+      },
+      {
+        "columnName": "Flood Zone",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "X500",
+          "X",
+          "X",
+          "X",
+          "X"
+        ]
+      },
+      {
+        "columnName": "Letter of Map Change",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Letter of Map Change Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2017-05-03",
+          "2006-11-09"
+        ]
+      },
+      {
+        "columnName": "Letter of Map Change Case No",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Coastal Barrier Resources Act Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "NFIP Participation",
+        "inferredSqlType": "VARCHAR(42)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PARTICIPATING REGULAR",
+          "PARTICIPATING REGULAR",
+          "PARTICIPATING REGULAR",
+          "PARTICIPATING REGULAR",
+          "PARTICIPATING REGULAR"
+        ]
+      },
+      {
+        "columnName": "SFHA Zone",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "OUTSIDE",
+          "OUTSIDE",
+          "OUTSIDE",
+          "OUTSIDE",
+          "OUTSIDE"
+        ]
+      },
+      {
+        "columnName": "Chargeoff",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Chargeoff Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Chargeoff Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      }
+    ],
+    "suggestedTableName": "loan_information"
+  },
+  "Payments": {
+    "sheetName": "Payments",
+    "rowCount": "42038",
+    "columnCount": 34,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "7478578043",
+          "8954158085",
+          "7362208571",
+          "7362208571",
+          "7362208571"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "4029648904",
+          "4011539067",
+          "009390605",
+          "009390605",
+          "009390605"
+        ]
+      },
+      {
+        "columnName": "Payment Date Received",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-10-28",
+          "2024-10-31",
+          "2024-11-05",
+          "2024-11-05",
+          "2024-11-29"
+        ]
+      },
+      {
+        "columnName": "Payment Date Effective",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-10-28",
+          "2024-10-31",
+          "2024-11-05",
+          "2024-11-05",
+          "2024-11-29"
+        ]
+      },
+      {
+        "columnName": "Payment Last Due Date Paid",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Amount",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "3681.26",
+          "1148.43",
+          "836.31",
+          "278.38",
+          "1019.77"
+        ]
+      },
+      {
+        "columnName": "Payment Method",
+        "inferredSqlType": "VARCHAR(50)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "INTERNALLY_ORIGINATED_ACH",
+          "INTERNALLY_ORIGINATED_ACH",
+          "INTERNALLY_ORIGINATED_ACH",
+          "INTERNALLY_ORIGINATED_ACH",
+          "INTERNALLY_ORIGINATED_ACH"
+        ]
+      },
+      {
+        "columnName": "Payment Source of Funds",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "BORROWER",
+          "BORROWER",
+          "BORROWER",
+          "BORROWER",
+          "BORROWER"
+        ]
+      },
+      {
+        "columnName": "Payment Internal ID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "LPMT342f5dc980f4a4cecd17a1f3202e21",
+          "LPMT5daf2f635924a477511bc1888fe2f9",
+          "LPMTa152a3d6061cfe19ce0b9143c7a6c9",
+          "LPMT75e56b53a783ea69bfbccef828c1a3",
+          "LPMTc89405be6cafb03647fd8f01ca3927"
+        ]
+      },
+      {
+        "columnName": "Payment External ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Status",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "COMPLETE",
+          "COMPLETE",
+          "COMPLETE",
+          "COMPLETE",
+          "COMPLETE"
+        ]
+      },
+      {
+        "columnName": "Payment Event Type",
+        "inferredSqlType": "VARCHAR(24)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "LOAN_PAYMENT",
+          "LOAN_PAYMENT",
+          "LOAN_PAYMENT",
+          "LOAN_PAYMENT",
+          "LOAN_PAYMENT"
+        ]
+      },
+      {
+        "columnName": "Payment Event Modification Type",
+        "inferredSqlType": "VARCHAR(44)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "SEQUENCE_NUMBER_CHANGE",
+          "REALLOCATION",
+          "REALLOCATION",
+          "REALLOCATION",
+          "REALLOCATION"
+        ]
+      },
+      {
+        "columnName": "Payment Event Subtype",
+        "inferredSqlType": "VARCHAR(58)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "SCHEDULED_PAYMENT_APPLICATION",
+          "SCHEDULED_PAYMENT_APPLICATION",
+          "SCHEDULED_PAYMENT_APPLICATION",
+          "SCHEDULED_PAYMENT_APPLICATION",
+          "SCHEDULED_PAYMENT_APPLICATION"
+        ]
+      },
+      {
+        "columnName": "Payment Actual Principal Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Actual Interest Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Master Servicing Fee Rate",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.250%",
+          "0.250%",
+          "0.250%",
+          "0.250%",
+          "0.250%"
+        ]
+      },
+      {
+        "columnName": "Payment Master Servicing Fee Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Scheduled Principal Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Scheduled Interest Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Escrow Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Suspense Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Late Fees Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment NSF Fees Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Other Fees Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Servicing Fee Balance Applied",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Payment Subservicer P&I Advance Liability Applied",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Master Servicer P&I Advance Liability Applied",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Investor P&I Advance Liability Applied",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Subservicer T&I Advance Liability Applied",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Master Servicer T&I Advance Liability Applied",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Investor T&I Advance Liability Applied",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Loss Draft Applied",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "28890.61",
+          "12498.88"
+        ]
+      }
+    ],
+    "suggestedTableName": "payments"
+  },
+  "Delinquency": {
+    "sheetName": "Delinquency",
+    "rowCount": "44155",
+    "columnCount": 8,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "4545471443",
+          "4545471443",
+          "4596737275",
+          "4644023320",
+          "4644023320"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "4025957612",
+          "4025957612",
+          "4018484222",
+          "4020882089",
+          "4020882089"
+        ]
+      },
+      {
+        "columnName": "C and D Flag",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Date Completed",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2022-12-17",
+          "2022-12-17",
+          "2022-12-17",
+          "2022-12-17",
+          "2022-12-17"
+        ]
+      },
+      {
+        "columnName": "Activity Type",
+        "inferredSqlType": "VARCHAR(32)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "payment_reminder",
+          "payment_reminder",
+          "payment_reminder",
+          "payment_reminder",
+          "payment_reminder"
+        ]
+      },
+      {
+        "columnName": "Communication Method",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "MAIL",
+          "MAIL",
+          "MAIL",
+          "MAIL",
+          "MAIL"
+        ]
+      },
+      {
+        "columnName": "Description",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      }
+    ],
+    "suggestedTableName": "delinquency"
+  },
+  "Expenses": {
+    "sheetName": "Expenses",
+    "rowCount": "101",
+    "columnCount": 22,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1210485284",
+          "1689703394",
+          "1757039769",
+          "1893743479",
+          "2275677168"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "080634486",
+          "1740226990",
+          "4027155861",
+          "4017304225",
+          "1737382005"
+        ]
+      },
+      {
+        "columnName": "Expense Date Effective",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-08-05",
+          "2024-08-05",
+          "2024-08-05",
+          "2024-08-05",
+          "2024-08-05"
+        ]
+      },
+      {
+        "columnName": "Expense Amount",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "-64.68",
+          "-231.88",
+          "-263.58",
+          "-1306.93",
+          "-642.84"
+        ]
+      },
+      {
+        "columnName": "Expense Counterparty",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CPNY000000000000000000000000000000",
+          "CPNY000000000000000000000000000000",
+          "CPNY000000000000000000000000000000",
+          "CPNY000000000000000000000000000000",
+          "CPNY000000000000000000000000000000"
+        ]
+      },
+      {
+        "columnName": "Expense Reason",
+        "inferredSqlType": "VARCHAR(30)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "BORROWER_REFUND",
+          "BORROWER_REFUND",
+          "BORROWER_REFUND",
+          "BORROWER_REFUND",
+          "BORROWER_REFUND"
+        ]
+      },
+      {
+        "columnName": "Tax Authority Type",
+        "inferredSqlType": "VARCHAR(4)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "01",
+          "02",
+          "02",
+          "02",
+          "02"
+        ]
+      },
+      {
+        "columnName": "Expense Internal ID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ESRF6e4715ef8dc75aa457b84800ba079a",
+          "ESRF9bbcea78f915f66245b1d676bac667",
+          "ESRF7c8a8c1d07e57676eececda1ae1d0b",
+          "ESRFb1b56238fbeef6ac99c019b5793b6f",
+          "ESRFda098da7ed8e7052beb334f90a5489"
+        ]
+      },
+      {
+        "columnName": "Expense External ID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "OGTF8e9586f6114fb2225a4ee3e5cdc420",
+          "OGTF48f06ed5333b1099fb2000c61ebf6c",
+          "OGTF6e0489c7f31256f5330fcc9b7b6a9d",
+          "OGTF5c53b4d2638d49cf0916ee9bd2586d",
+          "OGTF3fe6acddfd271c297bfd0cf81ba577"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Escrow Balance",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "-64.68",
+          "-231.88",
+          "-263.58",
+          "-1306.93",
+          "-642.84"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Late Fee Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to NSF Fee Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Other Fee Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Subservicer P&I Advance Liability Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Master Servicer P&I Advance Liability Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Investor P&I Advance Liability Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Subservicer T&I Advance Liability Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Master Servicer T&I Advance Liability Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Investor T&I Advance Liability Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Insurance Claim Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Expense Charged to Servicing Fee Balance",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00",
+          "0.00"
+        ]
+      }
+    ],
+    "suggestedTableName": "expenses"
+  },
+  "Trailing Payments": {
+    "sheetName": "Trailing Payments",
+    "rowCount": "1",
+    "columnCount": 11,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Date Received",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Date Effective",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Last Due Date Paid",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Method",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Source of Funds",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment Internal ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Payment External ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      }
+    ],
+    "suggestedTableName": "trailing_payments"
+  },
+  "Insurance": {
+    "sheetName": "Insurance",
+    "rowCount": "43335",
+    "columnCount": 29,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1000257343",
+          "1000334483",
+          "1001239700",
+          "1001404981",
+          "1001434476"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "4028899618",
+          "1730325768",
+          "1735015244",
+          "4019861883",
+          "350477833"
+        ]
+      },
+      {
+        "columnName": "P&C Escrowed Required",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "TRUE",
+          "TRUE",
+          "FALSE",
+          "FALSE",
+          "TRUE"
+        ]
+      },
+      {
+        "columnName": "P&C Forced Place Enabled",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "P&C Prop Insurance Claim Flag",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "P&C Prop Insurance Coverage Type",
+        "inferredSqlType": "VARCHAR(38)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "INDIVIDUAL_DWELLING",
+          "INDIVIDUAL_DWELLING",
+          "INDIVIDUAL_DWELLING",
+          "INDIVIDUAL_DWELLING",
+          "INDIVIDUAL_DWELLING"
+        ]
+      },
+      {
+        "columnName": "P&C Prop Insurance Coverage Amount",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "137584.00",
+          "730162.00",
+          "562500.00",
+          "662000.00",
+          "349300.00"
+        ]
+      },
+      {
+        "columnName": "P&C Prop Insurance Deductible Amount",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1000.00",
+          "2500.00",
+          "2500.00",
+          "5000.00",
+          "500.00"
+        ]
+      },
+      {
+        "columnName": "P&C Flood Insurance Coverage Type",
+        "inferredSqlType": "VARCHAR(38)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "INDIVIDUAL_DWELLING",
+          "INDIVIDUAL_DWELLING",
+          "HO6",
+          "HO6",
+          "INDIVIDUAL_DWELLING"
+        ]
+      },
+      {
+        "columnName": "P&C Flood Insurance Coverage Amount",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "142000.00",
+          "250000.00",
+          "193250.00",
+          "193250.00",
+          "250000.00"
+        ]
+      },
+      {
+        "columnName": "P&C Flood Insurance Deductible Amount",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "5000.00",
+          "1250.00",
+          "5000.00",
+          "2000.00",
+          "10000.00"
+        ]
+      },
+      {
+        "columnName": "P&C Wind Insurance Coverage Type",
+        "inferredSqlType": "VARCHAR(38)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "INDIVIDUAL_DWELLING"
+        ]
+      },
+      {
+        "columnName": "P&C Wind Insurance Coverage Amount",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "291000.00"
+        ]
+      },
+      {
+        "columnName": "P&C Wind Insurance Deductible Amount",
+        "inferredSqlType": "VARCHAR(8)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "P&C Policy Number",
+        "inferredSqlType": "VARCHAR(24)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2211876674",
+          "300119002282",
+          "FP25567630",
+          "LAR791650902",
+          "7240HR005979"
+        ]
+      },
+      {
+        "columnName": "P&C Provider SID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CPNYd4f26c1b086a4d2b8140be5fa36bb3",
+          "CPNY28dd3c19fa242cddd1628e5299d4f0",
+          "CPNYc328568038f88b981723ce5573a686",
+          "CPNYcfd0514fd9acb773e4c555141ab725",
+          "CPNY39c710cc97342d511ceb202907c173"
+        ]
+      },
+      {
+        "columnName": "P&C Broker SID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "P&C Policy Start Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-24",
+          "2024-09-15",
+          "2024-09-05",
+          "2024-04-20",
+          "2024-11-13"
+        ]
+      },
+      {
+        "columnName": "P&C Policy Expiration Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2026-02-24",
+          "2025-09-15",
+          "2025-09-05",
+          "2025-04-20",
+          "2025-11-13"
+        ]
+      },
+      {
+        "columnName": "P&C Policy Cancellation Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-01-17",
+          "2024-06-05"
+        ]
+      },
+      {
+        "columnName": "P&C Premium Payment",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1220.00",
+          "3434.80",
+          "1954.00",
+          "6977.00",
+          "3000.19"
+        ]
+      },
+      {
+        "columnName": "P&C Monthly Premium Payment",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "101.67",
+          "286.23",
+          "162.83",
+          "581.42",
+          "250.02"
+        ]
+      },
+      {
+        "columnName": "P&C Monthly Premium Payment Pending",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "P&C Premium Payment Frequency",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ANNUAL",
+          "ANNUAL",
+          "ANNUAL",
+          "ANNUAL",
+          "ANNUAL"
+        ]
+      },
+      {
+        "columnName": "P&C Last Premium Due Date Paid",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-24",
+          "2024-09-15",
+          "2023-09-05",
+          "2024-11-13",
+          "2024-08-14"
+        ]
+      },
+      {
+        "columnName": "P&C Next Premium Due Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "P&C Contact Email",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "P&C Contact Phone Number",
+        "inferredSqlType": "VARCHAR(24)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "+18602770111"
+        ]
+      }
+    ],
+    "suggestedTableName": "insurance"
+  },
+  "Loss Mitigation": {
+    "sheetName": "Loss Mitigation",
+    "rowCount": "101",
+    "columnCount": 20,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "3262991556",
+          "5053922308",
+          "5589940620",
+          "5589940620",
+          "7564752751"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "4030291414",
+          "4027709159",
+          "4004792200",
+          "4004792200",
+          "005487648"
+        ]
+      },
+      {
+        "columnName": "Loss Mitigation Plan Type",
+        "inferredSqlType": "VARCHAR(70)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Loan Modification Trial Period Plan",
+          "Repayment Plan",
+          "Repayment Plan",
+          "Forbearance Plan",
+          "Forbearance Plan"
+        ]
+      },
+      {
+        "columnName": "Hardship Reason",
+        "inferredSqlType": "VARCHAR(48)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "INCOME_DECREASE",
+          "INCOME_DECREASE",
+          "HOUSING_EXPENSE_INCREASE",
+          "UNEMPLOYMENT",
+          "UNEMPLOYMENT"
+        ]
+      },
+      {
+        "columnName": "MBA DQ Status",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "90-119 DPD",
+          "30-59 DPD",
+          "60-89 DPD",
+          "60-89 DPD",
+          "60-89 DPD"
+        ]
+      },
+      {
+        "columnName": "Evaluation Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-11-20",
+          "2025-02-13",
+          "2025-03-31",
+          "2025-01-07",
+          "2025-01-27"
+        ]
+      },
+      {
+        "columnName": "Plan Start Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-01-01",
+          "2025-03-01",
+          "2025-04-01",
+          "2025-01-01",
+          "2025-02-01"
+        ]
+      },
+      {
+        "columnName": "Plan End Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-04-30",
+          "2025-08-31",
+          "2025-09-30",
+          "2025-03-31",
+          "2025-04-30"
+        ]
+      },
+      {
+        "columnName": "Contractual Monthly Payment",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1180.47",
+          "798.87",
+          "446.90",
+          "446.90",
+          "526.40"
+        ]
+      },
+      {
+        "columnName": "Loss Mitigation Plan Payment Amount",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1562.46",
+          "1540.18",
+          "1385.05",
+          "0.00",
+          "0.00"
+        ]
+      },
+      {
+        "columnName": "Mod Initial Principal Balance",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "579849.22",
+          "144408.68"
+        ]
+      },
+      {
+        "columnName": "Mod Effective Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-09-01",
+          "2024-05-01"
+        ]
+      },
+      {
+        "columnName": "Mod New Interest Rate",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "6.125%",
+          "3.500%"
+        ]
+      },
+      {
+        "columnName": "Mod New Maturity Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2064-08-01",
+          "2064-04-01"
+        ]
+      },
+      {
+        "columnName": "Loss Mit Date of Resolution UPB",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Forbearance Next Payment Due Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-04-01",
+          "2025-04-01",
+          "2025-04-01",
+          "2025-04-01",
+          "2025-04-01"
+        ]
+      },
+      {
+        "columnName": "Forbearance Payment Frequency",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY",
+          "MONTHLY"
+        ]
+      },
+      {
+        "columnName": "Forbearance Plan Hardship Type",
+        "inferredSqlType": "VARCHAR(24)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "UNEMPLOYMENT",
+          "UNEMPLOYMENT",
+          "UNEMPLOYMENT",
+          "UNEMPLOYMENT",
+          "UNEMPLOYMENT"
+        ]
+      },
+      {
+        "columnName": "Forbearance Total Reduction Amount",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "100.000%",
+          "100.000%",
+          "100.000%",
+          "100.000%",
+          "100.000%"
+        ]
+      }
+    ],
+    "suggestedTableName": "loss_mitigation"
+  },
+  "COVID-19": {
+    "sheetName": "COVID-19",
+    "rowCount": "1",
+    "columnCount": 20,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Loss Mitigation Plan Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Hardship Reason",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "MBA DQ Status",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Evaluation Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Plan Start Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Plan End Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Contractual Monthly Payment",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Loss Mitigation Plan Payment Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Mod Initial Principal Balance",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Mod Effective Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Mod New Interest Rate",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Mod New Maturity Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Loss Mit Date of Resolution UPB",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Forbearance Next Payment Due Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Forbearance Payment Frequency",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Forbearance Plan Hardship Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Forbearance Total Reduction Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      }
+    ],
+    "suggestedTableName": "covid_19"
+  },
+  "Bankruptcy": {
+    "sheetName": "Bankruptcy",
+    "rowCount": "101",
+    "columnCount": 33,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "5005740163",
+          "9955975429",
+          "9166955675",
+          "7417976442",
+          "7417976442"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1708084482",
+          "1708081459",
+          "1702668251",
+          "4004487779",
+          "4004487779"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Case Status",
+        "inferredSqlType": "VARCHAR(52)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CASE_CLOSED_WITH_DISCHARGE",
+          "CASE_CLOSED_WITH_DISCHARGE",
+          "CASE_CLOSED_WITH_DISCHARGE",
+          "CASE_CLOSED_WITH_DISCHARGE",
+          "CASE_DISMISSED"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Filing Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2005-02-01",
+          "2005-09-23",
+          "2006-03-15",
+          "2006-09-29",
+          "2006-09-29"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Conversion Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2014-10-08",
+          "2015-05-20",
+          "2018-11-14"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Reaffirmation Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy Confirmation Hearing Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy Discharge Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy Dismissal Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy MFR Filed Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy MFR Granted Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy MFR Hearing Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy MFR Referred Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy Paid By",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy Plan Confirmed Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2020-09-21"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Post Petition Payment Amount",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2181.82",
+          "3749.44",
+          "1012.03",
+          "964.92",
+          "964.92"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Post Petition Payment First Due Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-06-01"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Post Petition Payment Next Due Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-04-01",
+          "2025-04-01",
+          "2024-11-01",
+          "2025-04-01",
+          "2025-04-01"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Pre Petition Payment Due Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Bankruptcy Proof of Claim Filed Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2019-08-05"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Case Number",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "05-30347",
+          "05-37800",
+          "06-20162",
+          "06-19307",
+          "06-19306"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy Chapter",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CHAPTER_7",
+          "CHAPTER_7",
+          "CHAPTER_7",
+          "CHAPTER_7",
+          "CHAPTER_7"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy District",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "SOUTHERN",
+          "ISLAND",
+          "ISLAND",
+          "SOUTHERN",
+          "SOUTHERN"
+        ]
+      },
+      {
+        "columnName": "Bankruptcy State",
+        "inferredSqlType": "VARCHAR(4)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CT",
+          "NY",
+          "CT",
+          "NJ",
+          "NJ"
+        ]
+      },
+      {
+        "columnName": "Debtor's First Name",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Lisa",
+          "Lawrence",
+          "Thomas",
+          "Lawrence",
+          "Lawrence"
+        ]
+      },
+      {
+        "columnName": "Debtor's Last Name",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Sodaro",
+          "Germano",
+          "Wood",
+          "Kennedy",
+          "Kennedy"
+        ]
+      },
+      {
+        "columnName": "Second Debtor's First Name",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "John",
+          "Joan",
+          "Heather",
+          "Heather",
+          "Daniel"
+        ]
+      },
+      {
+        "columnName": "Second Debtor's Last Name",
+        "inferredSqlType": "VARCHAR(22)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Bleggi",
+          "Molans Wood",
+          "Kennedy",
+          "Kennedy",
+          "Chapman"
+        ]
+      },
+      {
+        "columnName": "Debtor Attorney Name",
+        "inferredSqlType": "VARCHAR(72)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Adams Law Office",
+          "Law Office of Cathy R. Stroupe, P.A.",
+          "Law Offices of Neil Crane, LLC"
+        ]
+      },
+      {
+        "columnName": "Debtor Attorney Address",
+        "inferredSqlType": "VARCHAR(90)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "22 RICHMOND CENTER CT, SAINT PETERS, MO 63376",
+          "PO BOX 840, REIDSVILLE, NC 27323",
+          "2679 WHITNEY AVE, HAMDEN, CT 06518"
+        ]
+      },
+      {
+        "columnName": "Debtor Attorney Phone",
+        "inferredSqlType": "VARCHAR(30)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "+1-636-397-4744",
+          "+1-336-348-1241",
+          "+1-203-230-2233"
+        ]
+      },
+      {
+        "columnName": "Debtor Attorney Email",
+        "inferredSqlType": "VARCHAR(48)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "maggie@thinkadamslaw.com",
+          "stroupelaw@att.net",
+          "Neilecf@neilcranelaw.com"
+        ]
+      }
+    ],
+    "suggestedTableName": "bankruptcy"
+  },
+  "Foreclosure": {
+    "sheetName": "Foreclosure",
+    "rowCount": "54",
+    "columnCount": 20,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2008856735",
+          "7144052823",
+          "8244162673",
+          "9330947399",
+          "1831981143"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "4009125459",
+          "1733902437",
+          "4029828055",
+          "4011167213",
+          "4014639819"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Status",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ACTIVE",
+          "ACTIVE",
+          "COMPLETED",
+          "COMPLETED",
+          "ACTIVE"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Type",
+        "inferredSqlType": "VARCHAR(24)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "JUDICIAL",
+          "JUDICIAL",
+          "NON_JUDICIAL",
+          "JUDICIAL",
+          "JUDICIAL"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Referral Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-13",
+          "2025-01-30",
+          "2024-07-31",
+          "2024-10-16",
+          "2024-10-03"
+        ]
+      },
+      {
+        "columnName": "First Legal Action Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-12-05",
+          "2025-02-14",
+          "2025-01-31",
+          "2024-11-15",
+          "2024-12-24"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Actual Sale Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-27"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Notice of Sale Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-08-30",
+          "2024-10-28",
+          "2024-12-24",
+          "2024-12-06"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Service of Completion Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-05",
+          "2025-03-14",
+          "2024-12-10",
+          "2024-11-03",
+          "2024-05-13"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Judgement Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Foreclosure Est Sale Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-05-07",
+          "2025-03-27"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Start Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-13",
+          "2025-01-30",
+          "2024-10-02",
+          "2024-12-31",
+          "2025-02-19"
+        ]
+      },
+      {
+        "columnName": "Foreclosure Contested",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Last Completed Inspection Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-21",
+          "2025-02-28",
+          "2024-08-17",
+          "2024-11-18",
+          "2025-02-25"
+        ]
+      },
+      {
+        "columnName": "Last Foreclosure Appraisal Complete Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-10-28",
+          "2025-01-30",
+          "2024-08-27",
+          "2025-01-14",
+          "2025-01-14"
+        ]
+      },
+      {
+        "columnName": "Foreclosure NOI Sent Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2024-10-08",
+          "2024-11-12",
+          "2024-06-11",
+          "2024-08-06",
+          "2024-10-03"
+        ]
+      },
+      {
+        "columnName": "Post Foreclosure Title Owner",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Sale Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Sale Funds Received Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      }
+    ],
+    "suggestedTableName": "foreclosure"
+  },
+  "Borrowers": {
+    "sheetName": "Borrowers",
+    "rowCount": "101",
+    "columnCount": 37,
+    "inferredSchema": [
+      {
+        "columnName": "Report As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31",
+          "2025-03-31"
+        ]
+      },
+      {
+        "columnName": "Valon Loan ID",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "1000257343",
+          "1000334483",
+          "1001239700",
+          "1001404981",
+          "1001434476"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          4028899618,
+          1730325768,
+          1735015244,
+          4019861883,
+          350477833
+        ]
+      },
+      {
+        "columnName": "Borrower First Name",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Middle Name",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Last Name",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Suffix",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Date Of Birth",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Email Address",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Phone Number Cell",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Phone Number Home",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Phone Number Work",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Mailing Address 1",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Mailing Address 2",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Mailing City",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Mailing State",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Mailing Zipcode",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Borrower Originating FICO",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "764",
+          "806",
+          "802",
+          "818",
+          "789"
+        ]
+      },
+      {
+        "columnName": "Borrower Do Not Call Flag",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Borrower Current Credit Score",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "802",
+          "764",
+          "806",
+          "802",
+          "818"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower First Name",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Middle Name",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Last Name",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Suffix",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Date Of Birth",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Email Address",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Phone Number Cell",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Phone Number Home",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Phone Number Work",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Mailing Address 1",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Mailing Address 2",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Mailing City",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Mailing State",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Mailing Zipcode",
+        "inferredSqlType": "VARCHAR(16)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED",
+          "REDACTED"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Originating FICO",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "781",
+          "796",
+          "772",
+          "716"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Do Not Call Flag",
+        "inferredSqlType": "VARCHAR(10)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE",
+          "FALSE"
+        ]
+      },
+      {
+        "columnName": "Co-Borrower Current Credit Score",
+        "inferredSqlType": "VARCHAR(6)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "815",
+          "781",
+          "796",
+          "772",
+          "828"
+        ]
+      }
+    ],
+    "suggestedTableName": "borrowers"
+  }
+}

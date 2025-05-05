@@ -1,0 +1,1054 @@
+{
+  "Summary": {
+    "sheetName": "Summary",
+    "rowCount": "20",
+    "columnCount": 6,
+    "inferredSchema": [
+      {
+        "columnName": "187935",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          "2025-02-01",
+          "2025-02-28",
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "214093",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          "2025-02-01",
+          "2025-02-28",
+          0,
+          0,
+          219515.76
+        ]
+      },
+      {
+        "columnName": "283670015",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          "2025-02-01",
+          "2025-02-28",
+          0,
+          0,
+          1201166.18
+        ]
+      },
+      {
+        "columnName": "Asset",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          "2025-02-01",
+          "2025-02-28",
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Adjustment",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          "2025-02-01",
+          "2025-02-28",
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Total",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          "2025-02-01",
+          "2025-02-28",
+          0,
+          0,
+          1420681.94
+        ]
+      }
+    ],
+    "suggestedTableName": "summary"
+  },
+  "Loan Activity": {
+    "sheetName": "Loan Activity",
+    "rowCount": "101",
+    "columnCount": 31,
+    "inferredSchema": [
+      {
+        "columnName": "As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28"
+        ]
+      },
+      {
+        "columnName": "Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          3432928771,
+          1724757586,
+          4516809588,
+          7847110670,
+          3877156138
+        ]
+      },
+      {
+        "columnName": "Previous Servicer",
+        "inferredSqlType": "VARCHAR(70)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Ruoff Mortgage Company, Inc.",
+          "Flagstar Bank",
+          "Ruoff Mortgage Company, Inc.",
+          "Roundpoint Mortgage Servicing LLC",
+          "Highlands Residential Mortgage, Ltd"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          11851999,
+          4010400951,
+          4026540278,
+          4019198770,
+          4029649871
+        ]
+      },
+      {
+        "columnName": "Investor",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FREDDIE",
+          "FANNIE",
+          "FANNIE",
+          "FANNIE",
+          "FANNIE"
+        ]
+      },
+      {
+        "columnName": "SSID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          214093,
+          283670015,
+          283670015,
+          283670015,
+          283670015
+        ]
+      },
+      {
+        "columnName": "Remittance Type",
+        "inferredSqlType": "VARCHAR(32)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "SCHEDULED_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL"
+        ]
+      },
+      {
+        "columnName": "Pool ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Loan Purpose",
+        "inferredSqlType": "VARCHAR(30)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "NEW_ORIGINATION",
+          "NEW_ORIGINATION",
+          "CASH_OUT",
+          "NEW_ORIGINATION",
+          "NEW_ORIGINATION"
+        ]
+      },
+      {
+        "columnName": "Loan Status",
+        "inferredSqlType": "VARCHAR(18)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CURRENT",
+          "CURRENT",
+          "CURRENT",
+          "COMPLETED",
+          "CURRENT"
+        ]
+      },
+      {
+        "columnName": "LPI Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-01",
+          "2025-02-01",
+          "2025-02-01",
+          "2024-11-01",
+          "2025-02-01"
+        ]
+      },
+      {
+        "columnName": "Prior Interest-Bearing UPB",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          136287.06,
+          68860.79,
+          139077.5,
+          0,
+          194826.59
+        ]
+      },
+      {
+        "columnName": "Current Interest-Bearing UPB",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          136023.57,
+          67694.48,
+          138162.02,
+          0,
+          194567.66
+        ]
+      },
+      {
+        "columnName": "Deferred UPB",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Principal Collected",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          263.49,
+          1166.31,
+          915.48,
+          0,
+          258.93
+        ]
+      },
+      {
+        "columnName": "Principal Remitted",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Interest Collected",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          653.04,
+          193.67,
+          260.77,
+          0,
+          832.07
+        ]
+      },
+      {
+        "columnName": "Interest Remitted",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Gross Master Servicing Fee",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          28.4,
+          14.35,
+          28.97,
+          0,
+          40.59
+        ]
+      },
+      {
+        "columnName": "Client Principal Surplus",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Client Interest Surplus",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Client Principal Shortfall",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Client Interest Shortfall",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Valon T&I Advance Liability",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Valon Servicing Advance Liability",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Client T&I Advance Reimbursement",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Client Servicing Advance Reimbursement",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Repurchase Refund",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Late Fees",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "NSF Fees",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "columnName": "Other Fees",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "suggestedTableName": "loan_activity"
+  },
+  "Subservicing Fees": {
+    "sheetName": "Subservicing Fees",
+    "rowCount": "101",
+    "columnCount": 10,
+    "inferredSchema": [
+      {
+        "columnName": "As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28"
+        ]
+      },
+      {
+        "columnName": "Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          3432928771,
+          1724757586,
+          4516809588,
+          3877156138,
+          4280573851
+        ]
+      },
+      {
+        "columnName": "Previous Servicer",
+        "inferredSqlType": "VARCHAR(70)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Ruoff Mortgage Company, Inc.",
+          "Flagstar Bank",
+          "Ruoff Mortgage Company, Inc.",
+          "Highlands Residential Mortgage, Ltd",
+          "Flagstar Bank"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          11851999,
+          4010400951,
+          4026540278,
+          4029649871,
+          4011940373
+        ]
+      },
+      {
+        "columnName": "Investor",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FREDDIE",
+          "FANNIE",
+          "FANNIE",
+          "FANNIE",
+          "FANNIE"
+        ]
+      },
+      {
+        "columnName": "SSID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          214093,
+          283670015,
+          283670015,
+          283670015,
+          283670015
+        ]
+      },
+      {
+        "columnName": "Remittance Type",
+        "inferredSqlType": "VARCHAR(32)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "SCHEDULED_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL"
+        ]
+      },
+      {
+        "columnName": "Subservicing Fee SID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "SSFEb06a1538a71fc855fb84cedf1c3c8c",
+          "SSFE948e917bcbc449bc0eaa5bd432b58a",
+          "SSFE1177eab2ac6e1753dfe46a84d80234",
+          "SSFE3ad4ce3c4c3bc32e0ad30a9f24469f",
+          "SSFE4d7d219fec9fcc0901cac44a9a0bac"
+        ]
+      },
+      {
+        "columnName": "Subservicing Fee Amount",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          5.5,
+          5.92,
+          3.5,
+          6.44,
+          46.34
+        ]
+      },
+      {
+        "columnName": "Subservicing Fee Type",
+        "inferredSqlType": "VARCHAR(66)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "BASE_SERVICING_FEE_CURRENT_AGENCY",
+          "BASE_SERVICING_FEE_CURRENT_AGENCY",
+          "BASE_SERVICING_FEE_CURRENT_AGENCY",
+          "BASE_SERVICING_FEE_CURRENT_AGENCY",
+          "BASE_SERVICING_FEE_BANKRUPTCY"
+        ]
+      }
+    ],
+    "suggestedTableName": "subservicing_fees"
+  },
+  "Servicing Expenses": {
+    "sheetName": "Servicing Expenses",
+    "rowCount": "101",
+    "columnCount": 11,
+    "inferredSchema": [
+      {
+        "columnName": "As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28"
+        ]
+      },
+      {
+        "columnName": "Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          4280573851,
+          4280573851,
+          4280573851,
+          9408771927,
+          9408771927
+        ]
+      },
+      {
+        "columnName": "Previous Servicer",
+        "inferredSqlType": "VARCHAR(66)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Flagstar Bank",
+          "Flagstar Bank",
+          "Flagstar Bank",
+          "Roundpoint Mortgage Servicing LLC",
+          "Roundpoint Mortgage Servicing LLC"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          4011940373,
+          4011940373,
+          4011940373,
+          6026767,
+          6026767
+        ]
+      },
+      {
+        "columnName": "Investor",
+        "inferredSqlType": "VARCHAR(14)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FANNIE",
+          "FANNIE",
+          "FANNIE",
+          "FREDDIE",
+          "FREDDIE"
+        ]
+      },
+      {
+        "columnName": "SSID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          283670015,
+          283670015,
+          283670015,
+          214093,
+          214093
+        ]
+      },
+      {
+        "columnName": "Remittance Type",
+        "inferredSqlType": "VARCHAR(32)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "SCHEDULED_ACTUAL",
+          "SCHEDULED_ACTUAL"
+        ]
+      },
+      {
+        "columnName": "Servicing Expense SID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "EXPS632a470c832316137a1e1b1606575f",
+          "EXPS66932d0284f2e8831248565e23d2c5",
+          "EXPSc67715a65d8f5a7c9d90c2afce54af",
+          "EXPS16304b6c74ea366edad748c41a3e48",
+          "EXPS182b55d74258c92e0752afb32a8460"
+        ]
+      },
+      {
+        "columnName": "Servicing Expense Amount",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          1.94,
+          150,
+          25,
+          18,
+          25
+        ]
+      },
+      {
+        "columnName": "Servicing Expense Recoverability",
+        "inferredSqlType": "VARCHAR(40)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Investor Recoverable",
+          "Investor Recoverable",
+          "Investor Recoverable",
+          "Investor Recoverable",
+          "Not Recoverable"
+        ]
+      },
+      {
+        "columnName": "Servicing Expense Type",
+        "inferredSqlType": "VARCHAR(62)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "CERTIFIED_MAIL",
+          "PAYMENT_CHANGE_NOTIFICATION",
+          "PAYMENT_CHANGE_NOTIFICATION",
+          "RECORDING_COSTS_LOSS_MITIGATION",
+          "RECORDING_SERVICE_FEE"
+        ]
+      }
+    ],
+    "suggestedTableName": "servicing_expenses"
+  },
+  "Passthrough Expenses": {
+    "sheetName": "Passthrough Expenses",
+    "rowCount": "101",
+    "columnCount": 10,
+    "inferredSchema": [
+      {
+        "columnName": "As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28"
+        ]
+      },
+      {
+        "columnName": "Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          7847110670,
+          4280573851,
+          8164317918,
+          5353628804,
+          9991337596
+        ]
+      },
+      {
+        "columnName": "Previous Servicer",
+        "inferredSqlType": "VARCHAR(66)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Roundpoint Mortgage Servicing LLC",
+          "Flagstar Bank",
+          "BSI Financial Services",
+          "Webster Bank, N.A.",
+          "Webster Bank, N.A."
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          4019198770,
+          4011940373,
+          4028948824,
+          1714606495,
+          4018801666
+        ]
+      },
+      {
+        "columnName": "Investor",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FANNIE",
+          "FANNIE",
+          "FANNIE",
+          "FANNIE",
+          "FANNIE"
+        ]
+      },
+      {
+        "columnName": "SSID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          283670015,
+          283670015,
+          283670015,
+          283670015,
+          283670015
+        ]
+      },
+      {
+        "columnName": "Remittance Type",
+        "inferredSqlType": "VARCHAR(38)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "SCHEDULED_SCHEDULED",
+          "SCHEDULED_SCHEDULED"
+        ]
+      },
+      {
+        "columnName": "Passthrough Fee SID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "SSFEc5950e556bf465ac2c52111c0ef051",
+          "SSFEf785c8cb8d211a191e525bd9183aab",
+          "SSFEa2d806eb770cd99a1d28683219d1f8",
+          "SSFEb6851f7dcde2777c40e5c1db3b242a",
+          "SSFEf14e16aabde5d2ca5a3306022486ac"
+        ]
+      },
+      {
+        "columnName": "Passthrough Fee Amount",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          40.5,
+          1.99,
+          0.5,
+          102.75,
+          0.5
+        ]
+      },
+      {
+        "columnName": "Passthrough Fee Type",
+        "inferredSqlType": "VARCHAR(86)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PASS_THROUGH_EXPENSE_LIEN_RELEASES",
+          "PASS_THROUGH_EXPENSE_BK_MONITORING_FEE",
+          "PASS_THROUGH_EXPENSE_TAX_SERVICING_CONTRACT",
+          "PASS_THROUGH_EXPENSE_LIEN_RELEASES",
+          "PASS_THROUGH_EXPENSE_TAX_SERVICING_CONTRACT"
+        ]
+      }
+    ],
+    "suggestedTableName": "passthrough_expenses"
+  },
+  "Passthrough Income": {
+    "sheetName": "Passthrough Income",
+    "rowCount": "24",
+    "columnCount": 10,
+    "inferredSchema": [
+      {
+        "columnName": "As Of Date",
+        "inferredSqlType": "VARCHAR(20)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28",
+          "2025-02-28"
+        ]
+      },
+      {
+        "columnName": "Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          7332818072,
+          4266296226,
+          4129898039,
+          9790782298,
+          7103135796
+        ]
+      },
+      {
+        "columnName": "Previous Servicer",
+        "inferredSqlType": "VARCHAR(70)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "Open Mortgage",
+          "Webster Bank, N.A.",
+          "Ruoff Mortgage Company, Inc.",
+          "Highlands Residential Mortgage, Ltd",
+          "Open Mortgage"
+        ]
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          4029521018,
+          4021358330,
+          4028347386,
+          4029725270,
+          4029845407
+        ]
+      },
+      {
+        "columnName": "Investor",
+        "inferredSqlType": "VARCHAR(12)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "FANNIE",
+          "FANNIE",
+          "FANNIE",
+          "FANNIE",
+          "FANNIE"
+        ]
+      },
+      {
+        "columnName": "SSID",
+        "inferredSqlType": "INTEGER",
+        "originalExcelType": "n",
+        "sampleValues": [
+          283670015,
+          283670015,
+          283670015,
+          283670015,
+          283670015
+        ]
+      },
+      {
+        "columnName": "Remittance Type",
+        "inferredSqlType": "VARCHAR(26)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL",
+          "ACTUAL_ACTUAL"
+        ]
+      },
+      {
+        "columnName": "Passthrough Income SID",
+        "inferredSqlType": "VARCHAR(68)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "SSFEfce2a35d6844321d690d81488b5f92",
+          "SSFEf5f012f07e1bbe746120e73dfcbc17",
+          "SSFE10d9b5a4fbbfe4f35974cf2b821cf5",
+          "SSFE6dfa7991913429270f99dca36dde1d",
+          "SSFE6f2c578c9583d12932d4422ec1798b"
+        ]
+      },
+      {
+        "columnName": "Passthrough Income Amount",
+        "inferredSqlType": "DECIMAL(18,6)",
+        "originalExcelType": "n",
+        "sampleValues": [
+          33.65,
+          500,
+          500,
+          500,
+          -15.5
+        ]
+      },
+      {
+        "columnName": "Passthrough Income Type",
+        "inferredSqlType": "VARCHAR(78)",
+        "originalExcelType": "s",
+        "sampleValues": [
+          "PASS_THROUGH_INCOME_ANCILLARY_LATE_FEES",
+          "PASS_THROUGH_INCOME_GSE_INCENTIVE",
+          "PASS_THROUGH_INCOME_GSE_INCENTIVE",
+          "PASS_THROUGH_INCOME_GSE_INCENTIVE",
+          "PASS_THROUGH_INCOME_ANCILLARY_LATE_FEES"
+        ]
+      }
+    ],
+    "suggestedTableName": "passthrough_income"
+  },
+  "Other": {
+    "sheetName": "Other",
+    "rowCount": "1",
+    "columnCount": 11,
+    "inferredSchema": [
+      {
+        "columnName": "As Of Date",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Loan ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Previous Servicer",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Investor Loan ID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Investor",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "SSID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Remittance Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "SID",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Amount",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Category",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      },
+      {
+        "columnName": "Type",
+        "inferredSqlType": "TEXT",
+        "originalExcelType": "string",
+        "sampleValues": []
+      }
+    ],
+    "suggestedTableName": "other"
+  }
+}

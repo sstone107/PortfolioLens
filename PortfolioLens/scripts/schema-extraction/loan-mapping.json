@@ -1,0 +1,81 @@
+{
+  "tableName": "loans",
+  "columns": {
+    "Valon Loan ID": {
+      "dbColumn": "valon_loan_id",
+      "type": "string"
+    },
+    "Investor Loan ID": {
+      "dbColumn": "investor_loan_id",
+      "type": "string"
+    },
+    "Current Actual UPB": {
+      "dbColumn": "current_upb",
+      "type": "number"
+    },
+    "Current Interest Rate": {
+      "dbColumn": "current_interest_rate",
+      "type": "number"
+    },
+    "Last Due Date Paid": {
+      "dbColumn": "last_paid_date",
+      "type": "date"
+    },
+    "Next Due Date": {
+      "dbColumn": "next_due_date",
+      "type": "date"
+    },
+    "Origination Date": {
+      "dbColumn": "origination_date",
+      "type": "date"
+    },
+    "Original Loan Amount": {
+      "dbColumn": "original_loan_amount",
+      "type": "number"
+    },
+    "Original Interest Rate": {
+      "dbColumn": "original_interest_rate",
+      "type": "number"
+    },
+    "Property Address 1": {
+      "dbColumn": "property_address_line1",
+      "type": "string"
+    },
+    "Property Address 2": {
+      "dbColumn": "property_address_line2",
+      "type": "string"
+    },
+    "Property City": {
+      "dbColumn": "property_city",
+      "type": "string"
+    },
+    "Property State": {
+      "dbColumn": "property_state",
+      "type": "string"
+    },
+    "Property Zipcode": {
+      "dbColumn": "property_zip_code",
+      "type": "string"
+    },
+    "Product Type": {
+      "dbColumn": "product_type",
+      "type": "string"
+    },
+    "Investor Type": {
+      "dbColumn": "investor_type",
+      "type": "string"
+    },
+    "Lien Position": {
+      "dbColumn": "lien_position",
+      "type": "string"
+    },
+    "Days Past Due": {
+      "dbColumn": "days_past_due",
+      "type": "number"
+    },
+    "Effective Transfer Date": {
+      "dbColumn": "effective_transfer_date",
+      "type": "date"
+    }
+  }
+}

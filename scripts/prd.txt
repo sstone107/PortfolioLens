@@ -1,0 +1,310 @@
+Product Requirements Document (PRD): MSR Data Intelligence Platform
+
+📄 1. Overview
+Purpose: Build a secure, AI-augmented platform to ingest, normalize, visualize, and analyze daily loan-level data from multiple subservicers. Supports portfolio analytics, fee-based invoicing, and investor-facing reporting with emphasis on data visibility, analysis, and usability.
+Primary Users:
+
+Loan Officers
+Accounting
+Executives
+Servicing Team
+External MSR Investors
+
+Tech Stack: Refine.dev (frontend), Supabase (backend), Postgres (DB), AI Assistants, Supabase Edge Functions
+
+⚖️ 2. Core Modules
+♻ Data Ingestion & Transformation
+
+Multiple Input Methods:
+
+Manual UI uploads
+Automated SFTP pulls
+Email attachment processing
+
+
+File Format Support:
+
+Accept CSV/XLSX files from various subservicers
+Store raw files permanently with metadata for auditing
+
+
+Transformation Engine:
+
+Per-servicer configurable field mappings via UI
+Dynamic field normalization (e.g., rate: 0.0375 → 3.75%)
+Format standardization across inconsistent inputs
+
+
+Snapshot Management:
+
+Daily snapshot per loan per as-of date
+Track data lineage from source to normalized view
+
+
+
+🧠 AI-Assisted Features
+
+Smart field mapping suggestions during configuration
+Natural language queries (e.g., "show me 30-day DQ by servicer")
+Anomaly detection with explanations:
+
+Early payoffs (EPOs)
+Unexpected escrow balance changes
+Delinquency status shifts
+Fee anomalies
+
+
+QA assistant to explain data drift
+Future: Loan clustering by behavior, geography, prepayment risk
+
+📊 Portfolio Analytics
+
+Industry-standard mortgage metrics:
+
+Weighted Average Note Rate (WANR)
+Weighted Average Loan Age (WALA)
+Weighted Average FICO, LTV
+Delinquency percentages
+Prepayment speeds
+
+
+Interactive dashboards with drilldowns and time-series views
+Liquidity calculations based on agency/remittance/portfolio
+Filter views by servicer, investor, pool, geography
+
+📆 Historical Tracking
+
+Complete timeline for each loan:
+
+Payment activity
+Servicer/investor changes
+Status updates
+
+
+Track delinquency roll rates and category drift
+Visual payment timeline per loan
+Point-in-time portfolio reconstruction
+
+🗲 Loan Drilldown
+
+Advanced loan-level search with saved filters
+Full loan detail view showing:
+
+Normalized data across all fields
+Source file attribution
+Payment history and escrow balance
+Status changes over time
+
+
+Document attachment capability:
+
+PDFs, screenshots, notes
+Internal dispute threads
+Comment history
+
+
+
+📅 Invoice Engine
+
+Monthly rollups by client, investor, or pool
+Configurable fee table with client-specific overrides
+Complete approval workflow:
+
+Accounting generation
+Internal approval
+Delivery to investor
+Investor approval tracking
+
+
+Export options: PDF, Excel, CSV
+
+🖊️ Document & Notes Layer
+
+Attach supporting docs to loans or files
+Role-based access to documents
+Internal tagging, comments, status flags
+Comment threads with user attribution and timestamps
+
+🎯 Reporting
+
+Dual approach to reporting:
+
+Admin-defined standard reports
+User-defined custom reports with saved filters
+
+
+Export capabilities:
+
+Dashboards to PDF
+Data to CSV/Excel
+
+
+Global reports with permission-based access
+Specialized reporting for regulatory needs:
+
+MBFRF
+NMLS
+State regulators
+
+
+
+🔐 Permissions & Access
+
+Supabase Auth + Row-Level Security (RLS) for role-based control
+Security restrictions:
+
+IP/geography limitations
+Export/download permissions by user role
+
+
+Admin capabilities:
+
+User impersonation for troubleshooting
+Module visibility control by role
+
+
+Single-company focus with user-level permissions (not multi-tenant)
+
+🚧 Exception Monitoring
+
+Customizable data quality rules:
+
+Missing values
+Out-of-bounds values
+Irregular changes
+
+
+Delinquency roll reporting
+Key integrity checks (investor loan # as unique ID)
+Custom flagging rules defined by admins
+
+✉️ Notifications & Workflows
+
+Comprehensive alerting:
+
+Missing or late files
+Failed uploads
+Data anomalies
+Task assignments
+
+
+Multiple delivery channels:
+
+In-app notifications
+Email
+Slack/webhook integration
+
+
+Triggered approval queues:
+
+File uploads
+Record tagging
+Field edits
+
+
+Task system for flagged loans requiring attention
+
+🔗 API & Data Sync
+
+Export-only secure API with:
+
+Token-based authentication
+IP restrictions
+Detailed access logs
+
+
+Package generation for third parties (e.g., MSR buyers)
+Future hooks for external pricing/valuation tools
+
+⚖️ Config Management
+
+UI-based configuration:
+
+Field mappings per servicer (drag-and-drop)
+Fee tables and rules
+Filter definitions
+Role permissions
+
+
+All configuration changeable post-launch
+Configuration change audit trail
+
+↺ Versioning & Rollbacks
+
+Ability to revert changes:
+
+Field mapping rollbacks
+File ingestion reversals
+
+
+Complete audit trail:
+
+User tracking
+Timestamp logging
+Before/after values
+Change reasons
+
+
+
+
+📉 3. KPIs & System Metrics
+
+Data Quality:
+
+Ingestion match percentage per file
+Number and percentage of failed ingestions
+
+
+Operational Performance:
+
+File delivery lag (expected vs. actual)
+Processing time per file
+
+
+System Health:
+
+Total flagged records
+Anomaly detection rate
+Field-level audit trail coverage
+
+
+User Engagement:
+
+Report generation frequency
+Search utilization
+Feature adoption metrics
+
+
+
+
+🚧 4. Future & Stretch Goals
+
+AI-based pricing engine integration
+Investor-facing portal with controlled access
+BI Tool Integration (Metabase, Superset)
+Enhanced task assignment engine
+Field-level visualization components (e.g., escrow timeline widget)
+Advanced loan clustering and risk stratification
+Predictive analytics for prepayment behavior
+
+
+📌 5. Environment & Deployment
+
+Single environment approach (no staging initially)
+Role-based modules and dashboard visibility
+Built using Refine.dev UI framework + Supabase Auth + Postgres
+Cloud-hosted with appropriate security measures
+
+
+📋 6. Open Questions & TBD Items
+
+Approval routing logic and roles for invoice workflows
+Additional AI modules for behavioral clustering and data integrity
+File retention duration and archive lifecycle policy
+Early payoff (EPO) thresholds and trigger definitions
+Final design of MSR deal/pool associations and UI linkage
+Risk analytics module specifications (future phase)
+Custom exception rules configuration approach
+
+
+Status: Approved for architecture and initial prototype

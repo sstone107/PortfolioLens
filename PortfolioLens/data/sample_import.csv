@@ -1,0 +1,6 @@
+LoanID,BorrowerName,PropertyAddress,OriginalBalance,CurrentBalance,InterestRate,LoanStatus
+LN1001,John Doe,123 Main St, Anytown, CA 91234,250000,245000,3.5,Current
+LN1002,Jane Smith,456 Oak Ave, Sometown, FL 33333,300000,290000,4.0,Current
+LN1003,Robert Johnson,789 Pine Ln, Villagetown, TX 75001,150000,140000,3.75,Late (30-59)
+LN1004,Emily White,101 Maple Dr, Cityville, NY 10001,450000,445000,3.25,Current
+LN1005,Michael Brown,202 Birch Rd, Hamlet, WA 98001,200000,185000,4.125,Foreclosure

@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "generatedAt": "2025-05-01T20:51:40.336Z",
+    "tasksAnalyzed": 15,
+    "thresholdScore": 5,
+    "projectName": "Your Project Name",
+    "usedResearch": false
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 1,
+      "taskTitle": "Project Setup and Infrastructure Configuration",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the project setup task into subtasks covering: 1) Refine.dev frontend initialization, 2) Supabase backend setup, 3) Project structure and dependency configuration, 4) CI/CD pipeline implementation, and 5) Cloud hosting environment setup with security configurations.",
+      "reasoning": "This task involves multiple technologies (Refine.dev, Supabase, Postgres) and infrastructure components (CI/CD, cloud hosting). It's foundational for the entire project and requires careful planning across frontend, backend, and DevOps areas."
+    },
+    {
+      "taskId": 2,
+      "taskTitle": "Authentication and Permission System",
+      "complexityScore": 8,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Divide the authentication system implementation into subtasks covering: 1) Supabase Auth setup, 2) User role definition and management, 3) Row-Level Security policy implementation, 4) Admin capabilities including user impersonation, 5) IP/geography access limitations, and 6) Export/download permission controls.",
+      "reasoning": "Authentication and permissions are complex due to the need for fine-grained access control with multiple user roles, RLS policies, and advanced security features like user impersonation and geographic restrictions."
+    },
+    {
+      "taskId": 3,
+      "taskTitle": "Database Schema Design",
+      "complexityScore": 9,
+      "recommendedSubtasks": 7,
+      "expansionPrompt": "Break down the database schema design into subtasks covering: 1) Core loan and user entity design, 2) Servicer and investor table structures, 3) Payment and financial data models, 4) Document and file storage schema, 5) Notification and configuration tables, 6) Index and constraint implementation, and 7) Audit logging setup.",
+      "reasoning": "This task involves designing a comprehensive database schema with many interconnected entities. The complexity comes from ensuring proper relationships, constraints, and performance considerations while supporting all business requirements and audit capabilities."
+    },
+    {
+      "taskId": 4,
+      "taskTitle": "Data Ingestion System",
+      "complexityScore": 8,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Divide the data ingestion system into subtasks covering: 1) Manual file upload UI, 2) SFTP client for automated pulls, 3) Email attachment processor, 4) File format parsers (CSV/XLSX), 5) Raw file storage with metadata tracking, and 6) Ingestion queue system with error handling.",
+      "reasoning": "Data ingestion is complex due to multiple input sources (manual uploads, SFTP, email) and formats. The system must handle large files, maintain audit trails, and implement robust error handling and validation."
+    },
+    {
+      "taskId": 5,
+      "taskTitle": "Data Transformation Engine",
+      "complexityScore": 9,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Break down the data transformation engine into subtasks covering: 1) Configurable field mapping system, 2) Transformation rule implementation, 3) Data validation framework, 4) Data lineage tracking, 5) Error handling and logging system, and 6) Batch processing for large datasets.",
+      "reasoning": "This is one of the most complex tasks as it involves normalizing data from different sources with varying formats. The engine must be flexible enough to handle different servicer data structures while maintaining data integrity and traceability."
+    },
+    {
+      "taskId": 6,
+      "taskTitle": "Configuration Management UI",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Divide the configuration management UI into subtasks covering: 1) Field mapping interface with drag-and-drop functionality, 2) Fee tables and rules configuration screens, 3) Filter definition management UI, 4) Role permission configuration interface, and 5) Configuration versioning and audit trail implementation.",
+      "reasoning": "This task requires building intuitive interfaces for complex configuration options. The UI must support drag-and-drop functionality, versioning, and audit trails while remaining user-friendly for administrators."
+    },
+    {
+      "taskId": 7,
+      "taskTitle": "Snapshot Management System",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the snapshot management system into subtasks covering: 1) Daily snapshot mechanism implementation, 2) Data lineage tracking system, 3) Point-in-time portfolio reconstruction, 4) Snapshot comparison tools, and 5) Archiving strategy with efficient storage/retrieval.",
+      "reasoning": "Snapshot management is complex due to the need to efficiently store and retrieve historical data while maintaining data lineage. The system must handle large volumes of data and support point-in-time reconstruction of portfolios."
+    },
+    {
+      "taskId": 8,
+      "taskTitle": "Portfolio Analytics Dashboard",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Divide the portfolio analytics dashboard into subtasks covering: 1) Calculation engines for industry-standard metrics, 2) Interactive dashboard implementation with drill-down capabilities, 3) Time-series visualization components, 4) Multi-dimensional filtering system, and 5) Liquidity calculation features.",
+      "reasoning": "This task involves complex financial calculations and interactive visualizations. The dashboard must process large datasets efficiently while providing intuitive drill-down capabilities and filtering options."
+    },
+    {
+      "taskId": 9,
+      "taskTitle": "Loan Drilldown Interface",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the loan drilldown interface into subtasks covering: 1) Advanced loan-level search with saved filters, 2) Comprehensive loan detail view implementation, 3) Visual payment timeline component, 4) Document attachment functionality, and 5) Comment and note system with user attribution.",
+      "reasoning": "This interface requires detailed visualization of loan data with multiple interactive components. The complexity comes from integrating search, timeline visualization, document management, and commenting features into a cohesive interface."
+    },
+    {
+      "taskId": 10,
+      "taskTitle": "AI Features Integration",
+      "complexityScore": 9,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Divide the AI features integration into subtasks covering: 1) Smart field mapping suggestion system, 2) Natural language query processor, 3) Anomaly detection engine for various financial indicators, 4) QA assistant for data drift explanation, and 5) AI model training and update pipeline.",
+      "reasoning": "AI integration is highly complex, requiring specialized knowledge in machine learning and natural language processing. The system must learn from user interactions and detect subtle patterns in financial data while providing explainable results."
+    },
+    {
+      "taskId": 11,
+      "taskTitle": "Invoice Engine",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the invoice engine into subtasks covering: 1) Monthly rollup calculation system, 2) Configurable fee table with client-specific overrides, 3) Approval workflow implementation, 4) Export functionality for multiple formats, and 5) Invoice history and audit trail features.",
+      "reasoning": "The invoice engine involves complex financial calculations and a multi-step approval workflow. It must handle client-specific fee structures and maintain a complete audit trail while supporting various export formats."
+    },
+    {
+      "taskId": 12,
+      "taskTitle": "Document and Notes Management",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Divide the document and notes management system into subtasks covering: 1) Document storage and retrieval system, 2) Document attachment and role-based access controls, 3) Tagging, comments, and status flag implementation, and 4) Document version control and history tracking.",
+      "reasoning": "This task involves building a document management system with version control and access restrictions. While complex, it's more straightforward than some other tasks and leverages common document management patterns."
+    },
+    {
+      "taskId": 13,
+      "taskTitle": "Reporting System",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the reporting system into subtasks covering: 1) Standard report template implementation, 2) Custom report builder with saved filters, 3) Export capabilities for multiple formats, 4) Specialized regulatory reporting features, and 5) Report scheduling and distribution functionality.",
+      "reasoning": "The reporting system must handle both standard and custom reports with various export options. The complexity comes from supporting regulatory requirements and implementing a flexible report builder with scheduling capabilities."
+    },
+    {
+      "taskId": 14,
+      "taskTitle": "Exception Monitoring and Notifications",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Divide the exception monitoring system into subtasks covering: 1) Customizable data quality rule engine, 2) Delinquency roll reporting implementation, 3) Data integrity check framework, 4) Custom flagging rule system, and 5) Multi-channel notification delivery system.",
+      "reasoning": "This task requires building a flexible rule engine for data quality monitoring with comprehensive alerting capabilities. The system must detect various anomalies and deliver notifications through multiple channels."
+    },
+    {
+      "taskId": 15,
+      "taskTitle": "API and Data Sync",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the API and data sync implementation into subtasks covering: 1) Secure API with token-based authentication, 2) Access logging and monitoring system, 3) Package generation for third parties, and 4) Rate limiting and security measure implementation.",
+      "reasoning": "While API development involves security considerations and proper authentication, this task is more straightforward than others. The main challenges are implementing proper security measures and efficient package generation for third parties."
+    }
+  ]
+}
