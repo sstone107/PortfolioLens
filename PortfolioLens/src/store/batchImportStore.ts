@@ -140,7 +140,8 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
       const reviewedColumnMappings = Object.entries(columnMappings).reduce((acc, [header, mapping]) => {
           acc[header] = {
               ...mapping,
-              reviewStatus: 'pending', // Ensure all start as pending
+              // Preserve the reviewStatus provided by the worker
+              reviewStatus: mapping.reviewStatus,
           };
           return acc;
       }, {} as { [header: string]: BatchColumnMapping });
@@ -153,8 +154,10 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           selectedTable: sheet.selectedTable ?? autoSelectedTable, // Keep user selection if already made, else auto-select
           isNewTable: sheet.selectedTable ? sheet.isNewTable : isNewTableSelected, // Reflect if the selected table is new
           sheetSchemaProposals: sheetSchemaProposals, // Store proposals from analysis
-          status: 'needsReview', // Always needs review after suggestions
-          sheetReviewStatus: 'pending', // Reset sheet review status on new suggestions
+          // Determine sheet review status based on the updated column statuses
+          sheetReviewStatus: determineSheetReviewStatus(reviewedColumnMappings),
+          // Set status to 'ready' if sheet is auto-approved, otherwise 'needsReview'
+          status: determineSheetReviewStatus(reviewedColumnMappings) === 'approved' ? 'ready' : 'needsReview',
       };
       
       const updatedSheets = { ...state.sheets, [sheetName]: updatedSheet };
@@ -184,7 +187,9 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
               ...sheet.columnMappings[header],
               ...mappingUpdate,
               // status: 'userModified', // Keep original status ('suggested' or 'error') unless review changes
-              reviewStatus: mappingUpdate.reviewStatus ?? 'modified', // Set to modified if not explicitly set
+              // Preserve existing reviewStatus if mappingUpdate.reviewStatus is not provided
+              // Prioritize mappingUpdate.reviewStatus if provided, otherwise preserve existing reviewStatus
+              reviewStatus: mappingUpdate.reviewStatus !== undefined ? mappingUpdate.reviewStatus : sheet.columnMappings[header]?.reviewStatus ?? 'modified',
             },
           },
           // Determine sheet review status based on column statuses
@@ -216,7 +221,8 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
               action: 'skip', // Default to skip until re-analyzed
               newColumnProposal: undefined,
               status: 'pending', // Needs re-analysis
-              reviewStatus: 'pending', // Reset review
+              // Preserve existing reviewStatus if not pending, otherwise reset to pending
+              reviewStatus: sheet.columnMappings[header]?.reviewStatus !== 'pending' ? sheet.columnMappings[header]?.reviewStatus : 'pending',
           };
           return acc;
       }, {} as { [header: string]: BatchColumnMapping });
@@ -593,6 +599,20 @@ const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchCol
     // If any column is modified, the sheet is pending
     if (columnStatuses.includes('modified')) {
         return 'pending';
+    }
+    
+    // Count high confidence columns
+    const totalColumns = Object.values(columnMappings).length;
+    const highConfidenceCount = Object.values(columnMappings).filter(m =>
+        m.confidenceLevel === 'High' && m.action === 'map'
+    ).length;
+    
+    // Calculate percentage of high confidence columns
+    const highConfidencePercentage = totalColumns > 0 ? (highConfidenceCount / totalColumns) * 100 : 0;
+    
+    // Auto-approve if at least 95% of columns have high confidence
+    if (highConfidencePercentage >= 95) {
+        return 'approved';
     }
     
     // Default to pending

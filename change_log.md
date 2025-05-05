@@ -1,5 +1,37 @@
 # PortfolioLens Change Log
 
+## 2025-05-05: Auto-Approve Sheets with High Confidence Matches
+
+### Fixed
+- Fixed issue where sheets with auto-matched columns still required manual approval:
+  - Modified `determineSheetReviewStatus` function to auto-approve sheets with at least 95% high confidence matches
+  - Updated `updateSheetSuggestions` function to set sheet status to 'ready' when auto-approved
+  - Removed unnecessary explicit setting of sheet review status to 'pending'
+  - Improved handling of sheets with mixed confidence levels
+- This fix streamlines the import process by eliminating unnecessary manual approvals when the system has high confidence in the matches
+
+### Technical Details
+- Enhanced `determineSheetReviewStatus` in `batchImportStore.ts` to calculate the percentage of high confidence columns
+- Set 95% threshold for auto-approval to balance automation with accuracy
+- Improved coordination between worker-provided review statuses and sheet-level status determination
+- Removed debug logging after confirming the fix works correctly
+
+## 2025-05-05: Fixed Batch Import for Sheets with Only Headers
+
+### Fixed
+- Fixed issue where sheets with only one row (just headers) couldn't be mapped in batch import:
+  - Enhanced `FileReader.getSheetData()` to extract headers directly from the first row
+  - Added special handling for sheets with headers but no data rows
+  - Created a dummy row with null values when only headers are present
+  - Ensured mapping UI works correctly with empty sample data
+- This fix allows users to map columns based on header names even when there's no sample data
+
+### Technical Details
+- Modified `FileReader.ts` to extract headers directly using Excel.js cell access
+- Implemented range detection to identify sheets with only header rows
+- Created a fallback mechanism that generates a dummy data row with null values
+- Maintained backward compatibility with sheets containing actual data
+
 ## 2025-05-05: Prioritized Exact Normalized Matches in AnalysisEngine
 
 ### Fixed

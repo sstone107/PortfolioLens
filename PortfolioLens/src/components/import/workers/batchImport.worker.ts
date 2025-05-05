@@ -116,6 +116,7 @@ function performAutoMapping(
 
     const normalizedHeader = normalizeForMatching(header);
     const sampleValues = sampleData.map(row => row[header]).filter(v => v !== null && v !== undefined && v !== '');
+    console.log(`[DEBUG Worker] Header: ${header}, Sample values length: ${sampleValues.length}, Has data: ${sampleValues.length > 0}`);
     const inferredDataType: ColumnType | null = inferDataType(sampleValues, header); // Use new implementation with detailed logging
 
     let suggestedColumns: RankedColumnSuggestion[] = [];
@@ -199,7 +200,8 @@ function performAutoMapping(
       action, // Use determined action
       newColumnProposal, // Include proposal if action is 'create'
       status: action === 'skip' ? 'suggested' : 'suggested', // Status might need refinement based on action/confidence
-      reviewStatus: 'pending', // Add reviewStatus property
+      // Set reviewStatus to 'approved' if action is 'map' and confidence is 'High', otherwise 'pending'
+      reviewStatus: (action === 'map' && bestMatchConfidence === 'High') ? 'approved' : 'pending',
     };
   });
 
