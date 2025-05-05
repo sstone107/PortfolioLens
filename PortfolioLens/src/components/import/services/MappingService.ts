@@ -597,14 +597,34 @@ export class MappingService {
     };
 
     // Function to check type compatibility
-    const isTypeCompatible = (inferredType: ColumnType | null, dbDataType: string): boolean => {
+    const isTypeCompatible = (inferredType: ColumnType | null, dbDataType: string, nameSimilarityScore: number): boolean => {
       if (inferredType === null) {
         return true; // Cannot determine compatibility if source type is unknown
       }
 
       const dbColumnType = this.getColumnTypeFromDbType(dbDataType);
 
-      // Basic compatibility checks (can be made more sophisticated)
+      // If name similarity is high, be more lenient with type compatibility
+      if (nameSimilarityScore >= 0.9) {
+          // Allow number, amount, rate, id to match with number or string
+          if (['number', 'amount', 'rate', 'id'].includes(inferredType) && ['number', 'string'].includes(dbColumnType)) {
+              return true;
+          }
+          // Allow date to match with date or string
+          if (inferredType === 'date' && ['date', 'string'].includes(dbColumnType)) {
+              return true;
+          }
+          // Allow boolean to match with boolean or string
+          if (inferredType === 'boolean' && ['boolean', 'string'].includes(dbColumnType)) {
+              return true;
+          }
+          // Allow string to match with any type
+          if (inferredType === 'string') {
+              return true;
+          }
+      }
+
+      // Basic compatibility checks for lower name similarity
       if (inferredType === 'string') {
         return true; // Strings are generally compatible with most DB types (though may require casting)
       }
@@ -618,7 +638,14 @@ export class MappingService {
         return true;
       }
 
-      // Allow number to string, date to string, boolean to string
+      // Handle specialized inferred types for lower name similarity
+      if (inferredType === 'amount' || inferredType === 'rate') {
+          return dbColumnType === 'number' || dbColumnType === 'string';
+      }
+      if (inferredType === 'id') {
+          return dbColumnType === 'number' || dbColumnType === 'string';
+      }
+
       // Allow implicit conversion to string if the DB column is string type
       if (dbColumnType === 'string') {
           return true;
@@ -640,7 +667,7 @@ export class MappingService {
       // Generate suggestions for each database column
       for (const dbCol of dbColumns) {
         const nameSimilarityScore = calculateNameSimilarity(excelCol, dbCol.columnName);
-        const typeCompatible = isTypeCompatible(inferredDataType, dbCol.dataType);
+        const typeCompatible = isTypeCompatible(inferredDataType, dbCol.dataType, nameSimilarityScore);
 
         // Combine scores (simple average for now, can be weighted)
         // Give type compatibility a significant weight

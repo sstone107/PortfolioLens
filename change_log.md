@@ -1,5 +1,24 @@
 # PortfolioLens Change Log
 
+## 2025-05-05: Prioritized Exact Normalized Matches in AnalysisEngine
+
+### Fixed
+- Modified the `calculateCombinedScore` function in `AnalysisEngine.ts` to prioritize exact normalized name matches.
+- If the `nameSimilarity` score is >= 0.99, the `combinedScore` is now forced to 1.0, overriding type compatibility and pattern scores.
+- This ensures that columns differing only by case, spacing, or underscores receive a 100% confidence score during analysis.
+
+### Technical Details
+- Added an early return condition in `calculateCombinedScore` for `nameSimilarity >= 0.99`.
+- Added `Math.min(combinedScore, 1.0)` to prevent scores exceeding 1.0 due to weighting adjustments in other cases.
+## 2025-05-05: Adjusted Type Compatibility Logic for High Confidence Matches
+
+### Fixed
+- Adjusted the `isTypeCompatible` function in `MappingService.ts` to be more lenient when `nameSimilarityScore` is high (>= 0.9). This ensures that strong name matches (like those differing only by case/spacing) are more likely to achieve a "High" confidence level, even if inferred and database types aren't perfectly aligned according to stricter checks.
+- Updated the call to `isTypeCompatible` to pass the `nameSimilarityScore`.
+
+### Technical Details
+- Modified `isTypeCompatible` to include checks based on `nameSimilarityScore` before falling back to stricter type comparisons.
+- Ensured specialized inferred types ('amount', 'rate', 'id') are considered compatible with 'number' or 'string' database types when name similarity is high.
 ## 2025-05-05: Improved Column Mapping for Case and Spacing Variations
 
 ### Fixed

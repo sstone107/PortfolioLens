@@ -196,6 +196,11 @@ export class AnalysisEngine {
     typeCompatibility: boolean,
     patternScore: number
   ): number {
+    // Prioritize exact normalized name matches
+    if (nameSimilarity >= 0.99) { // Use a threshold close to 1.0 to account for potential float issues
+      return 1.0;
+    }
+
     // Adjusted weights - balanced emphasis
     const nameWeight = 0.50; // Reduced from 0.65
     const typeWeight = 0.25; // Increased from 0.15
@@ -210,7 +215,8 @@ export class AnalysisEngine {
       typeScore * typeWeight +
       patternScore * patternWeight
     );
-    return combinedScore;
+    // Ensure score doesn't exceed 1.0 due to weighting adjustments
+    return Math.min(combinedScore, 1.0);
   }
   
   /**
