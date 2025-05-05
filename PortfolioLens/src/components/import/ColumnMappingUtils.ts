@@ -465,8 +465,16 @@ function analyzeContentPatterns(
  * @param columnName Column name to normalize
  * @returns Normalized column name
  */
+/**
+ * Normalize column name for matching by removing spaces, underscores, hyphens, and making lowercase.
+ * This ensures that strings like "Valon Loan ID" and "valon_loan_id" will be normalized to the same value.
+ *
+ * @param columnName Column name to normalize
+ * @returns Normalized column name
+ */
 export function normalizeColumnName(columnName: string): string {
-  return columnName.toLowerCase().replace(/[\s_-]/g, '');
+  if (!columnName) return '';
+  return columnName.toLowerCase().replace(/[\s_\-]/g, '');
 }
 
 /**

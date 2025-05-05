@@ -11,10 +11,28 @@ import levenshtein from 'fast-levenshtein';
  * @param str2 - The second string.
  * @returns A similarity score between 0.0 and 1.0.
  */
+/**
+ * Calculates a normalized similarity score between two strings.
+ * Enhanced to recognize direct matches that only differ by case or spacing as 100% matches.
+ *
+ * @param str1 - The first string.
+ * @param str2 - The second string.
+ * @returns A similarity score between 0.0 and 1.0.
+ */
 export const calculateSimilarity = (str1: string, str2: string): number => {
   if (!str1 || !str2) {
     return 0; // Handle empty strings
   }
+  
+  // First check if the normalized versions are identical
+  const normalized1 = normalizeForMatching(str1);
+  const normalized2 = normalizeForMatching(str2);
+  
+  if (normalized1 === normalized2 && normalized1 !== '') {
+    return 1.0; // Perfect match after normalization
+  }
+  
+  // If not a perfect normalized match, calculate Levenshtein distance
   const distance = levenshtein.get(str1, str2);
   const maxLength = Math.max(str1.length, str2.length);
   if (maxLength === 0) {
@@ -28,7 +46,17 @@ export const calculateSimilarity = (str1: string, str2: string): number => {
  * Normalize a string by converting to lowercase and replacing spaces, hyphens, and underscores with
  * a consistent character (empty string), making these characters synonymous
  */
+/**
+ * Normalize a string for matching by:
+ * 1. Converting to lowercase
+ * 2. Removing spaces, hyphens, underscores, and other separators
+ * 3. Removing any non-alphanumeric characters
+ *
+ * This ensures that strings like "Valon Loan ID" and "valon_loan_id"
+ * will be normalized to the same value.
+ */
 export const normalizeForMatching = (input: string): string => {
+  if (!input) return '';
   return input.toLowerCase().replace(/[\s\-_]/g, '').replace(/[^a-z0-9]/g, '');
 };
 

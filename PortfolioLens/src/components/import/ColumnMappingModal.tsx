@@ -166,6 +166,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
                       reviewStatus: 'pending',
                       action: 'skip', // Default action
                       mappedColumn: null,
+                      dbColumn: null, // Add dbColumn property
                       confidenceScore: 0,
                       confidenceLevel: 'Low',
                   };
@@ -213,6 +214,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               reviewStatus: 'pending',
               action: 'skip',
               mappedColumn: null,
+              dbColumn: null, // Add dbColumn to default structure
               confidenceScore: 0,
               confidenceLevel: 'Low',
           };
@@ -225,18 +227,31 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           if (changes.action && changes.action !== current.action) {
               if (changes.action === 'skip') {
                   resetFields.mappedColumn = null;
+                  resetFields.dbColumn = null; // Also reset dbColumn
                   resetFields.newColumnProposal = undefined;
               } else if (changes.action === 'map') {
                   resetFields.newColumnProposal = undefined;
-                  // Keep mappedColumn if provided in changes, otherwise nullify? Or expect it?
-                  if (!changes.mappedColumn) resetFields.mappedColumn = null;
+                  // Keep mappedColumn if provided in changes, otherwise nullify
+                  if (!changes.mappedColumn) {
+                      resetFields.mappedColumn = null;
+                      resetFields.dbColumn = null; // Also reset dbColumn
+                  } else {
+                      // If mappedColumn is provided, ensure dbColumn is also set
+                      resetFields.dbColumn = changes.mappedColumn;
+                  }
               } else if (changes.action === 'create') {
-                  resetFields.mappedColumn = changes.newColumnProposal?.columnName || null; // Map to proposal name
-                  // Keep newColumnProposal if provided, otherwise nullify?
+                  const columnName = changes.newColumnProposal?.columnName || null;
+                  resetFields.mappedColumn = columnName; // Map to proposal name
+                  resetFields.dbColumn = columnName; // Also set dbColumn to the same value
+                  // Keep newColumnProposal if provided, otherwise nullify
                   if (!changes.newColumnProposal) resetFields.newColumnProposal = undefined;
               }
+          } else if (changes.mappedColumn && changes.mappedColumn !== current.mappedColumn) {
+              // If only mappedColumn changes, ensure dbColumn is updated too
+              resetFields.dbColumn = changes.mappedColumn;
           }
 
+          // Changes have been processed
 
           return {
               ...prev,
@@ -323,8 +338,31 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
 
   // Update handleSave to ensure it sends the full BatchColumnMapping
   const handleSave = () => {
-      // The `mappings` state should already hold the full BatchColumnMapping objects
-      onSave(mappings); // Pass the state directly
+      // Ensure all mappings have dbColumn set based on mappedColumn
+      const updatedMappings = { ...mappings };
+      
+      // Process each mapping to ensure dbColumn is set
+      Object.entries(updatedMappings).forEach(([header, mapping]) => {
+          if (mapping.action === 'map' && mapping.mappedColumn && !mapping.dbColumn) {
+              // If mappedColumn exists but dbColumn doesn't, copy the value
+              updatedMappings[header] = {
+                  ...mapping,
+                  dbColumn: mapping.mappedColumn
+              };
+              console.log(`[DEBUG ColumnMappingModal] Setting dbColumn for ${header} to ${mapping.mappedColumn}`);
+          } else if (mapping.action === 'create' && mapping.newColumnProposal?.columnName && !mapping.dbColumn) {
+              // For new columns, use the proposal name as dbColumn
+              updatedMappings[header] = {
+                  ...mapping,
+                  dbColumn: mapping.newColumnProposal.columnName
+              };
+          }
+      });
+      
+      // Log the final mappings for debugging
+      
+      // Pass the updated mappings with dbColumn properly set
+      onSave(updatedMappings);
       onClose();
   };
 

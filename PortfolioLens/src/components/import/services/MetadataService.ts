@@ -17,6 +17,9 @@ export class MetadataService {
   private cachedTableNames: string[] | null = null;
   private isInitialized: boolean = false;
   private initializePromise: Promise<void> | null = null;
+  
+  // Singleton instance
+  private static instance: MetadataService | null = null;
 
   constructor(schemaCacheServiceInstance: SchemaCacheService) { // REQUIRE SchemaCacheService instance
     // If SchemaCacheService is not provided, throw an error.
@@ -34,8 +37,21 @@ export class MetadataService {
         throw new Error('[MetadataService] SchemaCacheService instance is missing the setMetadataService method!');
     }
 
+    // Set the singleton instance if not already set
+    if (!MetadataService.instance) {
+        MetadataService.instance = this;
+    }
+
     // Initialize asynchronously, don't block constructor
     this.initialize();
+  }
+  
+  /**
+   * Get the singleton instance of MetadataService
+   * @returns The MetadataService instance or null if not initialized
+   */
+  static getInstance(): MetadataService | null {
+    return MetadataService.instance;
   }
 
   /**
@@ -118,7 +134,91 @@ export class MetadataService {
   async getCachedTableInfo(tableName: string): Promise<CachedDbTable | null> {
     await this.ensureInitialized(); // Wait for initialization
     const schemaCache = await this.schemaCacheService.getOrFetchSchema(); // Get the full cache
-    return schemaCache?.tables[tableName] ?? null; // Return specific table or null
+    
+    // Get the table info from cache
+    const tableInfo = schemaCache?.tables[tableName] ?? null;
+    
+    // Add debug logging
+    
+    // Validate the table info before returning
+    if (tableInfo) {
+      // Ensure columns array exists and has valid entries
+      if (!tableInfo.columns || !Array.isArray(tableInfo.columns) || tableInfo.columns.length === 0) {
+        console.warn(`[DEBUG MetadataService] Invalid or empty columns array for ${tableName}`);
+        // Return a minimal valid structure instead of null
+        return {
+          tableName,
+          columns: [{
+            columnName: 'id',
+            dataType: 'uuid',
+            isNullable: false,
+            columnDefault: 'uuid_generate_v4()',
+            isPrimaryKey: true
+          }],
+          lastRefreshed: Date.now()
+        };
+      }
+      
+      // Validate each column has required properties
+      const validColumns = tableInfo.columns.filter(col => {
+        if (!col || typeof col.columnName !== 'string') {
+          console.warn(`[DEBUG MetadataService] Invalid column data found in tableInfo for ${tableName}:`, JSON.stringify(col));
+          return false;
+        }
+        return true;
+      });
+      
+      // If no valid columns were found, return a default structure
+      if (validColumns.length === 0) {
+        console.warn(`[DEBUG MetadataService] No valid columns found for ${tableName}, returning default structure`);
+        return {
+          tableName,
+          columns: [{
+            columnName: 'id',
+            dataType: 'uuid',
+            isNullable: false,
+            columnDefault: 'uuid_generate_v4()',
+            isPrimaryKey: true
+          }],
+          lastRefreshed: Date.now()
+        };
+      }
+      
+      // Return the table info with validated columns
+      return {
+        ...tableInfo,
+        columns: validColumns
+      };
+    }
+    
+    return tableInfo; // Return null if not found
+  }
+  
+  /**
+   * Get the DatabaseService instance
+   * @returns The DatabaseService instance or null if not available
+   */
+  getDatabaseService(): import('./DatabaseService').DatabaseService | null {
+    // Get the SchemaCacheService first
+    const schemaCacheService = this.schemaCacheService;
+    if (!schemaCacheService) {
+      console.warn('[DEBUG MetadataService] SchemaCacheService not available');
+      return null;
+    }
+    
+    // Try to get the DatabaseService from SchemaCacheService
+    try {
+      // Use any to bypass TypeScript's strict checking
+      const dbService = (schemaCacheService as any).dbService;
+      if (!dbService) {
+        console.warn('[DEBUG MetadataService] DatabaseService not available from SchemaCacheService');
+        return null;
+      }
+      return dbService;
+    } catch (error) {
+      console.error('[DEBUG MetadataService] Error getting DatabaseService:', error);
+      return null;
+    }
   }
 
   /**
@@ -230,6 +330,29 @@ export class MetadataService {
       this.isInitialized = false;
       this.initializePromise = null; // Clear any existing promise
       await this.initialize(); // Re-run initialization
+  }
+
+  /**
+   * Refreshes the schema cache for a specific table
+   * @param tableName The name of the table to refresh
+   * @returns Promise resolving to true if successful, false otherwise
+   */
+  async refreshTableSchema(tableName: string): Promise<boolean> {
+    console.log(`[DEBUG MetadataService] Refreshing schema for table: ${tableName}`);
+    try {
+      // Use the SchemaCacheService to refresh the table schema
+      if (this.schemaCacheService && typeof this.schemaCacheService.refreshTableSchema === 'function') {
+        return await this.schemaCacheService.refreshTableSchema(tableName);
+      } else {
+        console.error(`[DEBUG MetadataService] SchemaCacheService missing refreshTableSchema method`);
+        // Fallback to full schema refresh
+        await this.refreshTableNameCache();
+        return true;
+      }
+    } catch (error) {
+      console.error(`[DEBUG MetadataService] Error refreshing table schema for ${tableName}:`, error);
+      return false;
+    }
   }
 }
 

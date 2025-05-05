@@ -159,6 +159,40 @@ describe('Column Mapping Integration Tests', () => {
       expect(statusBestSuggestion?.isCreateNewField).toBe(true);
     });
     
+    it('should recognize direct matches that only differ by case or spacing', () => {
+      // Mock table info with column names that differ by case and spacing
+      const tableInfo: TableInfo = {
+        tableName: 'loans',
+        columns: [
+          { columnName: 'valon_loan_id', dataType: 'character varying', isNullable: false, columnDefault: null, isPrimaryKey: false },
+          { columnName: 'loan_amount', dataType: 'numeric', isNullable: true, columnDefault: null, isPrimaryKey: false },
+          { columnName: 'origination_date', dataType: 'timestamp with time zone', isNullable: true, columnDefault: null, isPrimaryKey: false }
+        ]
+      };
+      
+      // Mock Excel data with column names that differ by case and spacing
+      const sheetData = [
+        { 'Valon Loan ID': 'LOAN-001', 'Loan Amount': 100.5, 'Origination Date': '2025-01-01' },
+        { 'Valon Loan ID': 'LOAN-002', 'Loan Amount': 200, 'Origination Date': '2025-01-02' }
+      ];
+      
+      // Get mapping suggestions
+      const suggestions = mappingService.suggestColumnMappings(sheetData, tableInfo);
+      
+      // Verify suggestions - these should be 100% matches despite case/spacing differences
+      expect(suggestions['Valon Loan ID']).toBeDefined();
+      expect(suggestions['Valon Loan ID'].suggestions[0].dbColumn).toBe('valon_loan_id');
+      expect(suggestions['Valon Loan ID'].suggestions[0].confidenceScore).toBe(1.0);
+      
+      expect(suggestions['Loan Amount']).toBeDefined();
+      expect(suggestions['Loan Amount'].suggestions[0].dbColumn).toBe('loan_amount');
+      expect(suggestions['Loan Amount'].suggestions[0].confidenceScore).toBe(1.0);
+      
+      expect(suggestions['Origination Date']).toBeDefined();
+      expect(suggestions['Origination Date'].suggestions[0].dbColumn).toBe('origination_date');
+      expect(suggestions['Origination Date'].suggestions[0].confidenceScore).toBe(1.0);
+    });
+    
     it('should suggest table mappings for Excel sheets', async () => {
       // Mock sheet names
       const sheetNames = ['Loans', 'Payments', 'Unknown'];

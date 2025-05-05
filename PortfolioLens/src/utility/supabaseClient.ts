@@ -93,12 +93,141 @@ export const executeSQL = async (sql: string): Promise<any[] | null> => {
   try {
     // Split the SQL string into individual statements
     // This is a basic split by semicolon, may need more robust parsing for complex SQL
-    const statements = trimmedSql.split(';').map(s => s.trim()).filter(s => s && !s.startsWith('--'));
+    // Improved SQL statement parsing - handle comments and properly split statements
+    const sqlLines = trimmedSql.split('\n');
+    const cleanedSql = sqlLines
+      .filter(line => !line.trim().startsWith('--')) // Remove comment-only lines
+      .join('\n');
+    
+    // Split by semicolons but preserve SQL structure
+    const statements = cleanedSql.split(';')
+      .map(s => s.trim())
+      .filter(s => s && s.length > 0);
+    
+    console.log(`[DEBUG executeSQL] Found ${statements.length} SQL statements to execute`);
 
     let lastResult: any[] | null = null;
 
     for (const statement of statements) {
+      // Skip empty statements
+      if (!statement) {
+        console.log(`[DEBUG executeSQL] Skipping empty statement`);
+        continue;
+      }
+      
       console.log(`Executing statement via RPC: ${statement.substring(0, 80)}${statement.length > 80 ? '...' : ''}`);
+      
+      // Check if this is a refresh_schema_cache call
+      if (statement.includes('refresh_schema_cache')) {
+        console.log(`Executing refresh_schema_cache via RPC`);
+        try {
+          // Execute via RPC
+          const { data: refreshData, error: refreshError } = await supabaseClient.rpc('exec_sql', { sql: statement });
+          
+          if (refreshError) {
+            console.error(`Error refreshing schema cache:`, refreshError);
+            // Try an alternative approach - execute as a regular SQL statement
+            try {
+              const result = await supabaseClient.rpc('exec_sql', { sql: 'SELECT refresh_schema_cache();' });
+              console.log(`Schema cache refreshed successfully via alternative method`);
+              lastResult = result.data;
+            } catch (altError) {
+              console.error(`Alternative schema refresh failed:`, altError);
+            }
+          } else {
+            console.log(`Schema cache refreshed successfully`);
+            lastResult = refreshData;
+          }
+          continue; // Skip to next statement
+        } catch (refreshErr) {
+          console.error(`Exception refreshing schema cache:`, refreshErr);
+          // Continue with normal execution as fallback
+        }
+      }
+      
+      // Check if this is an ALTER TABLE statement
+      if (statement.toUpperCase().includes('ALTER TABLE')) {
+        console.log(`[DEBUG executeSQL] Processing ALTER TABLE statement`);
+        // Extract the individual ADD COLUMN statements
+        const alterMatch = statement.match(/ALTER\s+TABLE\s+"([^"]+)"/i);
+        const tableName = alterMatch ? alterMatch[1] : null;
+        
+        if (tableName) {
+          console.log(`[DEBUG executeSQL] Altering table: ${tableName}`);
+          
+          // Extract all ADD COLUMN statements - use a more robust regex that handles multi-line statements
+          // This regex captures the column name and everything up to the next comma or semicolon
+          const addColumnRegex = /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+"([^"]+)"\s+([^,;]+)/gi;
+          const columnMatches = statement.match(addColumnRegex);
+          
+          if (!columnMatches || columnMatches.length === 0) {
+            console.log(`[DEBUG executeSQL] No ADD COLUMN statements found in ALTER TABLE statement`);
+            // Execute the entire ALTER TABLE statement as is
+            try {
+              // Use RPC function to execute SQL
+              const { data, error } = await supabaseClient.rpc('exec_sql', { sql: statement });
+              if (error) {
+                console.error(`[DEBUG executeSQL] Error executing ALTER TABLE statement:`, error);
+              } else {
+                console.log(`[DEBUG executeSQL] Successfully executed ALTER TABLE statement`);
+                lastResult = data;
+              }
+            } catch (sqlErr) {
+              console.error(`[DEBUG executeSQL] Exception executing ALTER TABLE statement:`, sqlErr);
+            }
+            continue;
+          }
+          
+          // Process each ADD COLUMN statement individually
+          let columnCount = 0;
+          let allColumnsSuccess = true;
+          
+          for (const columnMatch of columnMatches) {
+            // Extract column name and type from the match
+            const match = /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+"([^"]+)"\s+([^,;]+)/i.exec(columnMatch);
+            if (!match) continue;
+            
+            const columnName = match[1];
+            const columnType = match[2].trim();
+            columnCount++;
+            
+            console.log(`[DEBUG executeSQL] Adding column: ${columnName} (${columnType})`);
+            
+            // Execute each ADD COLUMN as a separate statement
+            const singleColumnSql = `ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS "${columnName}" ${columnType}`;
+            try {
+              // Use RPC function to execute SQL
+              const { data, error } = await supabaseClient.rpc('exec_sql', { sql: singleColumnSql });
+              
+              if (error) {
+                console.error(`[DEBUG executeSQL] Error adding column ${columnName}:`, error);
+                allColumnsSuccess = false;
+              } else {
+                console.log(`[DEBUG executeSQL] Successfully added column ${columnName}`);
+                lastResult = data;
+              }
+            } catch (columnErr) {
+              console.error(`[DEBUG executeSQL] Exception adding column ${columnName}:`, columnErr);
+              allColumnsSuccess = false;
+            }
+          }
+          
+          // If all columns were added successfully, refresh the schema cache
+          if (allColumnsSuccess && columnCount > 0) {
+            try {
+              console.log(`[DEBUG executeSQL] Refreshing schema cache after adding columns`);
+              await refreshSchema(1);
+            } catch (refreshErr) {
+              console.error(`[DEBUG executeSQL] Error refreshing schema cache:`, refreshErr);
+            }
+          }
+          
+          console.log(`[DEBUG executeSQL] Processed ${columnCount} columns for table ${tableName}`);
+          continue; // Skip to next statement after processing all columns
+        }
+      }
+      
+      // Use the RPC method which is available in the Supabase client
       const { data, error } = await supabaseClient.rpc('exec_sql', { sql: statement });
 
       if (error) {
@@ -140,25 +269,67 @@ export const executeSQL = async (sql: string): Promise<any[] | null> => {
  */
 export async function refreshSchema(retries = 2): Promise<boolean> {
   try {
-    // Try to call the refresh_schema RPC function
-    const { data, error } = await supabaseClient.rpc('refresh_schema');
+    // Call the refresh_schema_cache function directly via RPC
+    // This is the recommended approach according to Supabase documentation
+    const { data, error } = await supabaseClient.rpc('refresh_schema_cache');
     
-    if (error) {
-      console.warn('Initial schema refresh failed:', error.message);
+    if (!error) {
+      return true;
+    } else {
+      console.warn('Schema refresh via RPC failed:', error.message);
+      
+      // Try the SQL approach as a fallback
+      try {
+        // Try to execute the refresh_schema_cache() function via SQL
+        const result = await executeSQL('SELECT refresh_schema_cache();');
+        
+        if (result) {
+          console.log('Schema refreshed successfully via SQL ✓');
+          return true;
+        }
+      } catch (sqlError: any) {
+        console.warn('Schema refresh via SQL failed:', sqlError.message);
+      }
+      
+      // If both approaches fail and we have retries left
       if (retries > 0) {
         console.log(`Retrying schema refresh (${retries} attempts remaining)...`);
         // Wait a bit before retrying
         await new Promise(resolve => setTimeout(resolve, 1000));
         return refreshSchema(retries - 1);
       }
-      console.error('All schema refresh attempts failed');
+      console.warn('All schema refresh attempts failed');
       return false;
     }
-    
-    console.log('Schema refreshed successfully ✓');
-    return true;
   } catch (error: any) {
-    console.error('Schema refresh exception:', error.message);
+    console.warn('Schema refresh exception:', error.message);
+    
+    // Try an alternative approach - use exec_sql RPC
+    try {
+      const { data, error } = await supabaseClient.rpc('exec_sql', {
+        sql: 'SELECT refresh_schema_cache();'
+      });
+      
+      if (!error) {
+        console.log('Schema refreshed successfully via RPC ✓');
+        return true;
+      }
+    } catch (rpcError) {
+      // Try another RPC approach as a last resort
+      try {
+        await supabaseClient.rpc('exec_sql', {
+          sql: `DO $$
+          BEGIN
+            PERFORM refresh_schema_cache();
+          END $$;`
+        });
+        console.log('Schema refreshed successfully via DO block RPC ✓');
+        return true;
+      } catch (doBlockError) {
+        // Ignore errors and continue with retries
+      }
+    }
+    
     if (retries > 0) {
       console.log(`Retrying schema refresh (${retries} attempts remaining)...`);
       await new Promise(resolve => setTimeout(resolve, 1000));

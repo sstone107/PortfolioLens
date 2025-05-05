@@ -1,5 +1,7 @@
 import { MissingColumnInfo, ColumnType } from '../types';
-import { executeSQL, supabaseClient } from '../../../utility/supabaseClient';
+import SqlExecutionService from '../../../services/SqlExecutionService'; // Import SqlExecutionService
+import { UserRoleType } from '../../../types/userRoles'; // Import UserRoleType
+import { supabaseClient } from '../../../utility/supabaseClient'; // Import supabaseClient for direct RPC calls
 
 /**
  * Generate and execute SQL for schema creation
@@ -11,53 +13,53 @@ export class SchemaGenerator {
    * @param columnsToAdd Columns that need to be added to existing tables
    * @returns SQL statements as string
    */
-  static generateSQL(
-    tablesToCreate: { tableName: string }[],
+  // Modified: Generates parameters for the add_columns_to_table stored procedure
+  static generateProcedureCallParameters(
+    tablesToCreate: { tableName: string }[], // Keep for potential future CREATE TABLE function
     columnsToAdd: { tableName: string, columns: MissingColumnInfo[] }[]
-  ): string {
-    let sql = '-- Schema creation SQL\n\n';
+  ): { tableName: string, columnsJson: string }[] { // Return parameters needed for the procedure call
     
-    // Generate CREATE TABLE statements
-    if (tablesToCreate.length > 0) {
-      sql += '-- Table creation statements\n';
-      
-      tablesToCreate.forEach(table => {
-        sql += `CREATE TABLE IF NOT EXISTS "${table.tableName}" (\n`;
-        sql += '  "id" UUID PRIMARY KEY DEFAULT uuid_generate_v4(),\n';
-        sql += '  "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n';
-        sql += '  "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP\n';
-        sql += ');\n\n';
-      });
-    }
     
-    // Generate ALTER TABLE statements to add columns
+    const procedureCalls: { tableName: string, columnsJson: string }[] = [];
+
+    // Handle CREATE TABLE (if needed in future - currently handled separately or assumed exists)
+    // For now, we focus on ADD COLUMN via the procedure
+
+    // Generate parameters for add_columns_to_table procedure
     if (columnsToAdd.length > 0) {
-      sql += '-- Column addition statements\n';
-      
       columnsToAdd.forEach(tableInfo => {
         const { tableName, columns } = tableInfo;
         
-        if (columns.length > 0) {
-          sql += `-- Adding columns to "${tableName}"\n`;
-          sql += `ALTER TABLE "${tableName}"\n`;
-          
-          columns.forEach((column, index) => {
-            sql += `  ADD COLUMN IF NOT EXISTS "${column.columnName}" ${column.suggestedType}`;
-            if (index < columns.length - 1) {
-              sql += ',\n';
-            } else {
-              sql += ';\n\n';
-            }
-          });
+        if (!columns || columns.length === 0) {
+          console.log(`[DEBUG SchemaGenerator] Skipping parameter generation for table ${tableName} - no columns to add`);
+          return;
         }
+        
+        // Validate and format columns for JSONB array
+        const validColumnsForJson = columns
+          .filter(col => col && col.columnName && typeof col.columnName === 'string' && col.suggestedType)
+          .map(col => ({
+            columnName: col.columnName,
+            suggestedType: col.suggestedType || 'TEXT' // Ensure type exists
+          }));
+          
+        if (validColumnsForJson.length === 0) {
+          console.log(`[DEBUG SchemaGenerator] Skipping parameter generation for table ${tableName} - no valid columns to add`);
+          return;
+        }
+        
+        
+        // Convert the array of column info objects to a JSON string
+        const columnsJsonString = JSON.stringify(validColumnsForJson);
+        
+        procedureCalls.push({
+          tableName: tableName,
+          columnsJson: columnsJsonString
+        });
       });
     }
     
-    // Add schema cache refresh
-    sql += '-- Refresh schema cache\n';
-    sql += 'SELECT refresh_schema_cache();\n';
-    
-    return sql;
+    return procedureCalls;
   }
   
   /**
@@ -65,32 +67,73 @@ export class SchemaGenerator {
    * @param sql SQL statements to execute
    * @returns Result of execution
    */
-  static async executeSQL(sql: string): Promise<{ success: boolean, message: string }> {
+  // Modified: Executes the add_columns_batch RPC for each table needing columns.
+  static async executeSQL(
+     procedureParams: { tableName: string, columnsJson: string }[]
+  ): Promise<{ success: boolean, message: string }> {
+    if (!procedureParams || procedureParams.length === 0) {
+      console.log('[DEBUG SchemaGenerator] No procedure calls to execute.');
+      return { success: true, message: 'No schema changes needed.' };
+    }
+
+    let overallSuccess = true;
+    let firstErrorMessage = '';
+
     try {
-      console.log(`[SchemaGenerator] Executing schema SQL block...`);
+      console.log(`[DEBUG SchemaGenerator] Executing add_columns_batch RPC for ${procedureParams.length} table(s)...`);
 
-      // Directly call the utility function with the full SQL string
-      // The executeSQL utility now handles splitting and individual execution.
-      await executeSQL(sql);
+      for (const params of procedureParams) {
+        const { tableName, columnsJson } = params;
+        console.log(`[DEBUG SchemaGenerator] Calling add_columns_batch for table: ${tableName}`);
+        console.log(`[DEBUG SchemaGenerator] Columns JSON:`, columnsJson);
 
-      console.log('[SchemaGenerator] Schema SQL block execution attempt complete.');
+        // Parse the JSON to get the columns array
+        let columnsArray;
+        try {
+          columnsArray = JSON.parse(columnsJson);
+        } catch (e: any) { // Type the error as any to access message property
+          console.error(`[DEBUG SchemaGenerator] Error parsing columns JSON:`, e);
+          throw new Error(`Failed to parse columns JSON for table ${tableName}: ${e.message || 'Unknown error'}`);
+        }
 
-      // The refresh_schema_cache is included in the generated SQL block,
-      // so no need to call it separately here.
-      // The executeSQL utility will execute it as the last statement.
+        // Transform the columns array to match the format expected by add_columns_batch
+        const transformedColumns = columnsArray.map((col: any) => ({
+          name: col.columnName,
+          type: col.suggestedType
+        }));
 
-      // If executeSQL didn't throw, assume success.
-      return {
-        success: true,
-        message: `Schema operations executed successfully.`
-      };
+        // Call the add_columns_batch RPC
+        console.log(`[DEBUG SchemaGenerator] Calling add_columns_batch RPC for table ${tableName} with ${transformedColumns.length} columns`);
+        
+        const { data, error } = await supabaseClient.rpc('add_columns_batch', {
+          p_table_name: tableName,
+          p_columns: transformedColumns
+        });
+        
+        // Check for errors
+        if (error) {
+          const errorMessage = error.message || String(error);
+          console.error(`[DEBUG SchemaGenerator] Error executing add_columns_batch RPC for table ${tableName}:`, errorMessage);
+          if (!firstErrorMessage) {
+            firstErrorMessage = `Failed to add columns to table ${tableName}: ${errorMessage}`;
+          }
+          throw new Error(firstErrorMessage);
+        }
+        
+        console.log(`[DEBUG SchemaGenerator] add_columns_batch RPC result:`, data);
+        
+        // The schema cache is refreshed automatically by the add_columns_batch function
+        // if any columns were added, so we don't need to do it manually here
+        
+        console.log(`[DEBUG SchemaGenerator] Columns added successfully to table ${tableName}.`);
+      }
 
-    } catch (error: any) {
-       console.error(`[SchemaGenerator] Error executing schema SQL block:`, error);
-       return {
-         success: false,
-         message: `Failed to execute schema SQL: ${error.message}`
-       };
+      console.log('[DEBUG SchemaGenerator] All schema operations executed.');
+      return { success: true, message: 'Schema operations executed successfully.' };
+
+    } catch (error) {
+      console.error('[DEBUG SchemaGenerator] Error executing schema operations:', error);
+      return { success: false, message: `Schema execution failed: ${firstErrorMessage || (error instanceof Error ? error.message : String(error))}` };
     }
   }
 

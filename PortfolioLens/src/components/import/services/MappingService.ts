@@ -542,23 +542,28 @@ export class MappingService {
 
     // Function to calculate name similarity score
     const calculateNameSimilarity = (excelCol: string, dbColName: string): number => {
-      const normalizedExcelCol = excelCol.toLowerCase().replace(/[_\s-]/g, '');
-      const normalizedDbCol = dbColName.toLowerCase().replace(/[_\s-]/g, '');
+      // Import the normalizeForMatching function from BatchImporterUtils
+      const { normalizeForMatching } = require('../../BatchImporterUtils');
+      
+      // Fully normalize both strings (removing case, spaces, underscores, etc.)
+      const normalizedExcelCol = normalizeForMatching(excelCol);
+      const normalizedDbCol = normalizeForMatching(dbColName);
 
-      // 1. Exact match (highest priority)
+      // 1. Exact normalized match (highest priority)
+      // This will catch cases like "Valon Loan ID" matching with "valon_loan_id"
+      if (normalizedExcelCol === normalizedDbCol && normalizedExcelCol !== '') {
+        return 1.0;
+      }
+      
+      // 2. Case-insensitive exact match
       if (excelCol.toLowerCase() === dbColName.toLowerCase()) {
         return 1.0;
       }
 
-      // 2. Normalized exact match
-      if (normalizedExcelCol === normalizedDbCol) {
-        return 0.95;
-      }
-
       // 3. Substring matches
-      if (normalizedDbCol.includes(normalizedExcelCol)) {
+      if (normalizedDbCol.includes(normalizedExcelCol) && normalizedExcelCol.length > 3) {
         return 0.8;
-      } else if (normalizedExcelCol.includes(normalizedDbCol)) {
+      } else if (normalizedExcelCol.includes(normalizedDbCol) && normalizedDbCol.length > 3) {
         return 0.7;
       }
 

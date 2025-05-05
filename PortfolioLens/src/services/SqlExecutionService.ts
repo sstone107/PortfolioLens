@@ -86,7 +86,7 @@ export class SqlExecutionService {
   ): Promise<SqlExecutionResult<T>> {
     try {
       // Call the secure SQL execution function
-      const { data, error } = await supabaseClient.rpc(
+      const rpcResult = await supabaseClient.rpc(
         'exec_sql_secure',
         {
           query_text: query,
@@ -97,9 +97,14 @@ export class SqlExecutionService {
           role_name: options.role ?? null
         }
       );
+      
+      // Log the raw RPC result for detailed debugging
+      
+      const { data, error } = rpcResult; // Destructure after logging
 
-      if (error) {
-        console.error('SQL execution error:', error);
+      if (error) { // Check top-level error
+        console.error('SQL execution error (RPC Level):', error);
+        console.error('[DEBUG SqlExecutionService] RPC Error Details:', JSON.stringify(error, null, 2));
         return {
           data: null,
           error: new Error(error.message || 'SQL execution failed'),
@@ -109,9 +114,26 @@ export class SqlExecutionService {
           }
         };
       }
+      
+      // Check for nested errors within the data field (common pattern for pg functions)
+      if (data && typeof data === 'object' && !Array.isArray(data) && data.error) {
+        const nestedErrorMsg = data.detail ? `${data.error} (Detail: ${data.detail})` : data.error;
+        console.error('SQL execution error (Nested in Data):', nestedErrorMsg);
+        console.error('[DEBUG SqlExecutionService] Nested Error Details:', JSON.stringify(data, null, 2));
+        return {
+          data: null,
+          error: new Error(nestedErrorMsg),
+          metadata: {
+            status: SqlExecutionStatus.ERROR,
+            queryHash: this.generateQueryHash(query)
+          }
+        };
+      }
 
+      // If no errors, return data
       return {
-        data: Array.isArray(data) ? data : [data],
+        // Ensure data is always an array, even if RPC returns single object or null/undefined
+        data: data === null || data === undefined ? [] : (Array.isArray(data) ? data : [data]),
         error: null,
         metadata: {
           rowCount: Array.isArray(data) ? data.length : 1,

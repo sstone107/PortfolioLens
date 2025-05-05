@@ -353,9 +353,25 @@ export async function applyMigration(name: string, query: string): Promise<any> 
       // Continue with migration even if logging fails
     }
     
+    // Add detailed logging for MCP check
+    console.log('[DEBUG applyMigration] Checking MCP availability...');
+    const mcpAvailable = typeof window !== 'undefined' && window.supabaseMcp?.applyMigration;
+    console.log(`[DEBUG applyMigration] MCP available: ${mcpAvailable}`);
+    if (typeof window !== 'undefined') {
+      console.log(`[DEBUG applyMigration] window.supabaseMcp object:`, window.supabaseMcp);
+      if (window.supabaseMcp) {
+        console.log(`[DEBUG applyMigration] typeof window.supabaseMcp.applyMigration:`, typeof window.supabaseMcp.applyMigration);
+      }
+    }
+    
     // First try to use the MCP server if available
-    if (typeof window !== 'undefined' && window.supabaseMcp?.applyMigration) {
+    if (mcpAvailable) {
       try {
+        console.log('[DEBUG applyMigration] Attempting to apply migration via REAL MCP...');
+        // Add null check for TypeScript
+        if (!window.supabaseMcp) {
+          throw new Error('window.supabaseMcp is unexpectedly undefined despite mcpAvailable check.');
+        }
         const result = await window.supabaseMcp.applyMigration({
           project_id: SUPABASE_PROJECT_ID,
           name,
@@ -402,6 +418,8 @@ export async function applyMigration(name: string, query: string): Promise<any> 
         // Continue to fallback case
       }
     } else {
+      // Log the reason for using the mock
+      console.warn('[DEBUG applyMigration] Reason for using mock: MCP server or applyMigration function not available.');
       console.info('Supabase MCP not available for migration, using mock');
     }
     

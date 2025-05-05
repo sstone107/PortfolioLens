@@ -16,7 +16,7 @@ const STALE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 export class SchemaCacheService {
   private dbPromise: Promise<IDBPDatabase | null> | null = null;
   private metadataService: import('./MetadataService').MetadataService | null = null; // Type imported inline, initialized to null
-  private dbService: DatabaseService; // Add DatabaseService member
+  public dbService: DatabaseService; // Make dbService public for access by MetadataService
 
   constructor(dbServiceInstance: DatabaseService) { // REQUIRE DatabaseService instance
     if (!dbServiceInstance) {
@@ -191,7 +191,9 @@ export class SchemaCacheService {
     let cache = await this.getCache(); // Checks staleness by default
 
     if (!cache) {
+      console.log('[DEBUG SchemaCacheService] Cache not found or stale, fetching fresh schema');
       cache = await this.fetchAndCacheSchema();
+    } else {
     }
     return cache;
   }
@@ -202,7 +204,59 @@ export class SchemaCacheService {
    * @returns Promise resolving to the refreshed SchemaCache or null on failure.
    */
   async forceRefreshSchema(): Promise<SchemaCache | null> {
+    console.log('[DEBUG SchemaCacheService] Forcing schema cache refresh');
+    // First clear the existing cache
+    await this.clearCache();
+    // Then fetch and cache fresh schema
     return await this.fetchAndCacheSchema();
+  }
+
+  /**
+   * Refreshes the schema cache for a specific table
+   * @param tableName The name of the table to refresh
+   * @returns Promise resolving to true if successful, false otherwise
+   */
+  async refreshTableSchema(tableName: string): Promise<boolean> {
+    console.log(`[DEBUG SchemaCacheService] Refreshing schema for table: ${tableName}`);
+    try {
+      // Get the current cache
+      const cache = await this.getCache(false); // Don't check staleness
+      if (!cache) {
+        console.log(`[DEBUG SchemaCacheService] No cache found, fetching full schema`);
+        await this.fetchAndCacheSchema();
+        return true;
+      }
+
+      // Fetch fresh column data for this table
+      if (!this.dbService) {
+        console.error(`[DEBUG SchemaCacheService] Database service not available`);
+        return false;
+      }
+
+      // Force bypass of any caching when refreshing schema
+      const columns = await this.dbService.getColumns(tableName, true);
+      if (!columns || columns.length === 0) {
+        console.warn(`[DEBUG SchemaCacheService] No columns returned for ${tableName}`);
+        return false;
+      }
+
+      // Update just this table in the cache
+      cache.tables[tableName] = {
+        tableName,
+        columns,
+        lastRefreshed: Date.now()
+      };
+
+      // Update the overall cache refresh time
+      cache.lastRefreshed = Date.now();
+
+      // Save the updated cache
+      const success = await this.setCache(cache);
+      return success;
+    } catch (error) {
+      console.error(`[DEBUG SchemaCacheService] Error refreshing table schema for ${tableName}:`, error);
+      return false;
+    }
   }
 }
 

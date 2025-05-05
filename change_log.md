@@ -1,5 +1,67 @@
 # PortfolioLens Change Log
 
+## 2025-05-05: Improved Column Mapping for Case and Spacing Variations
+
+### Fixed
+- Fixed issue where column names differing only by case or spacing weren't recognized as 100% matches:
+  - Enhanced `normalizeForMatching` function in BatchImporterUtils.ts to better handle case and spacing variations
+  - Updated `calculateSimilarity` function to recognize normalized matches as 100% matches
+  - Improved `calculateNameSimilarity` function in MappingService.ts to prioritize normalized matches
+  - Added null/undefined checks to prevent errors with empty strings
+  - Fixed specific issue where "Valon Loan ID" was not recognized as a 100% match with "valon_loan_id"
+- Updated `normalizeColumnName` function in ColumnMappingUtils.ts for consistent normalization
+- Added test case to verify correct matching of columns with case and spacing differences
+
+### Technical Details
+- Implemented a two-step matching process that first checks for normalized equality before calculating Levenshtein distance
+- Enhanced string normalization to handle all common separator characters (spaces, underscores, hyphens)
+- Added proper TypeScript interface updates to support the isDuplicate property in ColumnSuggestion
+- Improved test coverage with specific test cases for case and spacing variations
+
+## 2025-05-05: Fixed SQL Function and Refactored Schema Changes to Use RPC
+
+### Fixed
+- Fixed critical bug in `add_columns_batch` SQL function that was causing "column reference 'column_name' is ambiguous" errors:
+  - Created migration `009_fix_add_columns_batch.sql` to update the function
+  - Renamed local variables to avoid name conflicts with database columns
+  - Added detailed comments to explain the fix
+
+### Changed
+- Refactored schema changes execution in batch-import to use the `add_columns_batch` RPC instead of direct SQL statements:
+  - Updated `SchemaGenerator.ts` to use the RPC call with proper parameter transformation
+  - Modified `DatabaseService.ts` to use the RPC for creating missing columns
+  - Updated `ImportService.ts` to use the RPC for applying schema changes
+  - Improved error handling and reporting throughout the schema change process
+  - Maintained schema cache refresh functionality through the RPC call
+
+### Technical Details
+- Transformed column data structures to match the format expected by the RPC
+- Leveraged the built-in schema cache refresh functionality in the `add_columns_batch` function
+- Enhanced error handling to provide better feedback when schema changes fail
+- Improved code maintainability by using a consistent approach across all schema change operations
+- Fixed SQL function to properly handle column name references in WHERE clauses
+
+## 2025-05-05: Fixed SQL Schema Generation and Schema Cache Refresh in Batch Import
+
+### Fixed
+- Fixed critical issue where SQL schema generation wasn't properly executing:
+  - Improved SQL statement parsing to handle multi-statement SQL blocks correctly
+  - Enhanced ALTER TABLE statement execution to process each column addition individually
+  - Added table-specific schema cache refresh after schema changes
+  - Implemented proper schema cache refresh mechanism with verification
+- Fixed schema cache refresh issues that were causing empty column lists:
+  - Added singleton pattern to MetadataService for consistent access
+  - Implemented refreshTableSchema method to refresh specific tables
+  - Enhanced error handling and logging throughout the schema refresh process
+  - Fixed SQL execution to properly handle refresh_schema_cache calls
+
+### Technical Details
+- Modified supabaseClient.ts to properly parse and execute SQL statements
+- Enhanced SchemaGenerator.ts to extract table names from ALTER TABLE statements
+- Added refreshTableSchema method to SchemaCacheService and MetadataService
+- Implemented singleton pattern in MetadataService for consistent access
+- Added detailed logging throughout the schema refresh process
+
 ## 2025-05-05: Added Field Name Input for "Create: New Field" in Batch Import
 
 ### Fixed

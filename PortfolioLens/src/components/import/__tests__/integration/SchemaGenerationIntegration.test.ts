@@ -6,7 +6,24 @@ import { MissingColumnInfo, ColumnType } from '../../types';
 jest.mock('@supabase/supabase-js');
 jest.mock('../../../utility/supabaseClient', () => ({
   executeSQL: jest.fn().mockResolvedValue({ success: true, message: 'Schema operations executed successfully' }),
-  supabaseClient: {}
+  supabaseClient: {
+    rpc: jest.fn().mockImplementation((funcName, params) => {
+      if (funcName === 'add_columns_batch') {
+        return {
+          data: {
+            success: true,
+            columns: params.p_columns.map((col: any) => ({
+              name: col.name,
+              type: col.type,
+              added: true
+            }))
+          },
+          error: null
+        };
+      }
+      return { data: null, error: null };
+    })
+  }
 }));
 
 describe('Schema Generation Integration Tests', () => {
@@ -74,18 +91,18 @@ describe('Schema Generation Integration Tests', () => {
       expect(sql).toContain('SELECT refresh_schema_cache()');
     });
     
-    it('should execute schema operations', async () => {
-      // Generate SQL
-      const sql = SchemaGenerator.generateSQL(
+    it('should execute schema operations using RPC', async () => {
+      // Generate procedure call parameters
+      const procedureParams = SchemaGenerator.generateProcedureCallParameters(
         [{ tableName: 'test_table' }],
-        [{ 
-          tableName: 'existing_table', 
-          columns: [{ columnName: 'test_column', suggestedType: 'TEXT', originalType: 'string' }] 
+        [{
+          tableName: 'existing_table',
+          columns: [{ columnName: 'test_column', suggestedType: 'TEXT', originalType: 'string' }]
         }]
       );
       
-      // Execute SQL
-      const result = await SchemaGenerator.executeSQL(sql);
+      // Execute RPC
+      const result = await SchemaGenerator.executeSQL(procedureParams);
       
       // Verify result
       expect(result.success).toBe(true);
@@ -241,12 +258,21 @@ describe('Schema Generation Integration Tests', () => {
       expect(missingColumns[1].suggestedType).toBe('timestamp with time zone');
     });
     
-    it('should create missing columns in a table', async () => {
-      // Mock the SchemaGenerator.executeSQL method
-      jest.spyOn(SchemaGenerator, 'executeSQL').mockResolvedValue({
-        success: true,
-        message: 'Schema operations executed successfully.'
+    it('should create missing columns in a table using RPC', async () => {
+      // Mock the supabaseClient.rpc method
+      const mockRpc = jest.fn().mockResolvedValue({
+        data: {
+          success: true,
+          columns: [
+            { name: 'amount', type: 'numeric(18,6)', added: true },
+            { name: 'date', type: 'timestamp with time zone', added: true }
+          ]
+        },
+        error: null
       });
+      
+      // Override the mock for this test
+      (mockSupabaseClient as any).rpc = mockRpc;
       
       // Define missing columns
       const missingColumns: MissingColumnInfo[] = [
@@ -259,14 +285,16 @@ describe('Schema Generation Integration Tests', () => {
       
       // Verify result
       expect(result.success).toBe(true);
-      expect(result.message).toContain('Successfully created');
+      expect(result.message).toContain('Successfully added');
       
-      // Verify SchemaGenerator.executeSQL was called with correct SQL
-      expect(SchemaGenerator.executeSQL).toHaveBeenCalled();
-      const sqlArg = (SchemaGenerator.executeSQL as jest.Mock).mock.calls[0][0];
-      expect(sqlArg).toContain('ALTER TABLE "loans"');
-      expect(sqlArg).toContain('ADD COLUMN IF NOT EXISTS "amount" numeric(18,6)');
-      expect(sqlArg).toContain('ADD COLUMN IF NOT EXISTS "date" timestamp with time zone');
+      // Verify RPC was called with correct parameters
+      expect(mockRpc).toHaveBeenCalledWith('add_columns_batch', {
+        p_table_name: 'loans',
+        p_columns: [
+          { name: 'amount', type: 'numeric(18,6)' },
+          { name: 'date', type: 'timestamp with time zone' }
+        ]
+      });
     });
   });
 });

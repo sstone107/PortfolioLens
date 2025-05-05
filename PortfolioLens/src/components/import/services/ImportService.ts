@@ -325,40 +325,66 @@ export class ImportService {
       return { success: true, message: 'No schema changes proposed.' };
     }
 
-    // Filter out any proposals that might already exist (though ideally proposals are pre-filtered)
-    // This requires fetching current table columns - consider if this check is needed here or earlier
-    // For now, assume proposals are for genuinely new columns
-
-    // Generate ALTER TABLE clauses
-    const addColumnClauses = proposals.map(col =>
-        // Ensure proper quoting for column names and use proposed SQL type
-        `ADD COLUMN "${col.columnName}" ${col.sqlType || 'TEXT'} ${col.isNullable === false ? 'NOT NULL' : ''} ${col.defaultValue ? `DEFAULT ${col.defaultValue}` : ''}`
-    ).join(',\n');
-
-    const migrationName = `add_cols_${tableName}_${Date.now()}`;
-    const sql = `ALTER TABLE public."${tableName}"\n${addColumnClauses};`;
-
-    console.log(`[ImportService] Applying migration to add columns: ${migrationName}`);
-    console.log(sql);
-
+    console.log(`[ImportService] Applying schema changes for ${tableName} using add_columns_batch RPC`);
+    
     try {
-      // Use applyMigration for schema changes (delegated via DatabaseService)
-      // Assuming applyMigration is available or called through an injected service/utility
-      const result = await applyMigration(migrationName, sql); // Use the imported MCP function
-      console.log('[ImportService] Add columns migration result:', result);
-
-      // Check result format - adjust based on actual applyMigration response
-      if (result && (result.success || !result.error)) { // Example check
-           const createdColumns = proposals.map(p => p.columnName);
-           return { success: true, message: `Successfully added ${proposals.length} columns to ${tableName}.`, columnsCreated: createdColumns };
+      // Transform the proposals to the format expected by add_columns_batch
+      const transformedColumns = proposals.map(col => ({
+        name: col.columnName,
+        type: col.sqlType || 'TEXT' // Use the proposed SQL type or default to TEXT
+      }));
+      
+      // Call the add_columns_batch RPC
+      const { data, error } = await supabaseClient.rpc('add_columns_batch', {
+        p_table_name: tableName,
+        p_columns: transformedColumns
+      });
+      
+      console.log('[ImportService] add_columns_batch RPC result:', data);
+      
+      // Check for errors
+      if (error) {
+        const errorMsg = error.message || JSON.stringify(error);
+        console.error(`[ImportService] Error adding columns to ${tableName}:`, errorMsg);
+        return {
+          success: false,
+          message: `Failed to add columns to ${tableName}: ${errorMsg}`
+        };
+      }
+      
+      // Check the result format from the RPC
+      if (data && data.success) {
+        // Extract the list of columns that were actually created
+        const createdColumns = proposals
+          .filter((_, index) => {
+            // If we have column-specific results, filter based on the 'added' flag
+            if (data.columns && Array.isArray(data.columns) && data.columns[index]) {
+              return data.columns[index].added === true;
+            }
+            // Otherwise assume all were created
+            return true;
+          })
+          .map(p => p.columnName);
+        
+        return {
+          success: true,
+          message: `Successfully added columns to ${tableName}.`,
+          columnsCreated: createdColumns
+        };
       } else {
-           const errorMsg = result?.error?.message || JSON.stringify(result);
-           console.error(`[ImportService] Failed to add columns to ${tableName}: ${errorMsg}`);
-           return { success: false, message: `Failed to add columns to ${tableName}: ${errorMsg}` };
+        const errorMsg = data?.error || 'Unknown error';
+        console.error(`[ImportService] Failed to add columns to ${tableName}: ${errorMsg}`);
+        return {
+          success: false,
+          message: `Failed to add columns to ${tableName}: ${errorMsg}`
+        };
       }
     } catch (error) {
       console.error(`[ImportService] Error applying schema changes for ${tableName}:`, error);
-      return { success: false, message: `Error applying schema changes: ${error instanceof Error ? error.message : String(error)}` };
+      return {
+        success: false,
+        message: `Error applying schema changes: ${error instanceof Error ? error.message : String(error)}`
+      };
     }
   }
 

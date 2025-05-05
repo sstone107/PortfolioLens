@@ -281,46 +281,88 @@ export class DatabaseService {
    * @param tableName Name of the table
    * @returns Promise resolving to array of column info objects
    */
-  async getColumns(tableName: string): Promise<DbColumnInfo[]> {
+  async getColumns(tableName: string, bypassCache: boolean = false): Promise<DbColumnInfo[]> {
      // Ensure table name is properly escaped and single-quoted for SQL literal
      const escapedTableName = tableName.replace(/'/g, "''"); // Escape single quotes
 
      return this.executeWithConnectionPool(async () => {
-        const columnSql = `
-            SELECT column_name, data_type, is_nullable, column_default
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = '${escapedTableName}' -- Use interpolated single-quoted name
-            ORDER BY ordinal_position;
-        `;
-        // Remove parameters object as it's now interpolated
-        const columnsData = await this.executeSQL(columnSql);
+        try {
+           // If bypassCache is true, force a schema refresh before fetching columns
+           if (bypassCache) {
+              try {
+                 const { refreshSchema } = await import('../../../utility/supabaseClient');
+                 await refreshSchema(1);
+              } catch (refreshError) {
+                 console.error(`Error refreshing schema:`, refreshError);
+              }
+           }
+           
+           const columnSql = `
+               SELECT column_name, data_type, is_nullable, column_default
+               FROM information_schema.columns
+               WHERE table_schema = 'public' AND table_name = '${escapedTableName}' -- Use interpolated single-quoted name
+               ORDER BY ordinal_position;
+           `;
+           
+           // Execute with direct SQL to bypass any caching
+           const columnsData = await this.executeSQL(columnSql);
 
-        // Fetch primary keys separately
-        const pkSql = `
-            SELECT kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-              ON tc.constraint_name = kcu.constraint_name
-              AND tc.table_schema = kcu.table_schema
-            WHERE tc.constraint_type = 'PRIMARY KEY'
-              AND tc.table_schema = 'public'
-              AND tc.table_name = '${escapedTableName}'; -- Use interpolated single-quoted name
-        `;
-        // Remove parameters object
+           // Fetch primary keys separately
+           const pkSql = `
+               SELECT kcu.column_name
+               FROM information_schema.table_constraints tc
+               JOIN information_schema.key_column_usage kcu
+                 ON tc.constraint_name = kcu.constraint_name
+                 AND tc.table_schema = kcu.table_schema
+               WHERE tc.constraint_type = 'PRIMARY KEY'
+                 AND tc.table_schema = 'public'
+                 AND tc.table_name = '${escapedTableName}'; -- Use interpolated single-quoted name
+           `;
 
-        const pkResult = await this.executeSQL(pkSql);
-        const primaryKeys = new Set(pkResult.map((row: any) => row.column_name));
+           const pkResult = await this.executeSQL(pkSql);
+           const primaryKeys = new Set(pkResult.map((row: any) => row.column_name));
 
-        // Map results to DbColumnInfo type
-        // Ensure DbColumnInfo matches the structure expected by TableColumn in TableInfo
-        return columnsData.map((col: any) => ({
-            columnName: col.column_name,
-            dataType: col.data_type,
-            isNullable: col.is_nullable === 'YES',
-            columnDefault: col.column_default,
-            isPrimaryKey: primaryKeys.has(col.column_name)
-            // Add other DbColumnInfo fields if necessary (e.g., description)
-        }));
+           // Map results to DbColumnInfo type with additional validation
+           const mappedColumns = columnsData.map((col: any) => {
+               // Validate column data before mapping
+               if (!col || typeof col.column_name !== 'string') {
+                   console.warn(`Invalid column data:`, JSON.stringify(col));
+                   return null; // Will be filtered out below
+               }
+               
+               return {
+                   columnName: col.column_name,
+                   dataType: col.data_type || 'text', // Default to text if missing
+                   isNullable: col.is_nullable === 'YES',
+                   columnDefault: col.column_default,
+                   isPrimaryKey: primaryKeys.has(col.column_name)
+               };
+           }).filter((col): col is DbColumnInfo => col !== null); // Type guard to filter out null entries
+           
+           // If no valid columns were found, return a default structure with id column
+           if (mappedColumns.length === 0) {
+               console.warn(`No valid columns found for ${tableName}, returning default structure`);
+               return [{
+                   columnName: 'id',
+                   dataType: 'uuid',
+                   isNullable: false,
+                   columnDefault: 'uuid_generate_v4()',
+                   isPrimaryKey: true
+               }];
+           }
+           
+           return mappedColumns;
+        } catch (error) {
+           console.error(`Error fetching columns for ${tableName}:`, error);
+           // Return a minimal default structure on error
+           return [{
+               columnName: 'id',
+               dataType: 'uuid',
+               isNullable: false,
+               columnDefault: 'uuid_generate_v4()',
+               isPrimaryKey: true
+           }];
+        }
     });
   }
 
@@ -396,40 +438,60 @@ export class DatabaseService {
     tableName: string,
     missingColumns: MissingColumnInfo[]
   ): Promise<{success: boolean, message: string}> {
-    // Correct Implementation: Create columns directly
+    // Return early if no columns to add
     if (missingColumns.length === 0) {
         return { success: true, message: 'No missing columns to create.' };
     }
 
-    // Important: Sanitize table and column names rigorously before embedding in SQL
-    // For simplicity here, assuming names are safe, but production code needs proper sanitization.
-    const addColumnClauses = missingColumns.map(col =>
-        `ADD COLUMN "${col.columnName}" ${col.suggestedType || 'TEXT'}` // Default to TEXT if type missing
-    ).join(',\n');
-
-    const migrationName = `add_missing_cols_${tableName}_${Date.now()}`;
-    const sql = `ALTER TABLE public."${tableName}"\n${addColumnClauses};`;
-
-    console.log(`[DatabaseService] Applying migration to add columns: ${migrationName}`);
-    console.log(sql);
-
+    console.log(`[DatabaseService] Adding ${missingColumns.length} columns to ${tableName} using add_columns_batch RPC`);
+    
     try {
-        // Use applyMigration for schema changes
-        const result = await this.applyMigration(migrationName, sql);
-        console.log('[DatabaseService] Add columns migration result:', result);
-        // Check result format - adjust based on actual applyMigration response
-        if (result && (result.success || !result.error)) { // Example check
-             return { success: true, message: `Successfully added ${missingColumns.length} columns to ${tableName}.` };
+        // Transform the columns to the format expected by add_columns_batch
+        const transformedColumns = missingColumns.map(col => ({
+            name: col.columnName,
+            type: col.suggestedType || 'TEXT' // Default to TEXT if type missing
+        }));
+        
+        // Import supabaseClient directly to use RPC
+        const { supabaseClient } = await import('../../../utility/supabaseClient');
+        
+        // Call the add_columns_batch RPC
+        const { data, error } = await supabaseClient.rpc('add_columns_batch', {
+            p_table_name: tableName,
+            p_columns: transformedColumns
+        });
+        
+        console.log('[DatabaseService] add_columns_batch RPC result:', data);
+        
+        // Check for errors
+        if (error) {
+            console.error(`[DatabaseService] Error adding columns to ${tableName}:`, error);
+            return {
+                success: false,
+                message: `Failed to add columns to ${tableName}: ${error.message || JSON.stringify(error)}`
+            };
+        }
+        
+        // Check the result format from the RPC
+        if (data && data.success) {
+            return {
+                success: true,
+                message: `Successfully added columns to ${tableName}.`
+            };
         } else {
-             const errorMsg = result?.error?.message || JSON.stringify(result);
-             return { success: false, message: `Failed to add columns to ${tableName}: ${errorMsg}` };
+            const errorMsg = data?.error || 'Unknown error';
+            return {
+                success: false,
+                message: `Failed to add columns to ${tableName}: ${errorMsg}`
+            };
         }
     } catch (error) {
-        console.error(`Error creating missing columns for ${tableName}:`, error);
-        return { success: false, message: `Error creating missing columns: ${error instanceof Error ? error.message : String(error)}` };
+        console.error(`[DatabaseService] Error creating missing columns for ${tableName}:`, error);
+        return {
+            success: false,
+            message: `Error creating missing columns: ${error instanceof Error ? error.message : String(error)}`
+        };
     }
-    // Note: executeWithConnectionPool is not used here as applyMigration likely handles its own execution context.
-    // If applyMigration *doesn't*, it should be wrapped. Assuming it does for now.
   }
   
   // ------------- Mapping Methods -------------
@@ -646,8 +708,9 @@ export class DatabaseService {
           { role: UserRoleType.Admin }
         );
         
-        // Apply the migration
+        // Apply the migration (will use the imported function from supabaseMcp.ts)
         return await applyMigration(name, sql);
+        
       } catch (error) {
         console.error('Error applying migration:', error);
         

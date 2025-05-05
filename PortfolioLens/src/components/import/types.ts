@@ -258,6 +258,7 @@ export interface ColumnSuggestion {
   isTypeCompatible: boolean; // Whether the DB column type is compatible with inferred source type
   isCreateNewField?: boolean; // Flag if this suggestion represents creating a new field
   confidenceLevel?: ConfidenceLevel; // Confidence level for the column suggestion
+  isDuplicate?: boolean; // Flag to indicate if this column is already mapped to another source column
 }
 
 /**
@@ -307,7 +308,8 @@ export type SchemaProposal = NewColumnProposal | NewTableProposal;
 export interface BatchColumnMapping {
   header: string; // Original sheet header
   sampleValue: any; // A sample value from the first few rows
-  mappedColumn: string | null; // Target DB column name
+  mappedColumn: string | null; // Target DB column name for UI display
+  dbColumn?: string | null; // Target DB column name for schema generation (should match mappedColumn)
   confidenceScore?: number; // Confidence score for the mapped column (0.0 to 1.0)
   confidenceLevel?: ConfidenceLevel; // Confidence level for the mapped column
   suggestedColumns: RankedColumnSuggestion[]; // Top N column suggestions
