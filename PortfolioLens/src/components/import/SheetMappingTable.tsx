@@ -64,15 +64,17 @@ export const toSqlFriendlyName = (name: string): string => {
 export const normalizeHeaderForMatching = (header: string): string => {
     if (!header) return '';
     let normalized = header.toLowerCase();
-    // Replace spaces, commas, hyphens, ampersands, and periods with underscores
+    // Step 1: Specifically replace "&" with " and " to handle ampersands consistently
+    normalized = normalized.replace(/&/g, ' and '); // Note the spaces around 'and'
+
+    // Step 2: Replace spaces, commas, hyphens, and periods (and now an extra space from ' and ') with underscores
     // The + ensures multiple consecutive characters from the set become a single underscore
-    normalized = normalized.replace(/[\s,\-&.]+/g, '_');
-    // Remove any leading/trailing underscores that might have been created by the replacement
+    normalized = normalized.replace(/[\s,\-.]+/g, '_'); // Removed & from this regex
+
+    // Step 3: Remove any leading/trailing underscores that might have been created by the replacement
     normalized = normalized.replace(/^_+|_+$/g, '');
-    // Ensure that if underscores were separated by other characters not in the set,
-    // and those other characters were removed by a hypothetical prior step, or if the original
-    // string had structures like 'field _ name' which becomes 'field___name',
-    // we consolidate multiple underscores down to one.
+
+    // Step 4: Consolidate multiple underscores down to one.
     normalized = normalized.replace(/__+/g, '_');
     return normalized;
 };

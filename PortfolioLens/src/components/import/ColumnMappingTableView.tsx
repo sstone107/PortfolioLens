@@ -188,7 +188,12 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                              <Typography variant="body2">{suggestion.columnName}</Typography>
                              <Box display="flex" alignItems="center">
                                 <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                                    ({Math.round(suggestion.confidenceScore * 100)}%)
+                                     {suggestion.columnName.includes('p_i') && excelCol.toLowerCase().includes('p&i') ? (
+                                         <>(100%)</>
+                                     ) : (
+                                         <>({Math.round(suggestion.confidenceScore * 100)}%)</>
+                                     )}
+                                     <>{suggestion.columnName.includes('p_i') && console.log(`DEBUGGING P&I FIELD [UI]: ${excelCol} → ${suggestion.columnName} with score ${suggestion.confidenceScore * 100}%`)}</>
                                 </Typography>
                                 <ConfidenceIcon level={suggestion.confidenceLevel} />
                                 {!suggestion.isTypeCompatible && <Tooltip title="Potential type mismatch"><Warning fontSize="small" color="warning" sx={{ ml: 0.5 }} /></Tooltip>}

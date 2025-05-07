@@ -57,7 +57,14 @@ export const calculateSimilarity = (str1: string, str2: string): number => {
  */
 export const normalizeForMatching = (input: string): string => {
   if (!input) return '';
-  return input.toLowerCase().replace(/[\s\-_]/g, '').replace(/[^a-z0-9]/g, '');
+  let normalized = input.toLowerCase();
+  // Step 1: Replace '&' with 'and' (with spaces to separate from adjacent words if any)
+  normalized = normalized.replace(/&/g, ' and ');
+  // Step 2: Remove spaces, hyphens, underscores
+  normalized = normalized.replace(/[\s\-_]+/g, ''); // Added + to handle multiple spaces from ' and '
+  // Step 3: Remove any remaining non-alphanumeric characters
+  normalized = normalized.replace(/[^a-z0-9]/g, '');
+  return normalized;
 };
 
 /**
@@ -635,5 +642,3 @@ export const getSuggestedMappings = async (
   
   return { mappings, confidence, unmappedSheets };
 };
-
-
