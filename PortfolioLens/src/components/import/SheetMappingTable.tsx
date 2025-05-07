@@ -17,9 +17,10 @@ import {
   LinearProgress,
   Chip,
   IconButton,
+  TextField, // Added TextField
   Divider,
-  Collapse, // Added for sample data
-  TableSortLabel, // Added for sorting
+  Collapse, 
+  TableSortLabel, 
 } from '@mui/material';
 import {
   Check as CheckIcon,
@@ -30,17 +31,51 @@ import {
   DoNotDisturb,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Add as AddIcon, // Added for create indicator
-  ThumbUpAlt, // High confidence
-  HelpOutline, // Medium confidence
-  ErrorOutline, // Low confidence
-  PlaylistAddCheck, // Approved
-  EditNotifications, // Modified
-  ReportProblem, // Rejected
-  HourglassEmpty, // Pending review
+  Add as AddIcon, 
+  ThumbUpAlt, 
+  HelpOutline, 
+  ErrorOutline, 
+  PlaylistAddCheck, 
+  EditNotifications, 
+  ReportProblem, 
+  HourglassEmpty, 
 } from '@mui/icons-material';
-import { SheetProcessingState, RankedTableSuggestion, ConfidenceLevel, SheetReviewStatus } from './types'; // Updated types
-import SampleDataTable from './SampleDataTable'; // Import the new component
+import { useBatchImportStore } from '../../store/batchImportStore'; // Added
+import { SheetProcessingState, RankedTableSuggestion, ConfidenceLevel, SheetReviewStatus } from './types'; 
+import SampleDataTable from './SampleDataTable'; 
+
+// Helper function to create a SQL-friendly name from a sheet name
+export const toSqlFriendlyName = (name: string): string => {
+    if (!name) return '';
+    // Replace spaces and common problematic characters with underscores
+    let sqlName = name.replace(/[\s\/\\?%*:|"<>.-]+/g, '_');
+    // Remove any leading/trailing underscores that might result
+    sqlName = sqlName.replace(/^_+|_+$/g, '');
+    // Ensure it doesn't start with a number (common SQL restriction)
+    if (/^\d/.test(sqlName)) {
+        sqlName = '_' + sqlName;
+    }
+    // Optional: Convert to lowercase, as many SQL dialects are case-insensitive or default to lowercase
+    // sqlName = sqlName.toLowerCase();
+    return sqlName.slice(0, 63); // Max length for some identifiers like in PostgreSQL
+};
+
+// Helper function to normalize header strings for better matching
+export const normalizeHeaderForMatching = (header: string): string => {
+    if (!header) return '';
+    let normalized = header.toLowerCase();
+    // Replace spaces, commas, hyphens, ampersands, and periods with underscores
+    // The + ensures multiple consecutive characters from the set become a single underscore
+    normalized = normalized.replace(/[\s,\-&.]+/g, '_');
+    // Remove any leading/trailing underscores that might have been created by the replacement
+    normalized = normalized.replace(/^_+|_+$/g, '');
+    // Ensure that if underscores were separated by other characters not in the set,
+    // and those other characters were removed by a hypothetical prior step, or if the original
+    // string had structures like 'field _ name' which becomes 'field___name',
+    // we consolidate multiple underscores down to one.
+    normalized = normalized.replace(/__+/g, '_');
+    return normalized;
+};
 
 // Helper function for confidence icons
 const ConfidenceIcon = ({ level }: { level?: ConfidenceLevel }) => {
@@ -57,30 +92,25 @@ const ReviewStatusIcon = ({ status }: { status?: SheetReviewStatus }) => {
     switch (status) {
         case 'approved': return <PlaylistAddCheck fontSize="small" color="success" sx={{ verticalAlign: 'middle' }} />;
         case 'rejected': return <ReportProblem fontSize="small" color="error" sx={{ verticalAlign: 'middle' }} />;
-        case 'partiallyApproved': // Or 'modified' if that's the state used
-        case 'modified': return <EditNotifications fontSize="small" color="info" sx={{ verticalAlign: 'middle' }} />;
+        case 'partiallyApproved': 
+            return <EditNotifications fontSize="small" color="info" sx={{ verticalAlign: 'middle' }} />;
         case 'pending':
         default: return <HourglassEmpty fontSize="small" color="disabled" sx={{ verticalAlign: 'middle' }} />;
     }
 };
 
-
-// Define the props based on the parent component (BatchImporter) passing store state
 interface SheetMappingTableProps {
   sheets: { [sheetName: string]: SheetProcessingState };
-  tables: string[]; // List of existing table names
-  localSelectedSheets: Record<string, boolean>; // UI state for selection
-  localSkippedSheets: Record<string, boolean>; // UI state for skipping
+  tables: string[]; 
+  localSelectedSheets: Record<string, boolean>; 
+  localSkippedSheets: Record<string, boolean>; 
   onSheetSelectionToggle: (sheetName: string) => void;
-  onTableSelection: (sheetName: string, tableName: string | null) => void; // Allow null for reset
+  onTableSelection: (sheetName: string, tableName: string | null) => void; 
   onSelectAll: (selected: boolean) => void;
   onSkipSheet: (sheetName: string, skipped: boolean) => void;
-  isProcessing: boolean; // Global processing state (e.g., worker running)
+  isProcessing: boolean; 
 }
 
-/**
- * Table component for mapping Excel sheets to database tables, integrated with Zustand store state.
- */
 export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
   sheets,
   tables,
@@ -94,12 +124,51 @@ export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
 }) => {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [sortConfig, setSortConfig] = useState<{ key: keyof SheetProcessingState | 'sheetName' | 'mappedPercent', direction: 'asc' | 'desc' } | null>(null);
+  const [editableNewTableNames, setEditableNewTableNames] = useState<Record<string, string>>({});
+  const storeUpdateNewTableName = useBatchImportStore(state => state.updateNewTableNameForSheet);
 
   const handleExpandClick = (sheetName: string) => {
     setExpandedRows(prev => ({ ...prev, [sheetName]: !prev[sheetName] }));
   };
 
-  // Sorting logic
+  useEffect(() => {
+    const initialEditableNames: Record<string, string> = {};
+    Object.entries(sheets).forEach(([name, sheetState]) => {
+        if (sheetState.isNewTable) {
+            if (sheetState.selectedTable && sheetState.selectedTable.startsWith('new:') && sheetState.selectedTable.length > 4) {
+                // User has already potentially typed a custom name or it was set
+                initialEditableNames[name] = sheetState.selectedTable.substring(4);
+            } else {
+                // Default to SQL-friendly sheet name if no specific new name is set
+                initialEditableNames[name] = toSqlFriendlyName(name);
+                 // Also, ensure the store reflects this default if it's truly a new table being setup
+                if (!sheetState.selectedTable || sheetState.selectedTable === 'CREATE_NEW_TABLE') {
+                    storeUpdateNewTableName(name, toSqlFriendlyName(name));
+                }
+            }
+        }
+    });
+    setEditableNewTableNames(prev => ({ ...prev, ...initialEditableNames }));
+  }, [sheets, storeUpdateNewTableName]);
+
+  const handleNewTableNameChange = (sheetName: string, newUiName: string) => {
+      setEditableNewTableNames(prev => ({ ...prev, [sheetName]: newUiName }));
+  };
+
+  const handleNewTableNameBlur = (sheetName: string) => {
+      const newName = editableNewTableNames[sheetName];
+      const currentSheetState = sheets[sheetName];
+      // Only update if the name is defined, it's a new table, and the name has actually changed from what's in the store
+      if (newName !== undefined && currentSheetState.isNewTable) {
+          const originalStoreName = currentSheetState.selectedTable?.startsWith('new:')
+              ? currentSheetState.selectedTable.substring(4)
+              : null;
+          if (newName !== originalStoreName) {
+              storeUpdateNewTableName(sheetName, newName);
+          }
+      }
+  };
+
   const sortedSheetNames = useMemo(() => {
     const sheetEntries = Object.entries(sheets);
     if (!sortConfig) return sheetEntries.map(([name]) => name);
@@ -124,7 +193,6 @@ export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
         valueB = stateB[sortConfig.key as keyof SheetProcessingState];
       }
 
-      // Basic comparison, can be enhanced for different types
       if (valueA < valueB) return sortConfig.direction === 'asc' ? -1 : 1;
       if (valueA > valueB) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
@@ -140,8 +208,7 @@ export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
              !localSkippedSheets[sheetState.sheetName] &&
              !sheetState.selectedTable;
     });
-}, [sheets, localSkippedSheets]);
-
+  }, [sheets, localSkippedSheets]);
 
   const handleSort = (key: keyof SheetProcessingState | 'sheetName' | 'mappedPercent') => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -153,24 +220,17 @@ export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
 
   const handleBatchApprove = () => {
     Object.entries(sheets).forEach(([sheetName, sheetState]) => {
-      // Find the top *existing* table suggestion
       const topExistingSuggestion = sheetState.tableSuggestions?.find(s => !s.isNewTableProposal);
-
       if (topExistingSuggestion && topExistingSuggestion.confidenceLevel === 'High' &&
-          !localSkippedSheets[sheetName] &&
-          !sheetState.selectedTable) { // Only approve if not already mapped
-        // Select the sheet if not already selected
+          !localSkippedSheets[sheetName] && !sheetState.selectedTable) {
         if (!localSelectedSheets[sheetName]) {
             onSheetSelectionToggle(sheetName);
         }
-        // Apply the high confidence table mapping
         onTableSelection(sheetName, topExistingSuggestion.tableName);
       }
     });
-};
+  };
 
-
-  // Check if all or some sheets are selected (considering only non-skipped sheets)
   const availableSheetNames = Object.keys(sheets).filter(name => !localSkippedSheets[name]);
   const allSelected = availableSheetNames.length > 0 && availableSheetNames.every(name => localSelectedSheets[name]);
   const someSelected = availableSheetNames.some(name => localSelectedSheets[name]);
@@ -241,22 +301,15 @@ export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
         <TableBody>
           {sortedSheetNames.map(sheetName => {
             const sheetState = sheets[sheetName];
-            if (!sheetState) return null; // Should not happen if sortedSheetNames is derived from sheets
+            if (!sheetState) return null; 
 
-            const { headers, sampleData, rowCount, selectedTable, tableSuggestions, columnMappings, status, error, sheetReviewStatus } = sheetState; // Added sheetReviewStatus
+            const { headers, sampleData, rowCount, selectedTable, tableSuggestions, columnMappings, status, error, sheetReviewStatus, isNewTable } = sheetState;
             const isSkipped = localSkippedSheets[sheetName];
             const isSelected = localSelectedSheets[sheetName];
-
-            // Determine if the selected table is a new proposal
-            const selectedSuggestion = tableSuggestions?.find(s => s.tableName === selectedTable);
-            const isCreating = selectedSuggestion?.isNewTableProposal ?? false;
-            // const actualTableName = isCreating ? selectedTable : selectedTable; // No need to substring if using suggestion
 
             const mapping = columnMappings || {};
             const mappedColumns = Object.values(mapping).filter(m => m.mappedColumn || m.action === 'create').length;
             const mappingPercent = headers.length > 0 ? Math.round((mappedColumns / headers.length) * 100) : 0;
-
-            // const topSuggestion = tableSuggestions?.[0]; // Not directly used here anymore
 
             return (
               <React.Fragment key={sheetName}>
@@ -281,9 +334,9 @@ export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
                       </Typography>
                       {selectedTable && (
                           <Chip
-                              label={isCreating ? "Creating New Table" : "Mapping to Existing Table"}
+                              label={isNewTable ? "Creating New Table" : "Mapping to Existing Table"}
                               size="small"
-                              color={isCreating ? "primary" : "default"}
+                              color={isNewTable ? "primary" : "default"}
                               variant="outlined"
                               sx={{ ml: 1 }}
                           />
@@ -292,162 +345,194 @@ export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
                   </TableCell>
                   <TableCell>{rowCount}</TableCell>
                   <TableCell>{headers.length}</TableCell>
-                  <TableCell sx={{ minWidth: 300 }}> {/* Increased minWidth */}
-                    <FormControl fullWidth size="small">
-                      <Select
-                        value={selectedTable ?? ''}
-                        onChange={(e) => onTableSelection(sheetName, e.target.value as string)}
-                        displayEmpty
-                        disabled={isSkipped || isProcessing}
-                        renderValue={(selectedValue) => {
-                          if (!selectedValue) return <em>Select or Create...</em>;
-
-                          // Find the suggestion corresponding to the selected value
-                          const selectedSuggestion = tableSuggestions?.find(s => s.tableName === selectedValue);
-
-                          // Handle rendering for new table proposals
-                          if (selectedSuggestion?.isNewTableProposal) {
-                            return (
-                              <Box display="flex" alignItems="center">
-                                <Chip icon={<AddIcon />} label="New Table" size="small" color="success" variant="outlined" sx={{ mr: 1 }} />
-                                {selectedValue} {/* Display proposed name */}
-                              </Box>
-                            );
-                          }
-                          // Handle rendering for existing tables
-                          return (
-                              <Box display="flex" alignItems="center">
-                                  {selectedValue}
-                                  {/* Show confidence of the *selected* mapping */}
-                                  {selectedSuggestion && <ConfidenceIcon level={selectedSuggestion.confidenceLevel} />}
-                              </Box>
-                          );
-                        }}
-                        MenuProps={{
-                          PaperProps: {
-                            style: {
-                              maxHeight: 300,
-                            },
-                          },
-                        }}
-                      >
-                        <MenuItem value="" disabled><em>Select or Create...</em></MenuItem>
-                        {/* Suggestions */}
-                        {tableSuggestions && tableSuggestions.length > 0 && (
-                          <MenuItem key="suggestion-header" disabled sx={{ fontStyle: 'italic', fontWeight: 'bold' }}>Suggestions:</MenuItem>
-                        )}
-                        {tableSuggestions?.map(suggestion => (
-                          <MenuItem key={`sugg-${suggestion.tableName}`} value={suggestion.tableName}>
-                            <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
-                              <Box display="flex" alignItems="center">
-                                {suggestion.isNewTableProposal && <Chip icon={<AddIcon />} label="New" size="small" color="success" variant="outlined" sx={{ mr: 1 }} />}
-                                <Typography variant="body2">{suggestion.tableName}</Typography>
-                              </Box>
-                              {/* Show confidence for the suggestion in the list */}
-                              {!suggestion.isNewTableProposal && (
-                                  <Box display="flex" alignItems="center">
+                  <TableCell sx={{ minWidth: 350 }}> {/* Adjusted minWidth for TextField and Select */}
+                    {isNewTable ? (
+                      <Box display="flex" alignItems="flex-start" flexDirection="column" gap={1}>
+                        <Box display="flex" alignItems="center" gap={1} width="100%">
+                            <Chip icon={<AddIcon />} label="New Table:" size="small" color="success" variant="outlined" sx={{flexShrink: 0}} />
+                            <TextField
+                                fullWidth
+                                variant="outlined"
+                                size="small"
+                                value={editableNewTableNames[sheetName] || ''}
+                                onChange={(e) => handleNewTableNameChange(sheetName, e.target.value)}
+                                onBlur={() => handleNewTableNameBlur(sheetName)}
+                                disabled={isSkipped || isProcessing}
+                                placeholder="Enter new table name"
+                                sx={{ flexGrow: 1 }}
+                            />
+                        </Box>
+                        <FormControl fullWidth size="small" sx={{ mt: 0 }}> {/* Select for switching off new table mode */}
+                          <Select
+                            value={'create_new_placeholder'} // Always show this when isNewTable is true
+                            onChange={(e) => {
+                              const value = e.target.value as string;
+                               if (value !== 'create_new_placeholder') { // User selected an existing table or re-selected create new
+                                onTableSelection(sheetName, value); 
+                              }
+                              // If they selected "Create New" again, onTableSelection would be called by its menu item
+                            }}
+                            displayEmpty
+                            disabled={isSkipped || isProcessing}
+                            renderValue={() => <em>Switch to existing table or re-select "Create New"</em>}
+                          >
+                            <MenuItem value="create_new_placeholder" disabled><em>Switch to existing table...</em></MenuItem>
+                            {/* "Create New Table" option */}
+                            <MenuItem value={`new:${toSqlFriendlyName(sheetName)}`}>
+                                <Box display="flex" alignItems="center">
+                                    <Chip icon={<AddIcon />} label="New" size="small" color="success" variant="outlined" sx={{ mr: 1 }} />
+                                    Create New Table (from sheet name)
+                                </Box>
+                            </MenuItem>
+                            <Divider />
+                            {tableSuggestions?.filter(s => !s.isNewTableProposal).map(suggestion => (
+                              <MenuItem key={`sugg-exist-${suggestion.tableName}`} value={suggestion.tableName}>
+                                <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                                  <Typography variant="body2">{suggestion.tableName}</Typography>
+                                  {suggestion.confidenceScore && (
+                                    <Box display="flex" alignItems="center">
                                       <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                                          ({Math.round(suggestion.confidenceScore * 100)}%)
+                                        ({Math.round(suggestion.confidenceScore * 100)}%)
                                       </Typography>
                                       <ConfidenceIcon level={suggestion.confidenceLevel} />
-                                  </Box>
-                              )}
-                            </Box>
-                          </MenuItem>
-                        ))}
-                        {tableSuggestions && tableSuggestions.length > 0 && <Divider />}
-                        {/* All Existing Tables */}
-                        <MenuItem key="all-tables-header" disabled sx={{ fontStyle: 'italic', fontWeight: 'bold' }}>All Existing Tables:</MenuItem>
-                        {tables
-                          .filter(t => !tableSuggestions?.some(s => s.tableName === t && !s.isNewTableProposal)) // Exclude existing suggestions
-                          .sort()
-                          .map(table => (
-                            <MenuItem key={table} value={table}>{table}</MenuItem>
-                          ))}
-                        {/* Create New Table Option (if not already suggested) */}
-                        {!tableSuggestions?.some(s => s.isNewTableProposal) && (
-                            <>
-                              <Divider />
-                              <MenuItem value="create-new-table" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                <AddIcon fontSize="small" sx={{ mr: 1 }}/> Create New Table...
+                                    </Box>
+                                  )}
+                                </Box>
                               </MenuItem>
-                            </>
-                        )}
-                      </Select>
-                    </FormControl>
-                  </TableCell>
-                  <TableCell>
-                    {selectedTable ? (
-                      <Tooltip title={`${mappedColumns} of ${headers.length} columns mapped`}>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={mappingPercent}
-                            color={mappingPercent === 100 ? 'success' : 'primary'}
-                            sx={{ flexGrow: 1, mr: 1, height: 8, borderRadius: 4 }}
-                          />
-                          <Typography variant="body2">{mappingPercent}%</Typography>
-                        </Box>
-                      </Tooltip>
+                            ))}
+                            {tables.filter(t => !tableSuggestions?.some(s => s.tableName === t && !s.isNewTableProposal)).length > 0 && <Divider />}
+                            {tables.filter(t => !tableSuggestions?.some(s => s.tableName === t && !s.isNewTableProposal)).map(tableName => (
+                              <MenuItem key={`exist-${tableName}`} value={tableName}>{tableName}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
                     ) : (
-                      <Typography variant="body2" color="text.secondary">N/A</Typography>
+                      <FormControl fullWidth size="small">
+                        <Select
+                          value={selectedTable ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value as string;
+                            onTableSelection(sheetName, value); // Handles both new (e.g. "new:...") and existing
+                          }}
+                          displayEmpty
+                          disabled={isSkipped || isProcessing}
+                          renderValue={(selectedValue) => {
+                            if (!selectedValue) return <em>Select or Create...</em>;
+                            const currentSuggestion = tableSuggestions?.find(s => s.tableName === selectedValue);
+                            if (currentSuggestion?.isNewTableProposal) {
+                              return (
+                                <Box display="flex" alignItems="center">
+                                  <Chip icon={<AddIcon />} label="New Table" size="small" color="success" variant="outlined" sx={{ mr: 1 }} />
+                                  {selectedValue.substring(4)} {/* Display actual name part */}
+                                </Box>
+                              );
+                            }
+                            return (
+                                <Box display="flex" alignItems="center">
+                                    {selectedValue}
+                                    {currentSuggestion && <ConfidenceIcon level={currentSuggestion.confidenceLevel} />}
+                                </Box>
+                            );
+                          }}
+                          MenuProps={{ PaperProps: { style: { maxHeight: 300 }}}}
+                        >
+                          <MenuItem value="" disabled><em>Select or Create...</em></MenuItem>
+                          {/* "Create New Table" option */}
+                          <MenuItem value={`new:${toSqlFriendlyName(sheetName)}`}>
+
+                              <Box display="flex" alignItems="center">
+                                  <Chip icon={<AddIcon />} label="New" size="small" color="success" variant="outlined" sx={{ mr: 1 }} />
+                                  Create New Table
+                              </Box>
+                          </MenuItem>
+                          {tableSuggestions?.filter(s => !s.isNewTableProposal).length > 0 && <Divider />}
+                          {tableSuggestions?.filter(s => !s.isNewTableProposal).map(suggestion => (
+                            <MenuItem key={`sugg-${suggestion.tableName}`} value={suggestion.tableName}>
+                              <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                                <Typography variant="body2">{suggestion.tableName}</Typography>
+                                {suggestion.confidenceScore && (
+                                  <Box display="flex" alignItems="center">
+                                    <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                                      ({Math.round(suggestion.confidenceScore * 100)}%)
+                                    </Typography>
+                                    <ConfidenceIcon level={suggestion.confidenceLevel} />
+                                  </Box>
+                                )}
+                              </Box>
+                            </MenuItem>
+                          ))}
+                          {tables.filter(t => !tableSuggestions?.some(s => s.tableName === t && !s.isNewTableProposal)).length > 0 && <Divider />}
+                          {tables.filter(t => !tableSuggestions?.some(s => s.tableName === t && !s.isNewTableProposal)).map(tableName => (
+                            <MenuItem key={`exist-${tableName}`} value={tableName}>{tableName}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                     )}
                   </TableCell>
                   <TableCell>
-                      {/* Display Sheet Processing Status */}
-                      <Tooltip title={`Processing: ${status}`}>
-                          <Chip
-                              label={status}
-                              size="small"
-                              color={
-                                  status === 'committed' ? 'success' :
-                                  status === 'error' ? 'error' :
-                                  status === 'needsReview' ? 'warning' :
-                                  status === 'analyzing' || status === 'processing' || status === 'committing' ? 'info' : // Added analyzing
-                                  'default'
-                              }
-                              icon={
-                                  status === 'committed' ? <CheckCircle /> :
-                                  status === 'error' ? <Warning /> :
-                                  undefined
-                              }
-                              variant="outlined"
-                          />
-                      </Tooltip>
-                      {/* Display Sheet Review Status */}
-                      <Tooltip title={`Review: ${sheetReviewStatus || 'pending'}`}>
-                          <IconButton size="small" sx={{ ml: 0.5 }}>
-                              <ReviewStatusIcon status={sheetReviewStatus} />
-                          </IconButton>
-                      </Tooltip>
-                      {error && <Tooltip title={error}><Warning color="error" fontSize="small" sx={{ ml: 0.5, verticalAlign: 'middle' }}/></Tooltip>}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <LinearProgress
+                            variant="determinate"
+                            value={mappingPercent}
+                            sx={{ width: '60px', height: '8px', borderRadius: '4px' }}
+                            color={
+                                sheetReviewStatus === 'approved' ? 'success' :
+                                sheetReviewStatus === 'rejected' ? 'error' :
+                                sheetReviewStatus === 'partiallyApproved' ? 'info' :
+                                mappingPercent > 0 ? 'primary' : 'inherit'
+                            }
+                        />
+                        <Typography variant="caption" sx={{ minWidth: '35px' }}>{mappingPercent}%</Typography>
+                        <ReviewStatusIcon status={sheetReviewStatus} />
+                    </Box>
                   </TableCell>
-                   <TableCell align="right">
-                     <Tooltip title={isSkipped ? "Include this sheet" : "Skip this sheet"}>
-                       <IconButton size="small" onClick={() => onSkipSheet(sheetName, !isSkipped)}>
-                         {isSkipped ? <SkipNext /> : <DoNotDisturb />}
-                       </IconButton>
-                     </Tooltip>
-                     <Tooltip title={expandedRows[sheetName] ? "Hide Sample Data" : "Show Sample Data"}>
-                       <IconButton size="small" onClick={() => handleExpandClick(sheetName)}>
-                         {expandedRows[sheetName] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                       </IconButton>
-                     </Tooltip>
-                   </TableCell>
+                  <TableCell>
+                    {isProcessing && status === 'analyzing' ? (
+                      <Chip label="Analyzing..." size="small" />
+                    ) : error ? (
+                      <Tooltip title={error}><Chip label="Error" color="error" size="small" /></Tooltip>
+                    ) : status === 'ready' ? (
+                      <Chip icon={<CheckCircle />} label="Ready" color="success" size="small" variant="outlined" />
+                    ) : status === 'needsReview' ? (
+                         <Chip icon={<Warning />} label="Needs Review" color="warning" size="small" variant="outlined" />
+                    ) : (
+                      <Chip label={status} size="small" />
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title={isSkipped ? "Include Sheet" : "Skip Sheet"}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => onSkipSheet(sheetName, !isSkipped)}
+                          disabled={isProcessing} // Disable if any global processing is happening
+                        >
+                          {isSkipped ? <SkipNext color="action"/> : <DoNotDisturb color="action"/>}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <IconButton size="small" onClick={() => handleExpandClick(sheetName)} disabled={isSkipped}>
+                      {expandedRows[sheetName] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
-                {/* Collapsible Row for Sample Data */}
-                <TableRow key={`${sheetName}-collapse`}>
-                   <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
-                     <Collapse in={expandedRows[sheetName]} timeout="auto" unmountOnExit>
-                       <Box sx={{ margin: 1, padding: 1, backgroundColor: 'grey.100', borderRadius: 1 }}>
-                         <Typography variant="caption" gutterBottom component="div">
-                           Sample Data (First 5 Rows):
-                         </Typography>
-                        <SampleDataTable sampleData={sampleData} />
-                       </Box>
-                     </Collapse>
-                   </TableCell>
-                 </TableRow>
+                <TableRow key={`${sheetName}-details`}>
+                  <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={9}>
+                    <Collapse in={expandedRows[sheetName] && !isSkipped} timeout="auto" unmountOnExit>
+                      <Box margin={1}>
+                        <Typography variant="subtitle2" gutterBottom component="div">
+                          Sample Data ({headers.length} columns)
+                        </Typography>
+                        {sampleData && sampleData.length > 0 ? (
+                           <SampleDataTable sampleData={sampleData.slice(0, 5)} headers={headers} />
+                        ) : (
+                          <Typography variant="caption">No sample data available or sheet is empty.</Typography>
+                        )}
+                      </Box>
+                    </Collapse>
+                  </TableCell>
+                </TableRow>
               </React.Fragment>
             );
           })}

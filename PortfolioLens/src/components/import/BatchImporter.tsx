@@ -23,8 +23,21 @@ import { DatabaseService } from './services/DatabaseService';
 import { FileReader } from './FileReader';
 
 // Types
-import { WorkbookInfo, MissingColumnInfo, ImportSettings, TableInfo, SheetProcessingState, ColumnMapping, BatchColumnMapping, FileType, ImportJob } from './types'; // Added FileType, ImportJob
-import { useSchemaInfo, useBatchImportWorker } from './BatchImporterHooks'; // <-- Import the new hooks
+import { 
+  WorkbookInfo, 
+  TableInfo, 
+  SheetProcessingState, 
+  BatchColumnMapping, 
+  ColumnMapping, 
+  FileType, 
+  ImportJob, 
+  ColumnType, 
+  NewColumnProposal, 
+  ImportSettings, 
+  MissingColumnInfo, 
+  NewTableProposal 
+} from './types'; 
+import { useSchemaInfo, useBatchImportWorker } from './BatchImporterHooks'; 
 
 // Components
 import { ImportSettingsDialog } from './ImportSettings';
@@ -40,7 +53,7 @@ import {
 } from './steps';
 
 // Store
-import { useBatchImportStore } from '../../store/batchImportStore'; // <-- Store Import
+import { useBatchImportStore } from '../../store/batchImportStore'; 
 
 interface BatchImporterProps {
   onImportComplete?: () => void;
@@ -73,6 +86,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
     setSheetCommitStatus: _setSheetCommitStatus,
     setError: _setError,
     resetState: _resetState,
+    updateSheetProcessingState, // Added: New action for generic sheet state updates
     updateSheetMapping: _updateSheetMapping
   } = useBatchImportStore();
   // --- End Store Integration ---
@@ -96,23 +110,27 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [localSelectedSheets, setLocalSelectedSheets] = useState<Record<string, boolean>>({});
   const [localSkippedSheets, setLocalSkippedSheets] = useState<Record<string, boolean>>({});
-  const [importMode, setImportMode] = useState<'structureAndData' | 'structureOnly'>('structureAndData'); // State for import mode
+  const [importMode, setImportMode] = useState<'structureAndData' | 'structureOnly'>('structureAndData'); 
   // --- End Local UI State ---
 
   // --- Custom Hooks ---
   const { tables, tableInfoMap, isLoadingTables, loadSchemaInfo } = useSchemaInfo();
-  const { postWorkerTask } = useBatchImportWorker(tableInfoMap); // Get postWorkerTask
+  const { postWorkerTask } = useBatchImportWorker(tableInfoMap); 
   // --- End Custom Hooks ---
 
-  // --- Effects ---
-  // REMOVED: useEffect for automatically triggering analysis based on state changes.
-  // Triggering is now handled explicitly in handleProceedToNextStep for step 0.
-  // --- End Effects ---
-
+  // Helper function to prepare example data for the modal
+  const prepareExampleDataForModal = (sampleData: any[] | undefined, headers: string[] | undefined): Record<string, any[]> => {
+    const preparedData: Record<string, any[]> = {};
+    if (!sampleData || !headers) return preparedData;
+    headers.forEach(header => {
+        preparedData[header] = sampleData.map(row => row[header]).filter(value => value !== undefined && value !== null).slice(0, 5); 
+    });
+    return preparedData;
+  };
 
   const dbService = useMemo(() => new DatabaseService(), []);
 
-  const importSteps = ['Upload file', 'Map sheets to tables', 'Map columns', 'Review and import'];
+  const importSteps = ['Upload file', 'Map sheets to tables', 'Map columns', 'Review and save'];
 
   const goToNextStep = useCallback(() => {
     
@@ -136,7 +154,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
         try {
           const fullSheetData = await FileReader.getSheetData(fileObj, sheet.name);
           const headers = fullSheetData.length > 0 ? Object.keys(fullSheetData[0]) : [];
-          const sampleData = fullSheetData.slice(0, 25); // Increased sample size to 25
+          const sampleData = fullSheetData.slice(0, 25); 
           _setSheetData(sheet.name, headers, sampleData, sheet.rowCount);
           initialLocalSelected[sheet.name] = true;
           initialLocalSkipped[sheet.name] = false;
@@ -158,26 +176,18 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
          setSnackbarMessage("Error reading file. Check sheet statuses.");
          setSnackbarOpen(true);
          _setGlobalStatus('error');
-         // REMOVED: goToNextStep(); - Let user manually proceed even on read errors to see details.
          return;
       }
 
       setSnackbarMessage(`Successfully read ${workbookInfo.sheets.length} sheets. Waiting for schema analysis...`);
       setSnackbarOpen(true);
 
-      // Set status to indicate file reading is done, let the useEffect handle processing start
-      
-      // Ensure schema cache status is ready before setting fileReadComplete
+      _setGlobalStatus('fileReadComplete');
+
       const currentSchemaStatus = useBatchImportStore.getState().schemaCacheStatus;
       if (currentSchemaStatus !== 'ready') {
         _setSchemaCacheStatus('ready');
       }
-      
-      _setGlobalStatus('fileReadComplete');
-
-      // REMOVED: Explicit trigger logic - moved to useEffect
-
-
     } catch (error) {
       console.error('[DEBUG BatchImporter] Error processing file:', error);
       _setError(`Failed to process the file: ${error instanceof Error ? error.message : String(error)}`);
@@ -185,108 +195,125 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
       setSnackbarOpen(true);
       _setGlobalStatus('error');
     }
-  }, [_resetState, _setFile, _setGlobalStatus, importSettings.useFirstRowAsHeader, _setSheetData, _setSheetCommitStatus, _setError, goToNextStep]); // Removed schemaCacheStatus, _startProcessingSheets
+  }, [_resetState, _setFile, _setGlobalStatus, importSettings.useFirstRowAsHeader, _setSheetData, _setSheetCommitStatus, _setError, goToNextStep]);
 
   const handleTableSelection = useCallback((sheetName: string, selectedValue: string | null) => {
     let finalSelectedValue = selectedValue;
     let isCreating = false;
 
-    if (selectedValue === 'create-new-table') {
+    // Check if selectedValue indicates creating a new table
+    if (selectedValue && selectedValue.startsWith('new:')) {
+      isCreating = true;
+      // finalSelectedValue is already in the correct format e.g., "new:desired_table_name"
+      // No need for the prompt here if the UI passes the full "new:name" string
+    } else if (selectedValue === 'create-new-table') { // Handle legacy or direct calls with this specific string
       const suggestedName = sheetName.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').substring(0, 50);
-      // Basic prompt for now, replace with a proper dialog later
+      // Consider if this prompt is still needed or if UI should always provide the name via "new:name"
       const newTableName = prompt(`Enter a name for the new table (based on sheet "${sheetName}"):`, suggestedName);
 
       if (!newTableName || !newTableName.trim()) {
-        // If cancelled, reset selection in store to trigger re-render if needed
-        _setSelectedTable(sheetName, sheets[sheetName]?.selectedTable || null); // Revert to previous or null
-        return; // Don't proceed if cancelled or empty
+        // Revert to previous selection if prompt is cancelled
+        _setSelectedTable(sheetName, sheets[sheetName]?.selectedTable || null, sheets[sheetName]?.isNewTable || false);
+        return; 
       }
       finalSelectedValue = `new:${newTableName.trim()}`;
       isCreating = true;
     }
+    // If selectedValue is not 'new:...' and not 'create-new-table', isCreating remains false, indicating mapping to an existing table.
 
-    // Update the store with the selected table (or new table identifier)
-    _setSelectedTable(sheetName, finalSelectedValue, isCreating); // Pass isCreating flag
+    _setSelectedTable(sheetName, finalSelectedValue, isCreating); 
 
-    // Get the latest sheet state *after* the update
-    // Use a slight delay to increase chance of state update propagation
-    // This delay might still be problematic, consider Zustand's subscribe or selectors if issues persist
+    // Delay to allow Zustand store to update before querying it
     setTimeout(() => {
         const updatedSheetState = useBatchImportStore.getState().sheets[sheetName];
         console.log(`[DEBUG BatchImporter] Fetched updated sheet state for ${sheetName} after selection:`, updatedSheetState ? { status: updatedSheetState.status, selectedTable: updatedSheetState.selectedTable } : 'NOT FOUND');
 
-        if (updatedSheetState && updatedSheetState.status === 'analyzing') { // Check if status correctly set to analyzing
-          // Ensure the selectedTable in the state reflects the *new* selection for the worker task
-          // The store should already have the latest selectedTable due to the _setSelectedTable call above
-          console.log(`[DEBUG BatchImporter] State being sent to worker for ${sheetName}:`, { sheetName: updatedSheetState.sheetName, selectedTable: updatedSheetState.selectedTable, headers: '...', sampleData: '...' }); // Avoid logging large data
+        if (updatedSheetState && updatedSheetState.status === 'analyzing') { 
+          console.log(`[DEBUG BatchImporter] State being sent to worker for ${sheetName}:`, { sheetName: updatedSheetState.sheetName, selectedTable: updatedSheetState.selectedTable, headers: '...', sampleData: '...' }); 
 
           console.log(`[DEBUG BatchImporter] Calling postWorkerTask for sheet: ${sheetName}`);
-          postWorkerTask(updatedSheetState); // Send the whole updated state object
+          postWorkerTask(updatedSheetState); 
 
-          // Setting status to 'processing' might be redundant if worker sets it, but can be useful UI feedback
-          // console.log(`[DEBUG BatchImporter] Calling _setSheetCommitStatus - Sheet: ${sheetName}, Status: processing`);
-          // _setSheetCommitStatus(sheetName, 'processing');
+          _setSheetCommitStatus(sheetName, 'processing');
         } else {
           console.error(`[DEBUG BatchImporter] Could not find sheet state for ${sheetName} or status not 'analyzing' after selection update.`);
-          // _setError(`Failed to reprocess sheet ${sheetName} after table selection.`); // Avoid setting error if it's just a timing issue
         }
-    }, 100); // Increased delay slightly - consider removing if store updates are reliable enough
-
-  }, [_setSelectedTable, postWorkerTask, _setSheetCommitStatus, _setError, sheets]); // Added sheets dependency
+    }, 100); 
+  }, [_setSelectedTable, postWorkerTask, _setSheetCommitStatus, sheets]);
 
   const openColumnMapping = useCallback((sheetName: string) => {
     const sheetState = sheets[sheetName];
     if (!sheetState || !sheetState.selectedTable) {
       _setError(`Cannot open mapping for ${sheetName}. Ensure a table is selected or creation is intended.`);
+      setSnackbarMessage(`Cannot open mapping for ${sheetName}. No table selected.`);
+      setSnackbarOpen(true);
       return;
     }
     const tableNameOrIdentifier = sheetState.selectedTable;
-
     const isCreating = tableNameOrIdentifier.startsWith('new:');
     const actualTableName = isCreating ? tableNameOrIdentifier.substring(4) : tableNameOrIdentifier;
 
+    if (isLoadingTables) {
+        setSnackbarMessage(`Schema information is still loading. Please wait.`);
+        setSnackbarOpen(true);
+        return;
+    }
     if (!isCreating && !tableInfoMap[actualTableName]) {
-        console.warn(`[DEBUG BatchImporter] Table info for ${actualTableName} not found in map. Modal might lack details.`);
+        console.warn(`[DEBUG BatchImporter] Table info for ${actualTableName} not found in map after loading. Modal might lack details or fail.`);
+        _setError(`Failed to load schema details for table '${actualTableName}'. It may not exist or there was an issue fetching its information.`);
+        setSnackbarMessage(`Error: Could not load details for table '${actualTableName}'. Please verify it exists and try again.`);
+        setSnackbarOpen(true);
+        return; 
     }
 
     setCurrentMappingSheet(sheetName);
     setCurrentMappingTable(tableNameOrIdentifier);
+    console.log(`[DEBUG BatchImporter] Setting showColumnMappingModal = true for ${sheetName} targeting table/identifier ${tableNameOrIdentifier}`);
     setShowColumnMappingModal(true);
-  }, [sheets, _setError, tableInfoMap]);
+  }, [sheets, _setError, tableInfoMap, isLoadingTables]);
 
-  const handleSaveColumnMappings = useCallback((updatedMappings: Record<string, Partial<BatchColumnMapping>>) => {
-    Object.entries(updatedMappings).forEach(([header, mappingUpdate]) => {
-      _updateSheetMapping(currentMappingSheet, header, mappingUpdate);
-    });
+  const handleModalSave = ( 
+    mappings: Record<string, BatchColumnMapping>, 
+    updatedNewTableNameFromModal?: string // Renamed for clarity
+  ) => {
+    if (currentMappingSheet && sheets[currentMappingSheet]) {
+      console.log(`[DEBUG BatchImporter] handleModalSave for sheet: ${currentMappingSheet}`, { mappings, updatedNewTableNameFromModal });
 
-    // After updating individual mappings, check if the sheet is now fully mapped
-    // Use setTimeout to allow store updates to propagate before checking
-    setTimeout(() => {
-        const latestSheetState = useBatchImportStore.getState().sheets[currentMappingSheet];
-        if (latestSheetState) {
-            const allColumnsHandled = Object.values(latestSheetState.columnMappings).every(
-                m => m.action === 'skip' || m.action === 'map' || m.action === 'create'
-            );
+      const currentSheetState = sheets[currentMappingSheet];
+      let newSheetDataUpdates: Partial<SheetProcessingState> = { 
+        columnMappings: mappings, 
+        sheetReviewStatus: Object.values(mappings).every(m => m.reviewStatus === 'approved') ? 'approved' : 'partiallyApproved',
+      };
 
-            if (allColumnsHandled) {
-                // Use _setSheetCommitStatus or a dedicated action if available
-                // Assuming _setSheetCommitStatus updates the main 'status' field used by ColumnMappingStep
-                useBatchImportStore.getState().setSheetReviewStatus(currentMappingSheet, 'approved');
-                useBatchImportStore.getState().setSheetCommitStatus(currentMappingSheet, 'ready'); // Keep ready status
-            } else {
-                console.log(`[DEBUG BatchImporter] Columns still need review for ${currentMappingSheet}. Setting status to 'needsReview'.`);
-                useBatchImportStore.getState().setSheetReviewStatus(currentMappingSheet, 'pending'); // Reset to pending if not all handled
-                useBatchImportStore.getState().setSheetCommitStatus(currentMappingSheet, 'needsReview');
+      if (updatedNewTableNameFromModal && currentSheetState.isNewTable) {
+        const sanitizedNewName = updatedNewTableNameFromModal.trim().replace(/\s+/g, '_'); // Basic sanitization
+        newSheetDataUpdates.selectedTable = `new:${sanitizedNewName}`; // Correctly prefix
+
+        if (currentSheetState.sheetSchemaProposals) {
+          newSheetDataUpdates.sheetSchemaProposals = currentSheetState.sheetSchemaProposals.map(proposal => {
+            // Assuming the first NewTableProposal for this sheet is the one to update.
+            // A more robust solution might involve proposal IDs if multiple NewTableProposals per sheet were possible.
+            // Type guard for NewTableProposal: checks for unique properties 'tableName' and 'columns' (as an array)
+            if ('tableName' in proposal && 
+                'columns' in proposal && 
+                Array.isArray((proposal as NewTableProposal).columns) && 
+                (proposal as NewTableProposal).sourceSheet === currentMappingSheet
+            ) {
+              return { ...proposal, tableName: sanitizedNewName } as NewTableProposal; // Cast is safe here
             }
-        } else {
-             console.warn(`[DEBUG BatchImporter] Could not find sheet state for ${currentMappingSheet} after saving mappings.`);
+            return proposal;
+          });
         }
-    }, 100); // Small delay for store update
-
+      }
+      
+      updateSheetProcessingState(currentMappingSheet, newSheetDataUpdates);
+      
+      console.log(`[DEBUG BatchImporter] Updated sheet data for ${currentMappingSheet} in store with new mappings.`);
+    }
+    // Ensure modal closes and sheet context is cleared even if sheet/store update fails, or handle errors more gracefully.
     setShowColumnMappingModal(false);
-    setSnackbarMessage(`Mappings saved for sheet: ${currentMappingSheet}`);
-    setSnackbarOpen(true);
-  }, [currentMappingSheet, _updateSheetMapping]); // Keep dependencies minimal, access store directly in timeout
+    // setCurrentMappingSheet(null); // Consider if this should be cleared here or if modal closure handles it
+  };
 
   const handleSheetSelectionToggle = useCallback((sheetName: string) => {
     if (localSkippedSheets[sheetName]) return;
@@ -316,34 +343,31 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
     const unmappedItems: string[] = [];
 
     Object.entries(localSelectedSheets)
-      .filter(([sheetName, selected]) => selected && !localSkippedSheets[sheetName])
-      .forEach(([sheetName]) => {
-        const sheetState = sheets[sheetName];
+      .filter(([name, selected]) => selected && !localSkippedSheets[name])
+      .forEach(([name]) => {
+        const sheetState = sheets[name];
         if (!sheetState) {
-          console.warn(`[DEBUG BatchImporter] Sheet state not found for selected sheet: ${sheetName}`);
+          console.warn(`[DEBUG BatchImporter] Sheet state not found for selected sheet: ${name}`);
           allMappingsComplete = false;
-          unmappedItems.push(`${sheetName} (data error)`);
+          unmappedItems.push(`${name} (data error)`);
           return;
         }
         if (!sheetState.selectedTable) {
-          console.warn(`[DEBUG BatchImporter] No table selected for sheet: ${sheetName}`);
+          console.warn(`[DEBUG BatchImporter] No table selected for sheet: ${name}`);
           allMappingsComplete = false;
-          unmappedItems.push(`${sheetName} (no table)`);
+          unmappedItems.push(`${name} (no table)`);
           return;
         }
-        // Check review status instead of processing status
         if (sheetState.sheetReviewStatus !== 'approved') {
-           console.warn(`[DEBUG BatchImporter] Sheet not approved: ${sheetName} (Status: ${sheetState.sheetReviewStatus})`);
-           // Check if *any* column is still pending or modified
+           console.warn(`[DEBUG BatchImporter] Sheet not approved: ${name} (Status: ${sheetState.sheetReviewStatus})`);
            const needsReview = Object.values(sheetState.columnMappings).some(
                m => m.reviewStatus === 'pending' || m.reviewStatus === 'modified'
            );
            if (needsReview) {
                allMappingsComplete = false;
-               unmappedItems.push(`${sheetName} (columns need review)`);
+               unmappedItems.push(`${name} (columns need review)`);
            } else if (sheetState.sheetReviewStatus === 'rejected') {
-               // If sheet is rejected, it's "complete" in terms of review, but won't be imported
-               console.log(`[DEBUG BatchImporter] Sheet ${sheetName} is rejected, skipping import.`);
+               console.log(`[DEBUG BatchImporter] Sheet ${name} is rejected, skipping import.`);
            }
         }
       });
@@ -359,21 +383,20 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
   }, [localSelectedSheets, localSkippedSheets, sheets, _setError]);
 
   const convertMappingsForDbService = (batchMappings: { [header: string]: BatchColumnMapping }): Record<string, ColumnMapping> => {
-      const columnMappings: Record<string, ColumnMapping> = {};
-      for (const header in batchMappings) {
-          const bm = batchMappings[header];
-          // Only include mappings that are approved and not skipped/create
-          if (bm.action === 'map' && bm.mappedColumn && bm.inferredDataType && bm.reviewStatus === 'approved') {
-              columnMappings[header] = {
-                  excelColumn: bm.header,
-                  dbColumn: bm.mappedColumn,
-                  type: bm.inferredDataType,
+      const columnMappingsForDb: Record<string, ColumnMapping> = {};
+      for (const headerKey in batchMappings) {
+          const bm = batchMappings[headerKey];
+          if ((bm.action === 'map' && bm.mappedColumn) || (bm.action === 'create' && bm.newColumnProposal?.columnName)) {
+              columnMappingsForDb[headerKey] = {
+                  excelColumn: bm.header, 
+                  dbColumn: bm.action === 'create' ? bm.newColumnProposal!.columnName : bm.mappedColumn!, 
+                  type: bm.inferredDataType ?? 'string', 
+                  isNew: bm.action === 'create',
               };
           }
       }
-      return columnMappings;
+      return columnMappingsForDb;
   };
-
 
   const checkMissingColumnsForPreview = useCallback(async () => {
     console.log('[DEBUG BatchImporter] checkMissingColumnsForPreview called.');
@@ -387,13 +410,12 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
       for (const sheetName in localSelectedSheets) {
         if (localSelectedSheets[sheetName] && !localSkippedSheets[sheetName]) {
           const sheetState = sheets[sheetName];
-          // Only check approved sheets with existing tables
           if (sheetState && sheetState.selectedTable && !sheetState.selectedTable.startsWith('new:') && sheetState.sheetReviewStatus === 'approved') {
             console.log(`[DEBUG BatchImporter] Checking missing columns for approved sheet: ${sheetName}, Table: ${sheetState.selectedTable}`);
             previewDataForModal[sheetName] = sheetState.sampleData;
             const tableName = sheetState.selectedTable;
             const batchMapping = sheetState.columnMappings || {};
-            const columnMappingForDb = convertMappingsForDbService(batchMapping); // Uses approved mappings
+            const columnMappingForDb = convertMappingsForDbService(batchMapping); 
             const missingCols = await dbService.detectMissingColumns(tableName, columnMappingForDb);
             if (missingCols.length > 0) {
               console.log(`[DEBUG BatchImporter] Missing columns found for ${sheetName}:`, missingCols);
@@ -412,70 +434,53 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
       if (hasMissingColumns && importSettings.createMissingColumns) {
         console.log('[DEBUG BatchImporter] Showing missing column preview modal.');
         setShowMissingColumnPreview(true);
-        return true; // Modal will be shown
+        return true; 
       }
       console.log('[DEBUG BatchImporter] No missing columns found or create setting disabled.');
-      return false; // Modal not shown
+      return false; 
     } catch (error) {
       _setError('Error checking for missing columns.');
       return false;
     }
   }, [fileInfo, localSelectedSheets, localSkippedSheets, sheets, importSettings.createMissingColumns, dbService, _setError]);
 
-
   const handleProceedToNextStep = useCallback(async () => {
     console.log(`[DEBUG BatchImporter] handleProceedToNextStep called for step: ${importStep}`);
     let canProceed = true;
-    _setError(null); // Clear previous errors
+    _setError(null); 
 
     switch(importStep) {
-      case 0: // Upload Step -> Trigger Analysis before proceeding
+      case 0: 
         if (!fileInfo || globalStatus === 'error' || globalStatus === 'readingFile') {
           _setError('Please upload a valid file and wait for it to be read.');
           canProceed = false;
         } else {
-          // Check if schema is ready before allowing progression
           const currentSchemaStatus = useBatchImportStore.getState().schemaCacheStatus;
           if (currentSchemaStatus === 'ready') {
             
-            // Check if any sheets are already being processed
             const currentSheets = useBatchImportStore.getState().sheets;
             const hasProcessingSheets = Object.values(currentSheets).some(sheet =>
                 sheet.status === 'processing' || sheet.status === 'needsReview' || sheet.status === 'ready'
             );
             
-            // Log the current state of sheets
-            console.log('[DEBUG BatchImporter handleProceed] Current sheets state:',
-              Object.entries(currentSheets).map(([name, sheet]) => ({
-                name,
-                status: sheet.status,
-                hasTableSuggestions: !!sheet.tableSuggestions && sheet.tableSuggestions.length > 0,
-                selectedTable: sheet.selectedTable
-              }))
-            );
-            
-            // If no sheets are being processed yet, trigger analysis
-            // This is a fallback in case the automatic task posting in useBatchImportWorker didn't work
             if (!hasProcessingSheets && globalStatus !== 'analyzing') {
                 console.log('[DEBUG BatchImporter handleProceed] No sheets being processed. Triggering analysis manually.');
-                _startProcessingSheets(); // Set global status to 'analyzing'
+                _startProcessingSheets(); 
                 
-                // Let the useEffect in useBatchImportWorker handle the task posting
-                // This avoids duplicate task posting
             } else {
                 console.log('[DEBUG BatchImporter handleProceed] Analysis already in progress or completed.');
             }
-            canProceed = true; // Allow proceeding to next step
+            canProceed = true; 
           } else if (currentSchemaStatus === 'loading') {
             _setError('Schema information is still loading. Please wait.');
             canProceed = false;
-          } else { // Error or idle (shouldn't happen if file loaded)
+          } else { 
              _setError('Schema information failed to load. Cannot proceed.');
              canProceed = false;
           }
         }
         break;
-      case 1: // Table Mapping Step
+      case 1: 
         const unmapped = Object.entries(localSelectedSheets)
           .filter(([name, selected]) => selected && !localSkippedSheets[name])
           .filter(([name]) => !sheets[name]?.selectedTable);
@@ -484,66 +489,61 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
           canProceed = false;
         }
         break;
-      case 2: // Column Mapping Step
-        canProceed = checkColumnMappings(); // Checks if all selected/approved sheets have columns reviewed
+      case 2: 
+        canProceed = checkColumnMappings(); 
         break;
-      case 3: // Review Step - Always allow proceeding to import attempt
+      case 3: 
         break;
     }
 
     console.log(`[DEBUG BatchImporter] Proceed check result: ${canProceed}`);
 
     if (canProceed) {
-      // Special check before leaving Column Mapping step (only relevant if proceeding from step 2)
       if (importStep === 2 && importSettings.createMissingColumns) {
         const modalShown = await checkMissingColumnsForPreview();
         if (!modalShown) {
           goToNextStep();
         } else {
         }
-      } else if (importStep !== 2 || !importSettings.createMissingColumns) { // Proceed normally if not step 2 or not creating columns
+      } else if (importStep !== 2 || !importSettings.createMissingColumns) { 
         console.log('[DEBUG BatchImporter] Proceeding to next step.');
         goToNextStep();
       }
     }
-    // Add postWorkerTask and _startProcessingSheets to dependencies
-  }, [importStep, fileInfo, globalStatus, localSelectedSheets, localSkippedSheets, sheets, _setError, checkColumnMappings, importSettings.createMissingColumns, checkMissingColumnsForPreview, goToNextStep, postWorkerTask, _startProcessingSheets]);
+  }, [importStep, fileInfo, globalStatus, localSelectedSheets, localSkippedSheets, sheets, _setError, checkColumnMappings, importSettings.createMissingColumns, checkMissingColumnsForPreview, goToNextStep]);
 
   const startActualImport = useCallback(async () => {
-      // Access state directly inside the function to ensure freshness
       const currentFile = useBatchImportStore.getState().file;
-      const currentSheets = useBatchImportStore.getState().sheets; // Get current sheets state
+      const currentSheets = useBatchImportStore.getState().sheets; 
 
       if (!currentFile) {
           _setError('Cannot start import: file object is missing.');
           return;
       }
 
-      _startCommit(); // Sets globalStatus to 'committing'
+      _startCommit(); 
 
-      let importJobs: ImportJob[] = []; // Define within scope
-      let dataForImport: Record<string, any[]> = {}; // Define within scope
+      let importJobs: ImportJob[] = []; 
+      let dataForImport: Record<string, any[]> = {}; 
 
       try {
-          // Filter sheets based on local selection, skip status, AND review status
-          const sheetsToImport = Object.values<SheetProcessingState>(currentSheets).filter(sheet => // Use currentSheets
+          const sheetsToImport = Object.values<SheetProcessingState>(currentSheets).filter(sheet => 
               localSelectedSheets[sheet.sheetName] &&
               !localSkippedSheets[sheet.sheetName] &&
-              sheet.sheetReviewStatus === 'approved' && // Only import approved sheets
-              sheet.selectedTable // Ensure a table is selected
+              sheet.sheetReviewStatus === 'approved' && 
+              sheet.selectedTable 
           );
           console.log(`[DEBUG BatchImporter] Found ${sheetsToImport.length} sheets approved for import.`);
 
           if (sheetsToImport.length === 0) {
               _setError("No sheets are approved for import. Please review mappings.");
-              _setGlobalStatus('review'); // Go back to review state
+              _setGlobalStatus('review'); 
               return;
           }
 
-          // --- Conditional Data Import ---
           if (importMode === 'structureAndData') {
             console.log('[DEBUG BatchImporter] Mode: structureAndData. Reading full data...');
-            dataForImport = {}; // Initialize
+            dataForImport = {}; 
             for (const sheet of sheetsToImport) {
                 try {
                     const data = await FileReader.getSheetData(currentFile, sheet.sheetName);
@@ -551,31 +551,24 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                 } catch (readError) {
                     console.error(`[DEBUG BatchImporter] Error reading full data for sheet ${sheet.sheetName}:`, readError);
                     _setSheetCommitStatus(sheet.sheetName, 'error', `Failed to read sheet data for import.`);
-                    // Remove sheet from sheetsToImport if data read fails? Or handle in processBatchImport?
-                    // For now, let processBatchImport handle potentially missing data.
-                } // End individual sheet try
-            } // End for loop
-          // Removed misplaced catch block here
+                } 
+            } 
           } else {
             console.log('[DEBUG BatchImporter] Mode: structureOnly. Skipping data read.');
-            dataForImport = {}; // Ensure it's empty
+            dataForImport = {}; 
           }
-          // --- End Conditional Data Import ---
-
-          // Create import jobs regardless of mode (needed for schema info, even if data is empty)
-          importJobs = sheetsToImport // Assign
-              .filter(sheet => dataForImport[sheet.sheetName]) // Ensure data exists
+          importJobs = sheetsToImport 
+              .filter(sheet => dataForImport[sheet.sheetName]) 
               .map(sheet => {
-                  // Extract column proposals for creation
                   const proposals = Object.values(sheet.columnMappings)
                       .filter(mapping => mapping.action === 'create' && mapping.newColumnProposal)
                       .map(mapping => mapping.newColumnProposal!);
 
                   return {
                       id: `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                      userId: 'current-user', // Replace later
+                      userId: 'current-user', 
                       fileName: fileInfo?.name ?? 'unknown',
-                      tableName: sheet.selectedTable!, // Should be defined
+                      tableName: sheet.selectedTable!, 
                       sheetName: sheet.sheetName,
                       mapping: convertMappingsForDbService(sheet.columnMappings),
                       newColumnProposals: proposals,
@@ -585,7 +578,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                       createdAt: new Date(),
                       updatedAt: new Date()
                   };
-              }); // Semicolon removed as it's end of assignment
+              }); 
 
           console.log(`[DEBUG BatchImporter] Created ${importJobs.length} import jobs.`);
 
@@ -598,14 +591,13 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
           console.log('Calling processBatchImport with jobs:', importJobs.length);
           _updateCommitProgress(0, importJobs.length, importJobs[0]?.sheetName || null);
 
-          // --- Conditional Data Processing ---
           if (importMode === 'structureAndData') {
             console.log('[DEBUG BatchImporter] Mode: structureAndData. Calling dbService.processBatchImport...');
             try {
                 await dbService.processBatchImport(
                     importJobs,
-                    dataForImport, // Will contain data
-                    importSettings.createMissingColumns // Pass the setting
+                    dataForImport, 
+                    importSettings.createMissingColumns 
                 );
                 console.log('dbService.processBatchImport finished.');
             } catch (importError) {
@@ -613,37 +605,29 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                 _setError(`Import failed: ${importError instanceof Error ? importError.message : String(importError)}`);
                 _setGlobalStatus('error');
                 importJobs.forEach(job => _setSheetCommitStatus(job.sheetName, 'error', 'Batch processing failed'));
-                return; // Exit if data import fails
+                return; 
             }
           } else {
-            // Structure Only Mode: Assume schema changes were handled by 'Generate Schema SQL' or potentially need a separate call here.
-            // For now, just mark as complete without data processing.
-            console.log('[DEBUG BatchImporter] Mode: structureOnly. Skipping data processing.');
-            // Mark sheets as 'committed' (or a new status like 'schemaApplied'?)
-            // This might need refinement depending on how schema application is confirmed.
             importJobs.forEach(job => _setSheetCommitStatus(job.sheetName, 'committed', 'Schema structure applied (no data imported).'));
           }
-          // --- End Conditional Data Processing ---
 
-          // Check final status after successful or partially successful import
-          const finalSheetStates = useBatchImportStore.getState().sheets; // Get latest state again
+          const finalSheetStates = useBatchImportStore.getState().sheets; 
           const failedSheets = importJobs.filter(job => finalSheetStates[job.sheetName]?.status === 'error');
 
           if (failedSheets.length > 0) {
               _setError(`Import completed with errors for sheets: ${failedSheets.map(j => j.sheetName).join(', ')}`);
               _setGlobalStatus('error');
           } else {
-              _setCommitComplete(); // Sets globalStatus to 'complete'
+              _setCommitComplete(); 
               setSnackbarMessage('Import completed successfully!');
               setSnackbarOpen(true);
               if (onImportComplete) onImportComplete();
           }
 
-      } catch (error) { // Outer catch
+      } catch (error) { 
           console.error('[DEBUG BatchImporter] Unexpected error during startActualImport:', error);
           _setError(`An unexpected error occurred during import: ${error instanceof Error ? error.message : String(error)}`);
           _setGlobalStatus('error');
-          // Ensure sheets that were part of the attempt are marked as error
           if (importJobs && importJobs.length > 0) {
              importJobs.forEach(job => {
                 if (useBatchImportStore.getState().sheets[job.sheetName]?.status !== 'error') {
@@ -652,15 +636,14 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
              });
           }
       }
-  }, [ // Ensure ALL external variables/functions used inside are listed
+  }, [ 
       localSelectedSheets, localSkippedSheets, _setError, _setGlobalStatus, _startCommit,
       fileInfo, _setSheetCommitStatus, _updateCommitProgress, dbService, importSettings.createMissingColumns,
       _setCommitComplete, onImportComplete, setSnackbarMessage, setSnackbarOpen, convertMappingsForDbService
-      // Note: `sheets` from the store is accessed via getState() inside, so not needed here
   ]);
 
   const handleStartImportClick = useCallback(async () => {
-      _setError(null); // Use action from store
+      _setError(null); 
       if (!checkColumnMappings()) {
           console.log('[DEBUG BatchImporter] Column mapping check failed in handleStartImportClick.');
           return;
@@ -671,17 +654,15 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
           const modalShown = await checkMissingColumnsForPreview();
           if (modalShown) {
               console.log('[DEBUG BatchImporter] Missing columns modal shown, waiting for user confirmation.');
-              return; // Wait for modal confirmation
+              return; 
           }
           console.log('[DEBUG BatchImporter] No missing columns modal shown or needed.');
       } else {
           console.log('[DEBUG BatchImporter] Skipping missing columns check as createMissingColumns is false.');
       }
 
-      // If no modal shown or createMissingColumns is false, proceed
-      console.log('[DEBUG BatchImporter] Proceeding to actual import...');
       await startActualImport();
-  }, [ // Ensure ALL external variables/functions used inside are listed
+  }, [ 
       _setError, checkColumnMappings, importSettings.createMissingColumns,
       checkMissingColumnsForPreview, startActualImport
   ]);
@@ -717,20 +698,17 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
     }
   }, [handleCloseSettings, handleFileLoaded]);
 
-  // --- Render Logic ---
-  // Helper to construct WorkbookInfo for child components that need it
   const reconstructedWorkbookInfo: WorkbookInfo | null = useMemo(() => {
       if (!fileInfo) return null;
       return {
           fileName: fileInfo.name,
-          fileType: fileInfo.type as FileType, // Assuming fileInfo.type is compatible
+          fileType: fileInfo.type as FileType, 
           sheets: Object.values(sheets).map(s => ({
               name: s.sheetName,
               columnCount: s.headers.length,
               rowCount: s.rowCount,
               columns: s.headers,
               previewRows: s.sampleData,
-              // columnTypes might be missing, add if available/needed
           }))
       };
   }, [fileInfo, sheets]);
@@ -740,7 +718,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
       <Box sx={{ my: 3 }}>
         <Card>
           <CardContent>
-            <Typography variant="h5" gutterBottom>Batch Excel Import</Typography>
+            <Typography variant="h5" gutterBottom>Template Mapping Tool</Typography>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
               <Button startIcon={<InfoIcon />} onClick={handleOpenSettings} variant="outlined" size="small">
                 Import Settings
@@ -755,7 +733,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
 
             {storeError && (
               <Alert severity="error" sx={{ my: 2 }} action={
-                <IconButton aria-label="close" color="inherit" size="small" onClick={() => _setError(null)}> {/* Use store action */}
+                <IconButton aria-label="close" color="inherit" size="small" onClick={() => _setError(null)}> 
                   <CloseIcon fontSize="inherit" />
                 </IconButton>
               }>{storeError}</Alert>
@@ -764,7 +742,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
             {/* Step Content */}
             {importStep === 0 && (
               <FileUploadStep
-                workbookInfo={reconstructedWorkbookInfo} // Pass reconstructed or null
+                workbookInfo={reconstructedWorkbookInfo} 
                 isLoadingTables={isLoadingTables || schemaCacheStatus === 'loading'}
                 onFileLoaded={handleFileLoaded}
                 onContinue={goToNextStep}
@@ -796,11 +774,11 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                  onBack={goToPreviousStep}
               />
             )}
-            {importStep === 3 && fileInfo && reconstructedWorkbookInfo && ( // Ensure reconstructedWorkbookInfo is not null
+            {importStep === 3 && fileInfo && reconstructedWorkbookInfo && ( 
               <ReviewImportStep
-                 workbookInfo={reconstructedWorkbookInfo} // Pass non-null WorkbookInfo
+                 workbookInfo={reconstructedWorkbookInfo} 
                  sheetTableMappings={Object.fromEntries(Object.entries(sheets).map(([name, state]) => [name, state.selectedTable || '']))}
-                 selectedSheets={localSelectedSheets} // Pass correct prop name
+                 selectedSheets={localSelectedSheets} 
                  importSettings={importSettings}
                  isImporting={globalStatus === 'committing'}
                  importProgress={commitProgress ? Math.round((commitProgress.processedSheets / commitProgress.totalSheets) * 100) : 0}
@@ -810,8 +788,8 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                  importResults={Object.fromEntries(Object.entries(sheets).map(([name, state]) => [name, { success: state.status === 'committed', message: state.error || (state.status === 'committed' ? 'Success' : ''), rowCount: state.rowCount }]))}
                  excelData={Object.fromEntries(Object.entries(sheets).map(([name, state]) => [name, state.sampleData]))}
                  columnMappings={Object.fromEntries(Object.entries(sheets).map(([name, state]) => [`${name}-${state.selectedTable}`, state.columnMappings]))}
-                 importMode={importMode} // Pass import mode state
-                 onImportModeChange={setImportMode} // Pass setter function
+                 importMode={importMode} 
+                 onImportModeChange={setImportMode} 
               />
             )}
 
@@ -839,16 +817,33 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
             startActualImport();
           }}
         />
-        {/* Column Mapping Modal */}
-        <ColumnMappingModal
-          open={showColumnMappingModal}
-          onClose={() => setShowColumnMappingModal(false)}
-          onSave={handleSaveColumnMappings}
-          sheetState={sheets[currentMappingSheet]}
-          tableInfo={tableInfoMap[currentMappingTable.startsWith('new:') ? '' : currentMappingTable]}
-          isCreatingTable={currentMappingTable.startsWith('new:')}
-          // Removed incorrect columnSuggestions prop
-        />
+        {(showColumnMappingModal && currentMappingSheet && (
+          (() => {
+            const sheetFromStore = sheets[currentMappingSheet];
+            const tableTargetName = sheetFromStore?.selectedTable;
+            const isCreatingNew = tableTargetName?.startsWith('new:') || false; 
+            const actualTargetTableName = isCreatingNew && tableTargetName ? tableTargetName.substring(4) : tableTargetName;
+
+            const tableInfoForModal = tableTargetName ? 
+              (isCreatingNew ? 
+                { tableName: actualTargetTableName || 'new_table_error', columns: [], isNew: true, tableIdentifier: tableTargetName } :
+                (tableInfoMap && actualTargetTableName && tableInfoMap[actualTargetTableName] ? 
+                  { ...tableInfoMap[actualTargetTableName], isNew: false, tableIdentifier: tableTargetName } :
+                  null))
+              : null;
+
+            return (
+              <ColumnMappingModal
+                open={showColumnMappingModal}
+                onClose={() => setShowColumnMappingModal(false)}
+                onSave={handleModalSave} 
+                sheetState={sheetFromStore} 
+                tableInfo={tableInfoForModal} 
+                isCreatingTable={isCreatingNew}
+              />
+            );
+          })()
+        ))}
       </Box>
 
       <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)} message={snackbarMessage} action={
