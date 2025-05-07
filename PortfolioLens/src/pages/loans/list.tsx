@@ -6,8 +6,12 @@ import {
   ShowButton,
   DateField,
 } from "@refinedev/mui";
+import { Button } from "@mui/material";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import React from "react";
+import { Link } from "react-router-dom";
+import { Box, Typography } from "@mui/material";
+import MapIcon from "@mui/icons-material/Map";
 
 // Define the loan interface with strict typing
 interface Loan {
@@ -99,7 +103,26 @@ export const LoanList: React.FC<IResourceComponentsProps> = () => {
   );
 
   return (
-    <List>
+    <List
+      headerButtons={({ defaultButtons }) => (
+        <>
+          {defaultButtons}
+          <Button
+            component={Link}
+            to="/loans/portfolio-mapping"
+            variant="contained"
+            startIcon={<MapIcon />}
+          >
+            Portfolio Mapping
+          </Button>
+        </>
+      )}
+    >
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          Manage loan records and their associations with portfolios. Use the Portfolio Mapping tool above to associate investor loan numbers with portfolios.
+        </Typography>
+      </Box>
       <DataGrid {...dataGridProps} columns={columns} autoHeight />
     </List>
   );

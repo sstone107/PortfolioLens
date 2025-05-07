@@ -92,10 +92,10 @@ export class DatabaseService {
   constructor(customClient?: SupabaseClient) {
     // Initialize MCP bridge to ensure MCP functions are available
     // initMcpBridge(); 
-    console.log('[DatabaseService constructor] Initializing. Custom client provided:', !!customClient);
+    //console.log('[DatabaseService constructor] Initializing. Custom client provided:', !!customClient);
     // Store the client if provided, otherwise use the global client
     this.client = customClient || globalSupabaseClient;
-    console.log('[DatabaseService constructor] this.client after assignment:', this.client ? 'Exists' : 'null');
+    //console.log('[DatabaseService constructor] this.client after assignment:', this.client ? 'Exists' : 'null');
     // Initialize services
     this.initializeServices();
   }
@@ -107,7 +107,7 @@ export class DatabaseService {
   private async initializeServices(): Promise<void> {
     try {
       // Initialize services with minimal logging
-      console.log('[DatabaseService initializeServices] Starting service initialization.');
+      //console.log('[DatabaseService initializeServices] Starting service initialization.');
       // 1. Create SchemaCacheService, passing this DatabaseService instance
       const schemaCacheServiceInstance = new SchemaCacheService(this);
       
@@ -131,9 +131,9 @@ export class DatabaseService {
       this.importService = new ImportService(this.metadataService, this.client || undefined);
 
       // 6. Verify connection (can happen after services are set up)
-      console.log('[DatabaseService initializeServices] Attempting to verify connection...');
+      //console.log('[DatabaseService initializeServices] Attempting to verify connection...');
       await this.verifyConnection();
-      console.log('[DatabaseService initializeServices] Connection verification process completed. State:', this.connectionState);
+      //console.log('[DatabaseService initializeServices] Connection verification process completed. State:', this.connectionState);
 
     } catch (error) {
       console.error('Failed to initialize database services:', error);
@@ -151,11 +151,11 @@ export class DatabaseService {
    */
   async verifyConnection(): Promise<boolean> {
     if (this.connectionState === ConnectionState.CONNECTED) {
-      console.log('[DatabaseService verifyConnection] Already connected.');
+      //console.log('[DatabaseService verifyConnection] Already connected.');
       return true;
     }
     
-    console.log('[DatabaseService verifyConnection] Setting state to CONNECTING.');
+    // console.log('[DatabaseService verifyConnection] Setting state to CONNECTING.');
     this.connectionState = ConnectionState.CONNECTING;
     this.connectionAttempts = 0;
     
@@ -170,11 +170,11 @@ export class DatabaseService {
   private async attemptConnection(): Promise<boolean> {
     try {
       this.connectionAttempts++;
-      console.log(`[DatabaseService attemptConnection] Attempt: ${this.connectionAttempts}`);
+      // console.log(`[DatabaseService attemptConnection] Attempt: ${this.connectionAttempts}`);
       // Execute a simple query to verify connection
       // Execute query with minimal logging
       const { data, error } = await executeSql(`SELECT version();`);
-      console.log('[DatabaseService attemptConnection] executeSql result - data:', data, 'error:', error);
+      // console.log('[DatabaseService attemptConnection] executeSql result - data:', data, 'error:', error);
 
       // Enhanced verification logic to handle different result formats
       if (error) {
@@ -186,24 +186,24 @@ export class DatabaseService {
       if (Array.isArray(data)) {
         // Case 1: Standard format - array with one element containing version info
         if (data.length === 1 && data[0]?.version) { 
-          console.log('[DatabaseService attemptConnection] Connection successful (standard array structure).');
+          //console.log('[DatabaseService attemptConnection] Connection successful (standard array structure).');
           this.connectionState = ConnectionState.CONNECTED;
           return true;
         }
         // Case 2: Empty array - valid response indicating success but no rows
         else if (data.length === 0) {
-          console.log('[DatabaseService attemptConnection] Connection successful (empty array).');
+          // console.log('[DatabaseService attemptConnection] Connection successful (empty array).');
           this.connectionState = ConnectionState.CONNECTED;
           return true;
         }
         // Case 3: Non-empty array with unexpected structure
         else { 
-          console.log('[DatabaseService attemptConnection] Connection successful (unexpected array structure).');
+          //console.log('[DatabaseService attemptConnection] Connection successful (unexpected array structure).');
           this.connectionState = ConnectionState.CONNECTED;
           return true;
         }
       } else if (data !== null && typeof data === 'object') {
-        console.log('[DatabaseService attemptConnection] Connection successful (object response).');
+        //console.log('[DatabaseService attemptConnection] Connection successful (object response).');
         // Case 4: Non-array object response (might happen with some MCP mocks or errors)
         this.connectionState = ConnectionState.CONNECTED; 
         return true;
@@ -216,7 +216,7 @@ export class DatabaseService {
     } catch (err) {
       console.error(`[DatabaseService attemptConnection] Attempt ${this.connectionAttempts} failed:`, err);
       if (this.connectionAttempts < this.MAX_RETRY_ATTEMPTS) {
-        console.log(`[DatabaseService attemptConnection] Retrying in ${this.RETRY_DELAY_MS}ms...`);
+        //  console.log(`[DatabaseService attemptConnection] Retrying in ${this.RETRY_DELAY_MS}ms...`);
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS));
         return this.attemptConnection();
@@ -242,7 +242,7 @@ export class DatabaseService {
    * @returns Promise resolving to the operation's result
    */
   private async executeWithConnectionPool<T>(operation: (client: SupabaseClient) => Promise<T>): Promise<T> {
-    console.log('[DatabaseService executeWithConnectionPool] Acquiring connection. Current this.client:', this.client ? 'Exists' : 'null', 'Connection state:', this.connectionState);
+    // console.log('[DatabaseService executeWithConnectionPool] Acquiring connection. Current this.client:', this.client ? 'Exists' : 'null', 'Connection state:', this.connectionState);
     await this.connectionPool.acquire();
     
     try {
@@ -252,7 +252,7 @@ export class DatabaseService {
       }
       return await operation(this.client);
     } finally {
-      console.log('[DatabaseService executeWithConnectionPool] Releasing connection.');
+      //console.log('[DatabaseService executeWithConnectionPool] Releasing connection.');
       this.connectionPool.release();
     }
   }
@@ -454,7 +454,7 @@ export class DatabaseService {
         return { success: true, message: 'No missing columns to create.' };
     }
 
-    console.log(`[DatabaseService] Adding ${missingColumns.length} columns to ${tableName} using add_columns_batch RPC`);
+    //console.log(`[DatabaseService] Adding ${missingColumns.length} columns to ${tableName} using add_columns_batch RPC`);
     
     try {
         // Transform the columns to the format expected by add_columns_batch
@@ -472,7 +472,7 @@ export class DatabaseService {
             p_columns: transformedColumns
         });
         
-        console.log('[DatabaseService] add_columns_batch RPC result:', data);
+        //console.log('[DatabaseService] add_columns_batch RPC result:', data);
         
         // Check for errors
         if (error) {

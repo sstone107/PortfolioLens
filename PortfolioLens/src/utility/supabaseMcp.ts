@@ -1,9 +1,6 @@
 /**
  * Supabase MCP utility wrapper
  * Provides a clean interface for interacting with the Supabase MCP server
- * and fallback mock data for local development
- *
- * Enhanced with secure SQL execution framework integration
  */
 
 import SqlExecutionService from '../services/SqlExecutionService';
@@ -23,126 +20,6 @@ declare global {
     mcp3_exec_sql?: any; // Function provided by Supabase MCP
     mcp3_execute_sql?: any; // Legacy function name
   }
-}
-
-// Sample table data for local development
-interface SampleTable {
-  table_name: string;
-  display_name: string;
-  category: string;
-}
-
-// Export sample tables to be used by other modules
-export const SAMPLE_TABLES: SampleTable[] = [
-  { table_name: 'loan_information', display_name: 'Loan Information', category: 'Loans' },
-  { table_name: 'borrowers', display_name: 'Borrowers', category: 'Customers' },
-  { table_name: 'payments', display_name: 'Payments', category: 'Transactions' },
-  { table_name: 'properties', display_name: 'Properties', category: 'Assets' },
-  { table_name: 'users', display_name: 'Users', category: 'System' },
-];
-
-// Sample column data type definition
-interface ColumnDefinition {
-  column_name: string;
-  data_type: string;
-  is_nullable: boolean;
-}
-
-type TableColumnsMap = {
-  [key: string]: ColumnDefinition[];
-};
-
-// Sample column data
-const SAMPLE_COLUMNS: TableColumnsMap = {
-  loan_information: [
-    { column_name: 'id', data_type: 'integer', is_nullable: false },
-    { column_name: 'loan_number', data_type: 'varchar', is_nullable: false },
-    { column_name: 'loan_amount', data_type: 'numeric', is_nullable: false },
-    { column_name: 'interest_rate', data_type: 'numeric', is_nullable: false },
-    { column_name: 'term_months', data_type: 'integer', is_nullable: false },
-    { column_name: 'origination_date', data_type: 'date', is_nullable: false },
-    { column_name: 'status', data_type: 'varchar', is_nullable: false },
-  ],
-  borrowers: [
-    { column_name: 'id', data_type: 'integer', is_nullable: false },
-    { column_name: 'first_name', data_type: 'varchar', is_nullable: false },
-    { column_name: 'last_name', data_type: 'varchar', is_nullable: false },
-    { column_name: 'email', data_type: 'varchar', is_nullable: false },
-    { column_name: 'phone', data_type: 'varchar', is_nullable: true },
-    { column_name: 'dob', data_type: 'date', is_nullable: false },
-    { column_name: 'ssn', data_type: 'varchar', is_nullable: false },
-  ],
-  payments: [
-    { column_name: 'id', data_type: 'integer', is_nullable: false },
-    { column_name: 'loan_id', data_type: 'integer', is_nullable: false },
-    { column_name: 'payment_date', data_type: 'date', is_nullable: false },
-    { column_name: 'amount', data_type: 'numeric', is_nullable: false },
-    { column_name: 'principal', data_type: 'numeric', is_nullable: false },
-    { column_name: 'interest', data_type: 'numeric', is_nullable: false },
-    { column_name: 'status', data_type: 'varchar', is_nullable: false },
-  ],
-  properties: [
-    { column_name: 'id', data_type: 'integer', is_nullable: false },
-    { column_name: 'loan_id', data_type: 'integer', is_nullable: false },
-    { column_name: 'address_line1', data_type: 'varchar', is_nullable: false },
-    { column_name: 'address_line2', data_type: 'varchar', is_nullable: true },
-    { column_name: 'city', data_type: 'varchar', is_nullable: false },
-    { column_name: 'state', data_type: 'varchar', is_nullable: false },
-    { column_name: 'zip', data_type: 'varchar', is_nullable: false },
-    { column_name: 'property_type', data_type: 'varchar', is_nullable: false },
-    { column_name: 'year_built', data_type: 'integer', is_nullable: true },
-  ],
-  users: [
-    { column_name: 'id', data_type: 'integer', is_nullable: false },
-    { column_name: 'username', data_type: 'varchar', is_nullable: false },
-    { column_name: 'email', data_type: 'varchar', is_nullable: false },
-    { column_name: 'created_at', data_type: 'timestamp', is_nullable: false },
-    { column_name: 'last_login', data_type: 'timestamp', is_nullable: true },
-    { column_name: 'is_admin', data_type: 'boolean', is_nullable: false },
-  ]
-};
-
-/**
- * Get mock data for a query based on the query text
- * @param query SQL query to mock
- * @returns Array of mock results
- */
-function getMockData(query: string): any[] {
-  // Handle tables list queries
-  if (query.toLowerCase().includes('tables_list') || 
-      query.toLowerCase().includes('information_schema.tables')) {
-    console.info('[MOCK] Returning sample tables list');
-    return SAMPLE_TABLES;
-  } 
-  
-  // Handle column information queries
-  if (query.toLowerCase().includes('information_schema.columns')) {
-    // Extract table name from the query
-    const tableMatch = query.match(/table_name\s*=\s*'([^']+)'/);
-    if (tableMatch && tableMatch[1]) {
-      const tableName = tableMatch[1];
-      if (SAMPLE_COLUMNS[tableName]) {
-        console.info(`[MOCK] Returning columns for table: ${tableName}`);
-        return SAMPLE_COLUMNS[tableName];
-      }
-    }
-    // Default to first table's columns if no match
-    console.info('[MOCK] No table match found, returning default columns');
-    return SAMPLE_COLUMNS.loan_information;
-  }
-  
-  // For INSERT/UPDATE/DELETE queries, return success indicator
-  if (query.toLowerCase().includes('insert') || 
-      query.toLowerCase().includes('update') || 
-      query.toLowerCase().includes('delete') || 
-      query.toLowerCase().includes('create')) {
-    console.info('[MOCK] Database write operation simulated successfully');
-    return [{ affected_rows: 1, success: true }];
-  }
-  
-  // Generic empty result for other queries
-  console.info('[MOCK] Unrecognized query type, returning empty result');
-  return [];
 }
 
 /**
@@ -500,24 +377,14 @@ export function initSupabaseMcp(): void {
   
   console.log('MCP availability check result:', mcpAvailable ? 'Available' : 'Not available');
   
-  // Set up mock functions for local development
   if (!mcpAvailable) {
-    console.info('Supabase MCP is not available - using mock implementation');
-    window.supabaseMcp = {
-      execSql: async (params: { project_id: string, query: string }) => {
-        console.info('[MOCK] execSql:', params.query.substring(0, 100));
-        return getMockData(params.query);
-      },
-      executeSql: async (params: { project_id: string, query: string }) => {
-        console.info('[MOCK] executeSql:', params.query.substring(0, 100));
-        return getMockData(params.query);
-      },
-      applyMigration: async (params: { project_id: string, name: string, query: string }) => {
-        console.info('[MOCK] applyMigration:', params.name);
-        console.info('[MOCK] SQL:', params.query.substring(0, 100));
-        return { success: true, mock: true, affected_rows: 1 };
-      }
-    };
+    console.warn('Supabase MCP is not available and mock implementation has been removed. Database operations may fail.');
+    // Optionally, define window.supabaseMcp with functions that throw errors:
+    // window.supabaseMcp = {
+    //   execSql: async () => { throw new Error('MCP not available and mocks removed.'); },
+    //   executeSql: async () => { throw new Error('MCP not available and mocks removed.'); },
+    //   applyMigration: async () => { throw new Error('MCP not available and mocks removed.'); },
+    // };
   } else {
     console.log('Detected MCP available in environment, using native implementation');
   }

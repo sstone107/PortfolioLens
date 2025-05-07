@@ -19,7 +19,7 @@ import {
   FormLabel,
   Tab,
   Tabs,
-  Checkbox // <-- Import Checkbox
+  Checkbox 
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -30,21 +30,18 @@ import {
   CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
   CheckBox as CheckBoxIcon
 } from '@mui/icons-material';
-import {
-    ColumnType,
-    TableColumn as TableColumnType,
-    SheetProcessingState,
-    BatchColumnMapping, // Already imported
-    TableInfo,
-    ColumnMapping,
-    ColumnMappingSuggestions,
-    ConfidenceLevel,    // Add
-    ReviewStatus,       // Add
-    NewColumnProposal   // Add
+import { 
+  SheetProcessingState, 
+  TableInfo, 
+  BatchColumnMapping, 
+  ColumnType,
+  NewColumnProposal, 
+  ReviewStatus,      
+  ConfidenceLevel
 } from './types';
+
 import { VirtualizedColumnMapper } from './VirtualizedColumnMapper';
 import { ColumnMappingTableView } from './ColumnMappingTableView';
-// import { suggestColumnMappings, mapColumnTypeToSql } from './ColumnMappingUtils'; // mapColumnTypeToSql moved inside
 
 // Suppress MUI console warnings
 const SuppressMuiWarnings = () => {
@@ -79,9 +76,9 @@ const SuppressMuiWarnings = () => {
 interface ColumnMappingModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (mappings: Record<string, BatchColumnMapping>) => void; // Expect full mappings on save
-  sheetState: SheetProcessingState | null;
-  tableInfo: TableInfo | null; // This might need to accept NewTableProposal too if creating
+  onSave: (mappings: Record<string, BatchColumnMapping>, newTableName?: string) => void; 
+  sheetState: SheetProcessingState | null; 
+  tableInfo: TableInfo | null; 
   isCreatingTable: boolean;
 }
 
@@ -93,6 +90,13 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   tableInfo,
   isCreatingTable,
 }) => {
+  console.log('[DEBUG ColumnMappingModal] Props received:', {
+    open,
+    sheetState,
+    tableInfo,
+    isCreatingTable
+  });
+
   // Helper function to map column type to SQL type
   const mapColumnTypeToSql = (columnType: ColumnType | null | undefined): string => {
     if (!columnType) return 'TEXT';
@@ -113,185 +117,161 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   // Update the state type to potentially hold the full structure
   const [mappings, setMappings] = useState<Record<string, BatchColumnMapping>>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'table' | 'virtualized'>('table'); // <-- Allow both types
+  const [viewMode, setViewMode] = useState<'table' | 'virtualized'>('table'); 
   const [newColumnDialogOpen, setNewColumnDialogOpen] = useState(false);
   const [currentExcelColumn, setCurrentExcelColumn] = useState<string>('');
   const [newColumnName, setNewColumnName] = useState<string>('');
   const [newColumnType, setNewColumnType] = useState<ColumnType>('string');
-  const [createStructureOnly, setCreateStructureOnly] = useState<boolean>(false); // State for the new checkbox
+  const [createStructureOnly, setCreateStructureOnly] = useState<boolean>(false); 
+  const [editableTableName, setEditableTableName] = useState<string>(''); // State for editable table name
 
-  const actualTableName = useMemo(() => {
+  const actualTableNameFromSheetState = useMemo(() => {
       if (!sheetState?.selectedTable) return 'Unknown Table';
       return isCreatingTable ? sheetState.selectedTable.substring(4) : sheetState.selectedTable;
   }, [sheetState?.selectedTable, isCreatingTable]);
 
   const memoizedExcelHeaders = useMemo(() => {
     if (!sheetState?.headers) return [];
-    return sheetState.headers.filter(header =>
+    const headers = sheetState.headers.filter(header =>
       header?.toLowerCase().includes(searchQuery.toLowerCase())
     );
+    console.log('[DEBUG ColumnMappingModal] memoizedExcelHeaders:', headers);
+    return headers;
   }, [sheetState, searchQuery]);
 
   const memoizedTargetColumns = useMemo(() => {
     return (tableInfo?.columns || []).filter(col => !['id', 'created_at', 'updated_at'].includes(col.columnName));
   }, [tableInfo]);
 
-  // Remove local columnSuggestions state and its setter
-  // const [columnSuggestions, setColumnSuggestions] = useState<Record<string, any>>({}); // Removed
-
-  // Update useEffect to initialize with full BatchColumnMapping structure
   useEffect(() => {
-      if (open && sheetState) {
-          const initialMappings: Record<string, BatchColumnMapping> = {};
-          sheetState.headers?.forEach(header => {
-              const existingMapping = sheetState.columnMappings?.[header];
-              // Prioritize existing mapping from sheetState if available
-              if (existingMapping) {
-                  initialMappings[header] = {
-                      ...existingMapping, // Use the full existing mapping
-                      reviewStatus: existingMapping.reviewStatus || 'pending', // Ensure reviewStatus is initialized
-                      // Ensure suggestedColumns is present, even if empty
-                      suggestedColumns: existingMapping.suggestedColumns || [],
-                  };
-              } else {
-                   // This case should ideally not happen if AnalysisEngine always provides
-                   // a BatchColumnMapping for every header. But as a fallback:
-                  console.warn(`No existing BatchColumnMapping found for header: ${header}. Creating default.`);
-                  initialMappings[header] = {
-                      header: header,
-                      sampleValue: sheetState.sampleData?.[0]?.[header] ?? null,
-                      suggestedColumns: [], // Default to empty array
-                      inferredDataType: null, // Or try to infer again?
-                      status: 'pending', // Needs attention
-                      reviewStatus: 'pending',
-                      action: 'skip', // Default action
-                      mappedColumn: null,
-                      dbColumn: null, // Add dbColumn property
-                      confidenceScore: 0,
-                      confidenceLevel: 'Low',
-                  };
-              }
-          });
-          setMappings(initialMappings);
-          // Reset other states
-          setNewColumnDialogOpen(false);
-          setSearchQuery('');
-          // Correctly set view mode based on header count
-          setViewMode((sheetState.headers?.length || 0) > 30 ? 'virtualized' : 'table');
+    console.log('[DEBUG ColumnMappingModal] useEffect for mapping init. Deps:', { open, sheetState, tableInfo });
 
-      } else if (open && !sheetState) {
-          setMappings({});
-      }
-  }, [open, sheetState, tableInfo]); // Updated dependencies
-
-  // More flexible update function
-  const handleMappingUpdate = (excelCol: string, changes: Partial<BatchColumnMapping>) => {
-      // Check if we need to open the new column dialog
-      if ((changes.action === 'create' && !changes.newColumnProposal) ||
-          (changes.action === 'create' && (changes as any).openDialog)) {
-          // Open the dialog for creating a new column
-          setCurrentExcelColumn(excelCol);
-          const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
-          setNewColumnName(suggestedName);
-          setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
-          setNewColumnDialogOpen(true);
-          // We'll still update the mapping state to reflect the 'create' action
-          
-          // Remove the openDialog flag as it's not part of the BatchColumnMapping type
-          if ((changes as any).openDialog) {
-              delete (changes as any).openDialog;
-          }
-      }
-
-      setMappings(prev => {
-          // Define the default structure separately to avoid self-reference issues
-          const defaultMapping: BatchColumnMapping = {
-              header: excelCol,
-              sampleValue: sheetState?.sampleData?.[0]?.[excelCol] ?? null,
-              suggestedColumns: [],
-              inferredDataType: null,
-              status: 'pending',
-              reviewStatus: 'pending',
-              action: 'skip',
-              mappedColumn: null,
-              dbColumn: null, // Add dbColumn to default structure
-              confidenceScore: 0,
-              confidenceLevel: 'Low',
+    if (open && sheetState) {
+      const initialMappings: Record<string, BatchColumnMapping> = {};
+      sheetState.headers?.forEach(header => {
+        const existingMapping = sheetState.columnMappings?.[header];
+        if (existingMapping) {
+          initialMappings[header] = {
+            ...existingMapping, 
+            reviewStatus: existingMapping.reviewStatus || 'pending', 
+            suggestedColumns: existingMapping.suggestedColumns || [],
           };
-
-          // Get the current mapping or use the default
-          const current: BatchColumnMapping = prev[excelCol] || defaultMapping;
-
-          // If action changes, reset potentially conflicting fields
-          const resetFields: Partial<BatchColumnMapping> = {};
-          if (changes.action && changes.action !== current.action) {
-              if (changes.action === 'skip') {
-                  resetFields.mappedColumn = null;
-                  resetFields.dbColumn = null; // Also reset dbColumn
-                  resetFields.newColumnProposal = undefined;
-              } else if (changes.action === 'map') {
-                  resetFields.newColumnProposal = undefined;
-                  // Keep mappedColumn if provided in changes, otherwise nullify
-                  if (!changes.mappedColumn) {
-                      resetFields.mappedColumn = null;
-                      resetFields.dbColumn = null; // Also reset dbColumn
-                  } else {
-                      // If mappedColumn is provided, ensure dbColumn is also set
-                      resetFields.dbColumn = changes.mappedColumn;
-                  }
-              } else if (changes.action === 'create') {
-                  const columnName = changes.newColumnProposal?.columnName || null;
-                  resetFields.mappedColumn = columnName; // Map to proposal name
-                  resetFields.dbColumn = columnName; // Also set dbColumn to the same value
-                  // Keep newColumnProposal if provided, otherwise nullify
-                  if (!changes.newColumnProposal) resetFields.newColumnProposal = undefined;
-              }
-          } else if (changes.mappedColumn && changes.mappedColumn !== current.mappedColumn) {
-              // If only mappedColumn changes, ensure dbColumn is updated too
-              resetFields.dbColumn = changes.mappedColumn;
-          }
-
-          // Changes have been processed
-
-          return {
-              ...prev,
-              [excelCol]: {
-                  ...current,
-                  ...changes, // Apply incoming changes
-                  ...resetFields, // Apply necessary resets based on action change
-                  status: 'userModified', // Mark as modified by user
-                  // If review status isn't explicitly changed, keep it, otherwise update
-                  reviewStatus: changes.reviewStatus || current.reviewStatus || 'pending',
-              }
+        } else {
+          console.warn(`No existing BatchColumnMapping found for header: ${header}. Creating default.`);
+          initialMappings[header] = {
+            header: header,
+            sampleValue: sheetState.sampleData?.[0]?.[header] ?? null,
+            suggestedColumns: [], 
+            inferredDataType: null, 
+            status: 'pending', 
+            reviewStatus: 'pending',
+            action: 'skip', 
+            mappedColumn: null,
+            newColumnProposal: undefined,
+            confidenceScore: 0,
+            confidenceLevel: 'Low',
           };
+        }
       });
-  };
-
-
-  // Update the old updateColumnMapping to use the new flexible one
-  // This handles the dropdown selection specifically
-  const updateColumnMapping = (excelCol: string, selectedValue: string | null) => {
-      if (selectedValue === 'create-new-column') {
-          // Logic for opening the 'create new column' dialog remains the same
-          setCurrentExcelColumn(excelCol);
-          const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
-          setNewColumnName(suggestedName);
-          setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
-          setNewColumnDialogOpen(true);
-          
-          // Also update the mapping state to reflect the 'create' action
-          handleMappingUpdate(excelCol, { action: 'create' });
-      } else if (!selectedValue) {
-          // Handle 'Skip this column' selection
-          handleMappingUpdate(excelCol, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });
-      } else {
-          // Handle selecting an existing DB column
-          handleMappingUpdate(excelCol, { action: 'map', mappedColumn: selectedValue, newColumnProposal: undefined });
+      setMappings(initialMappings);
+      setNewColumnDialogOpen(false);
+      setSearchQuery('');
+      setViewMode((sheetState.headers?.length || 0) > 30 ? 'virtualized' : 'table');
+      if (isCreatingTable) {
+        setEditableTableName(actualTableNameFromSheetState); // Initialize editable name
       }
+    } else if (open && !sheetState) {
+      setMappings({});
+      if (isCreatingTable) {
+        setEditableTableName(''); // Reset if creating but no sheet state
+      }
+    }
+  }, [open, sheetState, tableInfo, isCreatingTable, actualTableNameFromSheetState]); 
+
+  const handleMappingUpdate = (excelCol: string, changes: Partial<BatchColumnMapping>) => {
+    console.log('[DEBUG ColumnMappingModal] handleMappingUpdate:', { excelCol, changes });
+
+    if ((changes.action === 'create' && !changes.newColumnProposal) ||
+        (changes.action === 'create' && (changes as any).openDialog)) {
+      setCurrentExcelColumn(excelCol);
+      const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+      setNewColumnName(suggestedName);
+      setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
+      setNewColumnDialogOpen(true);
+      handleMappingUpdate(excelCol, { action: 'create' });
+    }
+
+    setMappings(prev => {
+      const defaultMapping: BatchColumnMapping = {
+        header: excelCol,
+        sampleValue: sheetState?.sampleData?.[0]?.[excelCol] ?? null,
+        suggestedColumns: [],
+        inferredDataType: 'string', // Default
+        status: 'pending', // Added missing status property
+        reviewStatus: 'pending',
+        action: 'skip',
+        mappedColumn: null,
+        newColumnProposal: undefined,
+        confidenceScore: 0,
+        confidenceLevel: 'Low',
+      };
+
+      const current: BatchColumnMapping = prev[excelCol] || defaultMapping;
+
+      const resetFields: Partial<BatchColumnMapping> = {};
+      if (changes.action && changes.action !== current.action) {
+        if (changes.action === 'skip') {
+          resetFields.mappedColumn = null;
+          resetFields.newColumnProposal = undefined;
+        } else if (changes.action === 'map') {
+          resetFields.newColumnProposal = undefined;
+          if (!changes.mappedColumn) {
+            resetFields.mappedColumn = null;
+          } else {
+            resetFields.mappedColumn = changes.mappedColumn;
+          }
+        } else if (changes.action === 'create') {
+          const columnName = changes.newColumnProposal?.columnName || null;
+          resetFields.mappedColumn = columnName; 
+          resetFields.newColumnProposal = changes.newColumnProposal;
+        }
+      } else if (changes.mappedColumn && changes.mappedColumn !== current.mappedColumn) {
+        resetFields.mappedColumn = changes.mappedColumn;
+      }
+
+      return {
+        ...prev,
+        [excelCol]: {
+          ...current,
+          ...changes, 
+          ...resetFields, 
+          status: 'userModified', 
+          reviewStatus: changes.reviewStatus || current.reviewStatus || 'pending',
+        }
+      };
+    });
   };
 
-  // Update handleCreateNewColumn to use handleMappingUpdate
+  const updateColumnMapping = (excelCol: string, selectedValue: string | null) => {
+    console.log('[DEBUG ColumnMappingModal] updateColumnMapping:', { excelCol, selectedValue });
+
+    if (selectedValue === 'create-new-column') {
+      setCurrentExcelColumn(excelCol);
+      const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+      setNewColumnName(suggestedName);
+      setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
+      setNewColumnDialogOpen(true);
+      handleMappingUpdate(excelCol, { action: 'create' });
+    } else if (!selectedValue) {
+      handleMappingUpdate(excelCol, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });
+    } else {
+      handleMappingUpdate(excelCol, { action: 'map', mappedColumn: selectedValue, newColumnProposal: undefined });
+    }
+  };
+
   const handleCreateNewColumn = () => {
+    console.log('[DEBUG ColumnMappingModal] handleCreateNewColumn:', { newColumnName, newColumnType });
+
     const trimmedName = newColumnName.trim();
     if (!trimmedName) {
       alert('Please enter a valid column name.');
@@ -300,7 +280,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     const formattedColumnName = trimmedName
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, '_')
-      .replace(/_{2,}/g, '_');
+      .replace(/_+/g, '_');
 
     const existingDbCols = memoizedTargetColumns.map(c => c.columnName);
     const otherNewCols = Object.values(mappings)
@@ -314,56 +294,49 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
 
     const proposal: NewColumnProposal = {
         columnName: formattedColumnName,
-        sqlType: mapColumnTypeToSql(newColumnType), // Use helper function
-        isNullable: true, // Default
+        sqlType: mapColumnTypeToSql(newColumnType), 
+        isNullable: true, 
         sourceSheet: sheetState?.sheetName,
         sourceHeader: currentExcelColumn,
-        createStructureOnly: createStructureOnly, // Include the checkbox state
+        createStructureOnly: createStructureOnly, 
     };
 
-    // Update using the flexible handler
     handleMappingUpdate(currentExcelColumn, {
         action: 'create',
-        mappedColumn: formattedColumnName, // Set mappedColumn to the new name for display consistency
+        mappedColumn: formattedColumnName, 
         newColumnProposal: proposal,
-        inferredDataType: newColumnType, // Update inferred type if changed in dialog
-        reviewStatus: 'approved', // Assume creating implies approval for now
+        inferredDataType: newColumnType, 
+        reviewStatus: 'approved', 
     });
 
     setNewColumnDialogOpen(false);
     setNewColumnName('');
     setCurrentExcelColumn('');
-    setCreateStructureOnly(false); // Reset checkbox state on close
+    setCreateStructureOnly(false); 
   };
 
-  // Update handleSave to ensure it sends the full BatchColumnMapping
   const handleSave = () => {
-      // Ensure all mappings have dbColumn set based on mappedColumn
-      const updatedMappings = { ...mappings };
-      
-      // Process each mapping to ensure dbColumn is set
-      Object.entries(updatedMappings).forEach(([header, mapping]) => {
-          if (mapping.action === 'map' && mapping.mappedColumn && !mapping.dbColumn) {
-              // If mappedColumn exists but dbColumn doesn't, copy the value
-              updatedMappings[header] = {
-                  ...mapping,
-                  dbColumn: mapping.mappedColumn
-              };
-              console.log(`[DEBUG ColumnMappingModal] Setting dbColumn for ${header} to ${mapping.mappedColumn}`);
-          } else if (mapping.action === 'create' && mapping.newColumnProposal?.columnName && !mapping.dbColumn) {
-              // For new columns, use the proposal name as dbColumn
-              updatedMappings[header] = {
-                  ...mapping,
-                  dbColumn: mapping.newColumnProposal.columnName
-              };
-          }
-      });
-      
-      // Log the final mappings for debugging
-      
-      // Pass the updated mappings with dbColumn properly set
-      onSave(updatedMappings);
-      onClose();
+    console.log('[DEBUG ColumnMappingModal] handleSave called.');
+    const finalMappings = { ...mappings };
+
+    // Finalize any pending new column creations that weren't explicitly saved through the sub-dialog
+    // This handles cases where user might have selected 'Create New' but didn't complete the sub-dialog
+    // and then hits the main save button.
+    Object.keys(finalMappings).forEach(key => {
+      if (finalMappings[key].action === 'create' && !finalMappings[key].newColumnProposal) {
+        // If 'create' was selected but no proposal exists, revert to 'skip' or clear mappedColumn
+        console.warn(`[DEBUG ColumnMappingModal] Reverting action for ${key} from 'create' to 'skip' due to missing newColumnProposal on final save.`);
+        finalMappings[key] = {
+          ...finalMappings[key],
+          action: 'skip', // Revert to skip
+          mappedColumn: null, // Ensure no dbColumn is set
+          reviewStatus: finalMappings[key].reviewStatus === 'approved' ? 'modified' : finalMappings[key].reviewStatus // Mark as modified if was approved
+        };
+      }
+    });
+
+    onSave(finalMappings, isCreatingTable ? editableTableName : undefined);
+    onClose();
   };
 
   const getColumnSample = (columnName: string) => {
@@ -377,11 +350,11 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     return result.length > 60 ? result.substring(0, 57) + '...' : result;
   };
 
-  // Remove the convertMappingsForDisplay helper function as it's no longer needed
-  // const convertMappingsForDisplay = (...) => { ... }; // REMOVE THIS
-
-
   if (!sheetState) {
+    console.log('[DEBUG ColumnMappingModal] Displaying loading indicator. Conditions:', {
+      open,
+      sheetState
+    });
     return (
       <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
         <DialogTitle>Loading Mapping Information...</DialogTitle>
@@ -412,57 +385,44 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     >
       <SuppressMuiWarnings />
       <DialogTitle>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h6">
-            Map Excel Columns to Database Fields
-          </Typography>
-          <Box>
-            <Chip
-              label={`${mappedOrCreatedColumns}/${totalColumns} columns mapped (${mappingPercentage}%)`}
-              color={mappingPercentage > 80 ? "success" : mappingPercentage > 50 ? "info" : "warning"}
-            />
-          </Box>
-        </Box>
+        Map Columns for Sheet: <strong>{sheetState?.sheetName || 'N/A'}</strong>
+        {isCreatingTable 
+          ? ` (New Table)` 
+          : ` (Existing Table: ${actualTableNameFromSheetState})`}
       </DialogTitle>
-
-      <Divider />
-
-      <DialogContent sx={{ bgcolor: 'background.paper' }}>
-        <Box mb={2}>
-          <Typography variant="subtitle1" gutterBottom>
-            Mapping Sheet: <strong>{sheetState.sheetName}</strong> to Table: <strong>{isCreatingTable ? `New Table (${actualTableName})` : actualTableName}</strong>
-          </Typography>
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Alert severity="info" sx={{ flexGrow: 1, mr: 2 }}>
-              Map Excel columns to database fields below. Unmapped columns will be skipped. Use 'Create New Field' to add missing fields to the database table.
-            </Alert>
-
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-               <TextField
-                 label="Search Columns"
-                 variant="outlined"
-                 size="small"
-                 value={searchQuery}
-                 onChange={(e) => setSearchQuery(e.target.value)}
-                 InputProps={{
-                   startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'action.active' }} />,
-                 }}
-                 sx={{ width: '200px' }}
-               />
-            </Box>
-          </Box>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {isCreatingTable && (
+          <TextField
+            label="New Table Name"
+            value={editableTableName}
+            onChange={(e) => setEditableTableName(e.target.value)}
+            variant="outlined"
+            size="small"
+            sx={{ mt: 1, mb: 1, maxWidth: '400px' }} // Added margin and limited width
+          />
+        )}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <TextField
+            label="Search Columns"
+            variant="outlined"
+            size="small"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'action.active' }} />,
+            }}
+            sx={{ width: '200px' }}
+          />
         </Box>
-
         {/* Table view for column mapping */}
         <ColumnMappingTableView
           excelHeaders={memoizedExcelHeaders}
-          mappings={mappings} // Pass the full state
+          mappings={mappings} 
           targetColumns={memoizedTargetColumns}
           sheetState={sheetState}
           isCreatingTable={isCreatingTable}
           getColumnSample={getColumnSample}
-          onMappingUpdate={handleMappingUpdate} // Pass the flexible update function
+          onMappingUpdate={handleMappingUpdate} 
         />
       </DialogContent>
 
@@ -493,7 +453,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         <DialogTitle>Create New Database Field</DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
-            Creating a new field in table '{actualTableName}' for Excel column: <strong>{currentExcelColumn}</strong>
+            Creating a new field in table '{actualTableNameFromSheetState}' for Excel column: <strong>{currentExcelColumn}</strong>
           </Typography>
           <TextField
             autoFocus
@@ -513,7 +473,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               aria-label="data type"
               name="newColumnType"
               value={newColumnType}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewColumnType(e.target.value as ColumnType)} // Add event type
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewColumnType(e.target.value as ColumnType)} 
             >
               <FormControlLabel value="string" control={<Radio />} label="Text" />
               <FormControlLabel value="number" control={<Radio />} label="Number" />
@@ -535,12 +495,12 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
             sx={{ mt: 1 }}
           />
           {/* Removed duplicate block */}
-        </DialogContent> {/* Correct closing tag for inner DialogContent */}
+        </DialogContent> 
         <DialogActions>
           <Button onClick={() => { setNewColumnDialogOpen(false); setCreateStructureOnly(false); }}>Cancel</Button>
           <Button onClick={handleCreateNewColumn} variant="contained">Create Field</Button>
         </DialogActions>
-      </Dialog> {/* Correct closing tag for inner Dialog */}
+      </Dialog> 
     </Dialog>
   );
 };

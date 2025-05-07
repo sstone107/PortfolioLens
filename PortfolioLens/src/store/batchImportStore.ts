@@ -7,57 +7,72 @@ import {
   RankedColumnSuggestion,
   SchemaProposal,
   NewColumnProposal,
+  NewTableProposal,
   SheetReviewStatus,
   ReviewStatus,
-  GlobalStatus, // <-- Import GlobalStatus type
-  SheetCommitStatus, // <-- Import SheetCommitStatus type
-} from '../components/import/types'; // Adjust path as needed
-import { AnalysisEngine } from '../components/import/services/AnalysisEngine'; // Added import
+  GlobalStatus,
+  SheetCommitStatus,
+  ColumnType
+} from '../components/import/types';
+
+// Helper function to map abstract ColumnType to a basic SQL type
+const mapColumnTypeToSqlType = (columnType: ColumnType | null): string => {
+  if (!columnType) return 'TEXT'; // Default SQL type
+  switch (columnType) {
+    case 'string': return 'TEXT';
+    case 'number': return 'NUMERIC'; // Or INTEGER, REAL, etc. depending on expected precision
+    case 'boolean': return 'BOOLEAN';
+    case 'date': return 'TIMESTAMP'; // Or DATE, DATETIME
+    default: return 'TEXT';
+  }
+};
 
 // Define the interface for the store's actions
 interface BatchImportActions {
   setFile: (file: File | null) => void;
   setSheetData: (sheetName: string, headers: string[], sampleData: Record<string, any>[], rowCount: number) => void;
-  startProcessingSheets: () => void; // Consider renaming or clarifying if this triggers analysis worker
+  startProcessingSheets: () => void; 
   updateSheetSuggestions: (
     sheetName: string,
     tableSuggestions: RankedTableSuggestion[],
     columnMappings: { [header: string]: BatchColumnMapping },
     tableConfidenceScore?: number,
-    sheetSchemaProposals?: SchemaProposal[] // Added schema proposals from analysis
+    sheetSchemaProposals?: SchemaProposal[] 
   ) => void;
-  updateSheetMapping: ( // Updates a single column mapping within a sheet
+  updateSheetMapping: ( 
     sheetName: string,
     header: string,
     mappingUpdate: Partial<BatchColumnMapping>
   ) => void;
-  batchUpdateSheetMappings: ( // Updates multiple column mappings within a sheet (e.g., set all to skip)
+  batchUpdateSheetMappings: ( 
     sheetName: string,
     headers: string[],
     action: 'map' | 'skip' | 'create'
   ) => void;
-  setSelectedTable: (sheetName: string, tableName: string | null, isNew?: boolean) => void; // Added isNew flag
-  setGlobalStatus: (status: GlobalStatus) => void; // <-- Use imported GlobalStatus type
+  setSelectedTable: (sheetName: string, tableName: string | null, isNew?: boolean) => void; 
+  setGlobalStatus: (status: GlobalStatus) => void; 
   setSchemaCacheStatus: (status: BatchImportState['schemaCacheStatus']) => void;
-  // updateSchemaProposals: (sheetName: string, proposals: SchemaProposal[]) => void; // Combined into updateSheetSuggestions
-  updateOverallSchemaProposals: () => void; // Recalculates based on current sheet states
+  // updateSchemaProposals: (sheetName: string, proposals: SchemaProposal[]) => void; 
+  updateOverallSchemaProposals: () => void; 
   startCommit: () => void;
   updateCommitProgress: (processedSheets: number, totalSheets: number, currentSheet: string | null) => void;
   setCommitComplete: () => void;
-  setSheetCommitStatus: (sheetName: string, status: SheetCommitStatus, error?: string) => void; // <-- Use imported SheetCommitStatus type
+  setSheetCommitStatus: (sheetName: string, status: SheetCommitStatus, error?: string) => void; 
   setError: (errorMessage: string | null) => void;
   resetState: () => void;
 
   // --- Review and Approval Actions ---
-  approveSheetMapping: (sheetName: string) => void; // Approve sheet-level mapping
-  rejectSheetMapping: (sheetName: string) => void; // Reject sheet-level mapping
-  approveColumnMapping: (sheetName: string, header: string) => void; // Approve column-level mapping
-  rejectColumnMapping: (sheetName: string, header: string) => void; // Reject column-level mapping
-  approveAllHighConfidenceSheets: () => void; // Batch approve high-confidence sheets
-  approveAllColumnsInSheet: (sheetName: string) => void; // Batch approve all columns in a sheet
-  rejectAllColumnsInSheet: (sheetName: string) => void; // Batch reject all columns in a sheet
-  setSheetReviewStatus: (sheetName: string, status: SheetProcessingState['sheetReviewStatus']) => void; // Explicitly set sheet review status
-  setColumnReviewStatus: (sheetName: string, header: string, status: BatchColumnMapping['reviewStatus']) => void; // Explicitly set column review status
+  approveSheetMapping: (sheetName: string) => void; 
+  rejectSheetMapping: (sheetName: string) => void; 
+  approveColumnMapping: (sheetName: string, header: string) => void; 
+  rejectColumnMapping: (sheetName: string, header: string) => void; 
+  approveAllHighConfidenceSheets: () => void; 
+  approveAllColumnsInSheet: (sheetName: string) => void; 
+  rejectAllColumnsInSheet: (sheetName: string) => void; 
+  setSheetReviewStatus: (sheetName: string, status: SheetProcessingState['sheetReviewStatus']) => void; 
+  setColumnReviewStatus: (sheetName: string, header: string, status: BatchColumnMapping['reviewStatus']) => void; 
+  updateSheetProcessingState: (sheetName: string, updates: Partial<SheetProcessingState>) => void;
+  updateNewTableNameForSheet: (sheetName: string, newRawTableName: string) => void; 
 }
 
 // Define the initial state
@@ -65,7 +80,7 @@ const initialState: BatchImportState = {
   fileInfo: null,
   file: null,
   sheets: {},
-  overallSchemaProposals: [], // Aggregated proposals ready for commit
+  overallSchemaProposals: [], 
   globalStatus: 'idle',
   commitProgress: null,
   error: null,
@@ -78,8 +93,8 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
 
   setFile: (file) => set({
     fileInfo: file ? { name: file.name, size: file.size, type: file.type } : null,
-    file: file, // <-- STORE the actual file object
-    sheets: {}, // Reset sheets when a new file is set
+    file: file, 
+    sheets: {}, 
     globalStatus: file ? 'readingFile' : 'idle',
     commitProgress: null,
     error: null,
@@ -95,15 +110,15 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
         rowCount,
         selectedTable: null,
         tableSuggestions: [],
-        columnMappings: {}, // Initialize empty, worker will populate
-        status: 'pending', // Ready for worker processing
-        sheetReviewStatus: 'pending', // Initialize sheet review status
+        columnMappings: {}, 
+        status: 'pending', 
+        sheetReviewStatus: 'pending', 
         error: undefined,
       },
     },
   })),
 
-  startProcessingSheets: () => set({ globalStatus: 'analyzing' }), // Corrected status
+  startProcessingSheets: () => set({ globalStatus: 'analyzing' }), 
 
   updateSheetSuggestions: (sheetName, tableSuggestions, columnMappings, tableConfidenceScore, sheetSchemaProposals) => set((state) => {
       const sheet = state.sheets[sheetName];
@@ -127,7 +142,7 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
       // If no high-confidence existing table, consider the new table proposal if it exists
       else if (newTableSuggestion) {
           autoSelectedTable = newTableSuggestion.tableName;
-          autoSelectedScore = undefined; // Score not applicable for new
+          autoSelectedScore = undefined; 
           isNewTableSelected = true;
       }
       // Otherwise, select the best existing suggestion, even if low confidence
@@ -140,7 +155,6 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
       const reviewedColumnMappings = Object.entries(columnMappings).reduce((acc, [header, mapping]) => {
           acc[header] = {
               ...mapping,
-              // Preserve the reviewStatus provided by the worker
               reviewStatus: mapping.reviewStatus,
           };
           return acc;
@@ -149,14 +163,12 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
       const updatedSheet: SheetProcessingState = {
           ...sheet,
           tableSuggestions,
-          columnMappings: reviewedColumnMappings, // Use mappings with initialized review status
-          tableConfidenceScore: autoSelectedScore, // Store score of the auto-selected table
-          selectedTable: sheet.selectedTable ?? autoSelectedTable, // Keep user selection if already made, else auto-select
-          isNewTable: sheet.selectedTable ? sheet.isNewTable : isNewTableSelected, // Reflect if the selected table is new
-          sheetSchemaProposals: sheetSchemaProposals, // Store proposals from analysis
-          // Determine sheet review status based on the updated column statuses
+          columnMappings: reviewedColumnMappings, 
+          tableConfidenceScore: autoSelectedScore, 
+          selectedTable: sheet.selectedTable ?? autoSelectedTable, 
+          isNewTable: sheet.selectedTable ? sheet.isNewTable : isNewTableSelected, 
+          sheetSchemaProposals: sheetSchemaProposals, 
           sheetReviewStatus: determineSheetReviewStatus(reviewedColumnMappings),
-          // Set status to 'ready' if sheet is auto-approved, otherwise 'needsReview'
           status: determineSheetReviewStatus(reviewedColumnMappings) === 'approved' ? 'ready' : 'needsReview',
       };
       
@@ -170,6 +182,25 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           sheets: updatedSheets,
           globalStatus: allSheetsAnalyzed ? 'review' : state.globalStatus,
       };
+  }),
+
+  updateSheetProcessingState: (sheetName, updates) => set((state) => {
+    const sheet = state.sheets[sheetName];
+    if (!sheet) return {};
+
+    const updatedSheet = { ...sheet, ...updates };
+
+    // If columnMappings were part of the update, re-determine sheetReviewStatus
+    if (updates.columnMappings) {
+      updatedSheet.sheetReviewStatus = determineSheetReviewStatus(updatedSheet.columnMappings);
+    }
+
+    return {
+      sheets: {
+        ...state.sheets,
+        [sheetName]: updatedSheet,
+      },
+    };
   }),
 
   updateSheetMapping: (sheetName, header, mappingUpdate) => set((state) => {
@@ -186,16 +217,10 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
             [header]: {
               ...sheet.columnMappings[header],
               ...mappingUpdate,
-              // status: 'userModified', // Keep original status ('suggested' or 'error') unless review changes
-              // Preserve existing reviewStatus if mappingUpdate.reviewStatus is not provided
-              // Prioritize mappingUpdate.reviewStatus if provided, otherwise preserve existing reviewStatus
               reviewStatus: mappingUpdate.reviewStatus !== undefined ? mappingUpdate.reviewStatus : sheet.columnMappings[header]?.reviewStatus ?? 'modified',
             },
           },
-          // Determine sheet review status based on column statuses
-          sheetReviewStatus: determineSheetReviewStatus({ ...sheet.columnMappings, [header]: { ...sheet.columnMappings[header], ...mappingUpdate, reviewStatus: mappingUpdate.reviewStatus ?? 'modified' } as BatchColumnMapping }), // Added type assertion
-          // Sheet processing status ('needsReview', 'ready') might depend on review status now
-          // status: determineSheetProcessingStatus(...) // TODO: Define this logic if needed
+          sheetReviewStatus: determineSheetReviewStatus({ ...sheet.columnMappings, [header]: { ...sheet.columnMappings[header], ...mappingUpdate, reviewStatus: mappingUpdate.reviewStatus ?? 'modified' } as BatchColumnMapping }), 
         },
       },
     };
@@ -218,10 +243,9 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
               suggestedColumns: [],
               confidenceScore: undefined,
               confidenceLevel: undefined,
-              action: 'skip', // Default to skip until re-analyzed
+              action: 'skip', 
               newColumnProposal: undefined,
-              status: 'pending', // Needs re-analysis
-              // Preserve existing reviewStatus if not pending, otherwise reset to pending
+              status: 'pending', 
               reviewStatus: sheet.columnMappings[header]?.reviewStatus !== 'pending' ? sheet.columnMappings[header]?.reviewStatus : 'pending',
           };
           return acc;
@@ -233,16 +257,15 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
               [sheetName]: {
                   ...sheet,
                   selectedTable: tableName,
-                  isNewTable: isNew, // Set if the selected table is a new proposal
-                  tableConfidenceScore: newConfidenceScore, // Update confidence score
-                  // Reset column mappings and statuses for re-analysis
+                  isNewTable: isNew, 
+                  tableConfidenceScore: newConfidenceScore, 
                   columnMappings: resetColumnMappings,
-                  sheetSchemaProposals: [], // Clear old proposals
-                  status: 'analyzing', // Trigger re-analysis by worker
-                  sheetReviewStatus: 'pending', // Reset sheet review status
+                  sheetSchemaProposals: [], 
+                  status: 'analyzing', 
+                  sheetReviewStatus: 'pending', 
               },
           },
-          globalStatus: 'analyzing', // Go back to analyzing state
+          globalStatus: 'analyzing', 
       };
       // NOTE: The worker needs to listen for this state change and re-run analysis
       // for the specific sheet based on the newly selected table.
@@ -281,101 +304,76 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
     };
   }),
 
-  // updateSchemaProposals: (sheetName: string, proposals: SchemaProposal[]) => set((state) => { // Added types to signature
-  //   const sheet = state.sheets[sheetName];
-  //   if (!sheet) return {};
-
-  //   return {
-  //     sheets: {
-  //       ...state.sheets,
-  //       [sheetName]: {
-  //         ...sheet,
-  //         sheetSchemaProposals: proposals,
-  //       },
-  //     },
-  //   };
-  // }),
-
-  updateOverallSchemaProposals: () => set((state) => {
-      // Aggregate unique schema proposals from all sheets that are NOT rejected
-      const aggregatedProposals: SchemaProposal[] = [];
-      const proposalKeys = new Set<string>(); // To track uniqueness (e.g., "table:col" or "new_table")
-
-      Object.values(state.sheets).forEach(sheet => {
-          // Only include proposals from sheets that haven't been fully rejected
-          if (sheet.sheetReviewStatus !== 'rejected' && sheet.sheetSchemaProposals) {
-              sheet.sheetSchemaProposals.forEach(proposal => {
-                  let key: string;
-                  // Type guard to correctly access properties
-                  if ('sourceHeader' in proposal && proposal.sourceHeader !== undefined) { // NewColumnProposal
-                      // Key based on target table and column name
-                      key = `${sheet.selectedTable}:${proposal.columnName}`;
-                  } else if ('tableName' in proposal) { // NewTableProposal
-                      key = `new_table:${proposal.tableName}`;
-                  } else {
-                      // Should not happen with current types, but good for safety
-                      return; // Skip unknown proposal types
-                  }
-
-                  if (!proposalKeys.has(key)) {
-                      // Check column review status if it's a column proposal
-                      if ('sourceHeader' in proposal) {
-                          const colMapping = sheet.columnMappings[proposal.sourceHeader!];
-                          // Only add if the column mapping itself isn't rejected
-                          if (colMapping && colMapping.reviewStatus !== 'rejected') {
-                              aggregatedProposals.push(proposal);
-                              proposalKeys.add(key);
-                          }
-                      } else {
-                          // Add new table proposals directly if sheet isn't rejected
-                          aggregatedProposals.push(proposal);
-                          proposalKeys.add(key);
-                      }
-                  }
-              });
-          }
-      });
-
-      return { overallSchemaProposals: aggregatedProposals };
-  }),
-
-  setGlobalStatus: (status) => set({ globalStatus: status }),
-
-  setSchemaCacheStatus: (status) => set({ schemaCacheStatus: status }),
-
-  startCommit: () => set((state) => ({
-      globalStatus: 'committing',
-      commitProgress: { processedSheets: 0, totalSheets: Object.keys(state.sheets).length, currentSheet: null },
-      error: null, // Clear previous errors
-  })),
-
-  updateCommitProgress: (processedSheets, totalSheets, currentSheet) => set({
-    commitProgress: { processedSheets, totalSheets, currentSheet },
-  }),
-
-  setCommitComplete: () => set({ globalStatus: 'complete', commitProgress: null }),
-
-  setSheetCommitStatus: (sheetName, status, error) => set((state) => {
-      const sheet = state.sheets[sheetName];
-      if (!sheet) return {};
-      return {
-          sheets: {
-              ...state.sheets,
-              [sheetName]: {
-                  ...sheet,
-                  status: status,
-                  error: error,
-              }
-          }
+  updateNewTableNameForSheet: (sheetName, newRawTableName) => set((state) => {
+      if (!state || !state.sheets) {
+        console.error("[DEBUG Store] updateNewTableNameForSheet: State or state.sheets is undefined.");
+        return {}; // Critical error, return empty partial state
       }
+      const sheet = state.sheets[sheetName];
+      if (!sheet) { 
+        console.warn(`[DEBUG Store] updateNewTableNameForSheet: Sheet ${sheetName} not found.`);
+        return {}; // Sheet not found, return empty partial state
+      } 
+      if (!sheet.isNewTable) {
+        console.warn(`[DEBUG Store] updateNewTableNameForSheet: Sheet ${sheetName} is not marked as a new table.`);
+        return {}; // Not a new table, return empty partial state
+      }
+
+      const sanitizedNewName = newRawTableName.trim().replace(/\s+/g, '_'); 
+      let updatedSheetSchemaProposals = sheet.sheetSchemaProposals ? [...sheet.sheetSchemaProposals] : [];
+      const proposalIndex = updatedSheetSchemaProposals.findIndex(proposal => 'tableName' in proposal && proposal.tableName === sheet.selectedTable?.substring(4) && proposal.sourceSheet === sheetName);
+
+      if (proposalIndex !== -1) {
+        const oldProposal = updatedSheetSchemaProposals[proposalIndex] as NewTableProposal;
+        updatedSheetSchemaProposals[proposalIndex] = { ...oldProposal, tableName: sanitizedNewName };
+      } else {
+        // If no existing proposal, create one (this might need adjustment based on exact logic)
+        // This case might indicate that selectedTable was `new:...` but no proposal was initially made, or name changed so much it didn't match.
+        // For now, let's assume if isNewTable is true, we should ensure a proposal reflects the new name.
+        console.warn(`[DEBUG Store] updateNewTableNameForSheet: No matching NewTableProposal found for sheet ${sheetName} with old name ${sheet.selectedTable}. Creating/Updating.`);
+        // Attempt to find *any* NewTableProposal for this sheet or add a new one.
+        // This logic might need to be more robust based on application flow.
+        let foundAndUpdated = false;
+        updatedSheetSchemaProposals = updatedSheetSchemaProposals.map(p => {
+            if ('tableName' in p && p.sourceSheet === sheetName) {
+                foundAndUpdated = true;
+                return { ...(p as NewTableProposal), tableName: sanitizedNewName };
+            }
+            return p;
+        });
+        if (!foundAndUpdated) {
+            updatedSheetSchemaProposals.push({
+                sourceSheet: sheetName,
+                tableName: sanitizedNewName,
+                columns: sheet.columnMappings ? Object.entries(sheet.columnMappings).map(([excelCol, cm]) => ({
+                    columnName: cm.dbColumn || excelCol, 
+                    sqlType: mapColumnTypeToSqlType(cm.inferredDataType), 
+                    isNullable: true, 
+                    sourceHeader: excelCol, 
+                })) : [],
+            });
+        }
+      }
+
+      const updatedSheetState = {
+        ...sheet,
+        selectedTable: `new:${sanitizedNewName}`,
+        sheetSchemaProposals: updatedSheetSchemaProposals,
+      };
+
+      return {
+        sheets: {
+          ...state.sheets,
+          [sheetName]: updatedSheetState,
+        },
+      };
   }),
 
-  setError: (errorMessage) => set({ error: errorMessage, globalStatus: 'error' }),
-
-  resetState: () => set(initialState),
+  resetState: () => set((state) => {
+    return initialState;
+  }),
 
   // --- Review and Approval Action Implementations ---
-
   approveSheetMapping: (sheetName) => set((state) => {
       const sheet = state.sheets[sheetName];
       if (!sheet) return {};
@@ -396,7 +394,7 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                   ...sheet,
                   columnMappings: approvedColumnMappings,
                   sheetReviewStatus: 'approved',
-                  status: 'ready', // Mark sheet as ready for commit
+                  status: 'ready', 
               },
           },
       };
@@ -420,7 +418,7 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                   ...sheet,
                   columnMappings: rejectedColumnMappings,
                   sheetReviewStatus: 'rejected',
-                  status: 'ready', // Still 'ready' in terms of processing, but won't be committed
+                  status: 'ready', 
               },
           },
       };
@@ -432,7 +430,7 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
 
       const updatedMappings = {
           ...sheet.columnMappings,
-          [header]: { ...sheet.columnMappings[header], reviewStatus: 'approved' as ReviewStatus }, // Ensure correct type
+          [header]: { ...sheet.columnMappings[header], reviewStatus: 'approved' as ReviewStatus }, 
       };
 
       const newSheetState: SheetProcessingState = {
@@ -455,8 +453,8 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
 
        const updatedMappings = {
           ...sheet.columnMappings,
-          [header]: { ...sheet.columnMappings[header], reviewStatus: 'rejected' as ReviewStatus }, // Ensure correct type
-      };
+          [header]: { ...sheet.columnMappings[header], reviewStatus: 'rejected' as ReviewStatus }, 
+       };
 
        const newSheetState: SheetProcessingState = {
           ...sheet,
@@ -493,7 +491,7 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                   ...sheet,
                   columnMappings: approvedColumnMappings,
                   sheetReviewStatus: 'approved',
-                  status: 'ready', // Mark sheet as ready for commit
+                  status: 'ready', 
               };
           }
       });
@@ -517,7 +515,7 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                   ...sheet,
                   columnMappings: approvedColumnMappings,
                   sheetReviewStatus: 'approved',
-                  status: 'ready', // Mark sheet as ready for commit
+                  status: 'ready', 
               },
           },
       };
@@ -539,7 +537,7 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                   ...sheet,
                   columnMappings: rejectedColumnMappings,
                   sheetReviewStatus: 'rejected',
-                  status: 'ready', // Still 'ready' in terms of processing, but won't be committed
+                  status: 'ready', 
               },
           },
       };
@@ -580,10 +578,88 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           },
       };
   }),
+
+  updateOverallSchemaProposals: () => set((state) => {
+    const aggregatedProposals: SchemaProposal[] = [];
+    const proposalKeys = new Set<string>();
+    Object.values(state.sheets).forEach(sheet => {
+      if (sheet.sheetReviewStatus !== 'rejected' && sheet.sheetSchemaProposals) {
+        sheet.sheetSchemaProposals.forEach(proposal => {
+          let key: string;
+          if ('sourceHeader' in proposal && proposal.sourceHeader !== undefined) { 
+            key = `${sheet.selectedTable}:${proposal.columnName}`;
+          } else if ('tableName' in proposal) { 
+            key = `new_table:${proposal.tableName}`;
+          } else {
+            return;
+          }
+          if (!proposalKeys.has(key)) {
+            if ('sourceHeader' in proposal) {
+              const colMapping = sheet.columnMappings[proposal.sourceHeader!];
+              if (colMapping && colMapping.reviewStatus !== 'rejected') {
+                aggregatedProposals.push(proposal);
+                proposalKeys.add(key);
+              }
+            } else {
+              aggregatedProposals.push(proposal);
+              proposalKeys.add(key);
+            }
+          }
+        });
+      }
+    });
+    return { overallSchemaProposals: aggregatedProposals };
+  }),
+
+  setGlobalStatus: (status) => set({ globalStatus: status }),
+
+  setSchemaCacheStatus: (status) => set({ schemaCacheStatus: status }),
+
+  startCommit: () => set((state) => ({
+      globalStatus: 'committing',
+      commitProgress: { processedSheets: 0, totalSheets: Object.keys(state.sheets).length, currentSheet: null },
+      error: null,
+  })),
+
+  updateCommitProgress: (processedSheets, totalSheets, currentSheet) => set({
+    commitProgress: { processedSheets, totalSheets, currentSheet },
+  }),
+
+  setCommitComplete: () => set({ globalStatus: 'complete', commitProgress: null }),
+
+  setSheetCommitStatus: (sheetName, status, error) => set((state) => { 
+      if (!state) {
+        console.error("[DEBUG Store] setSheetCommitStatus: 'state' is undefined. This should not happen.");
+        return {}; // Return empty partial state on critical error
+      }
+      if (!state.sheets) {
+        console.error(`[DEBUG Store] setSheetCommitStatus: 'state.sheets' is undefined. SheetName: ${sheetName}`);
+        return {}; // Return empty partial state
+      }
+
+      const sheetToUpdate = state.sheets[sheetName]; 
+      if (!sheetToUpdate) {
+        console.warn(`[DEBUG Store] setSheetCommitStatus: Sheet ${sheetName} not found in state.sheets.`);
+        return {}; // Return empty partial state if sheet not found
+      } 
+      
+      // Create a new sheets object with the updated sheet
+      const newSheets = {
+        ...state.sheets,
+        [sheetName]: {
+          ...sheetToUpdate,
+          status: status,
+          error: error,
+        },
+      };
+      return { sheets: newSheets }; // Return the updated part of the state
+  }),
+
+  setError: (errorMessage) => set({ error: errorMessage, globalStatus: 'error' }),
 }));
 
 // Helper function to determine sheet review status based on column review statuses
-const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchColumnMapping }): SheetReviewStatus => { // Ensure correct return type
+const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchColumnMapping }): SheetReviewStatus => { 
     const columnStatuses = Object.values(columnMappings).map(m => m.reviewStatus);
     
     // If any column is rejected, the sheet is partially approved
@@ -596,25 +672,16 @@ const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchCol
         return 'approved';
     }
     
-    // If any column is modified, the sheet is pending
-    if (columnStatuses.includes('modified')) {
+    // If some are approved and none are rejected or pending, it's still partially approved (e.g. some skipped)
+    if (columnStatuses.some(s => s === 'approved') && !columnStatuses.some(s => s === 'pending' || s === 'rejected')) {
+        return 'partiallyApproved';
+    }
+    
+    // If any column is pending review, the sheet is pending review
+    if (columnStatuses.some(s => s === 'pending')) {
         return 'pending';
     }
     
-    // Count high confidence columns
-    const totalColumns = Object.values(columnMappings).length;
-    const highConfidenceCount = Object.values(columnMappings).filter(m =>
-        m.confidenceLevel === 'High' && m.action === 'map'
-    ).length;
-    
-    // Calculate percentage of high confidence columns
-    const highConfidencePercentage = totalColumns > 0 ? (highConfidenceCount / totalColumns) * 100 : 0;
-    
-    // Auto-approve if at least 95% of columns have high confidence
-    if (highConfidencePercentage >= 95) {
-        return 'approved';
-    }
-    
-    // Default to pending
-    return 'pending';
+    // Default to pending if no other conditions met (e.g. all skipped, no actual mappings)
+    return 'pending'; 
 };

@@ -25,8 +25,9 @@ import {
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchIcon from '@mui/icons-material/Search';
-import { SheetInfo, TableColumnInfo, ColumnMapping, TableInfo } from './types';
+import { SheetInfo, TableColumn, ColumnMapping, TableInfo, ColumnType } from './types';
 import { generateColumnMappings } from './mappingLogic';
+import { CreateFieldModal } from './CreateFieldModal';
 
 interface ColumnMapperModalProps {
   open: boolean;
@@ -54,6 +55,8 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
   // State for current mappings
   const [mapping, setMapping] = useState<Record<string, ColumnMapping>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCreateFieldModalOpen, setIsCreateFieldModalOpen] = useState(false);
+  const [creatingFieldForExcelCol, setCreatingFieldForExcelCol] = useState<string | null>(null);
 
   // Initialize mappings when the modal opens or relevant props change
   useEffect(() => {
@@ -63,7 +66,7 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
     } else if (open && sheetInfo && tableInfo) {
       // If no initial mappings, generate based on passed sheetInfo and tableInfo
       // Assuming generateColumnMappings exists and works with these types
-      console.log("Generating initial mappings for:", sheetInfo.name, tableInfo.name);
+      console.log("Generating initial mappings for:", sheetInfo.name, tableInfo.tableName);
       const generated = generateColumnMappings(sheetInfo, tableInfo, true);
       setMapping(generated);
     } else {
@@ -89,15 +92,21 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
 
     setMapping(prev => ({
       ...prev,
-      [excelCol]: { dbColumn: dbCol, type: type }
+      [excelCol]: { excelColumn: excelCol, dbColumn: dbCol, type: type }
     }));
   };
 
   const handleUnmap = (excelCol: string) => {
     setMapping(prev => {
-      const newMapping = { ...prev };
-      delete newMapping[excelCol];
-      return newMapping;
+      const existingMapping = prev[excelCol];
+      return {
+        ...prev,
+        [excelCol]: {
+          excelColumn: excelCol, // Ensure excelColumn is part of the object
+          dbColumn: null, // Explicitly set to null for unmapped/skipped
+          type: existingMapping?.type || 'string' // Preserve existing type or default to string
+        }
+      };
     });
   };
 
@@ -127,6 +136,22 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
     onClose(); // Close modal on save
   };
 
+  const handleSaveNewField = (newField: { name: string; type: ColumnType }) => {
+    if (creatingFieldForExcelCol) {
+      setMapping(prev => ({
+        ...prev,
+        [creatingFieldForExcelCol]: {
+          excelColumn: creatingFieldForExcelCol,
+          dbColumn: newField.name,
+          type: newField.type,
+          isNew: true, // Mark as a new field proposal
+        },
+      }));
+    }
+    setCreatingFieldForExcelCol(null);
+    setIsCreateFieldModalOpen(false);
+  };
+
   // Show loading indicator if essential data isn't ready
   // BatchImporter should ideally prevent opening the modal until these are loaded
   if (open && (!sheetInfo || !tableInfo)) {
@@ -146,7 +171,7 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>
-        Map Columns for '{sheetInfo?.name}' to '{tableInfo?.name}' Table
+        Map Columns for '{sheetInfo?.name}' to '{tableInfo?.tableName}' Table
       </DialogTitle>
       <DialogContent dividers>
          <TextField
@@ -179,28 +204,25 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
             <TableBody>
               {/* Ensure memoizedTargetColumns are available before mapping */}
               {memoizedTargetColumns.length > 0 && sheetInfo ? (
-                 memoizedExcelHeaders.map(excelCol => {
-                  const currentMapping = mapping[excelCol];
-                  const isMapped = !!currentMapping?.dbColumn;
-                  const targetColInfo = isMapped ? memoizedTargetColumns.find(col => col.columnName === currentMapping.dbColumn) : null;
-
-                  // Get sample values using exampleData and excelCol
-                  const sampleValues = (exampleData[sheetInfo?.name || ''] || [])
-                    .map(row => row[excelCol])
-                    .filter(val => val !== undefined && val !== null && val !== '')
-                    .slice(0, 3); // Show top 3 non-empty values
+                 memoizedExcelHeaders.map((excelCol) => {
+                  const currentMap = mapping[excelCol] || { excelColumn: excelCol, dbColumn: null, type: 'string' };
+                  const sampleValue = sheetInfo?.previewRows?.[0]?.[excelCol] || '';
+                  const dbColDetails = currentMap.dbColumn ? memoizedTargetColumns.find(c => c.columnName === currentMap.dbColumn) : null;
+                  const confidencePercentage = currentMap.confidenceScore && currentMap.confidenceScore > 0
+                    ? `(${(currentMap.confidenceScore * 100).toFixed(0)}% match)`
+                    : '';
 
                   return (
                     <TableRow key={excelCol} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                       <TableCell component="th" scope="row">
-                        <Typography variant="body2" noWrap> {excelCol} </Typography>
+                        {excelCol} {confidencePercentage && <Typography variant="caption" color="textSecondary" sx={{ ml: 0.5 }}>{confidencePercentage}</Typography>}
                       </TableCell>
                       <TableCell>
-                        <Tooltip title={sampleValues.join('\n')} placement="top-start">
+                        <Tooltip title={String(sampleValue)} placement="top-start">
                              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', maxWidth: 200 }}>
-                                {sampleValues.length > 0 ? sampleValues.map((val, i) => (
-                                    <Chip key={i} label={String(val).substring(0, 20)} size="small" variant="outlined" />
-                                )) : <Chip label="-" size="small" variant="outlined" />}
+                                {sampleValue && (
+                                    <Chip label={String(sampleValue).substring(0, 20)} size="small" variant="outlined" />
+                                ) || <Chip label="-" size="small" variant="outlined" />}
                             </Box>
                         </Tooltip>
                       </TableCell>
@@ -208,10 +230,14 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
                         <FormControl fullWidth size="small" variant="outlined">
                           <Select
                             displayEmpty
-                            value={ isMapped ? currentMapping.dbColumn : '' }
+                            value={ currentMap.dbColumn || '' }
                             onChange={(e) => {
                               const dbCol = e.target.value;
-                              if (dbCol) {
+                              if (dbCol === "CREATE_NEW_FIELD") {
+                                setCreatingFieldForExcelCol(excelCol);
+                                setIsCreateFieldModalOpen(true);
+                                // Actual modal opening logic will be here
+                              } else if (dbCol) {
                                 handleMappingChange(excelCol, dbCol);
                               } else {
                                 handleUnmap(excelCol);
@@ -239,20 +265,23 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
                                   {col.columnName}
                                 </MenuItem>
                             ))}
+                            <MenuItem value="CREATE_NEW_FIELD">
+                              <Typography color="primary"><em>+ Create New Field...</em></Typography>
+                            </MenuItem>
                           </Select>
                         </FormControl>
                       </TableCell>
                       <TableCell>
-                        {targetColInfo ? (
-                           <Tooltip title={`Data Type: ${targetColInfo.dataType}`}>
-                             <Chip label={targetColInfo.dataType} size="small" variant="outlined" />
+                        {dbColDetails ? (
+                           <Tooltip title={`Data Type: ${dbColDetails.dataType}`}>
+                             <Chip label={dbColDetails.dataType} size="small" variant="outlined" />
                            </Tooltip>
                         ) : (
                             <Chip label="-" size="small" />
                         )}
                       </TableCell>
                       <TableCell align="center">
-                         {targetColInfo?.isNullable === false ? (
+                         {dbColDetails?.isNullable === false ? (
                              <Tooltip title="Column is required (NOT NULL)">
                                 <Chip label="Yes" size="small" color="warning" variant="outlined"/>
                              </Tooltip>
@@ -285,6 +314,18 @@ export const ColumnMappingModal: React.FC<ColumnMapperModalProps> = ({
           Save Mapping
         </Button>
       </DialogActions>
+      {creatingFieldForExcelCol && sheetInfo && (
+        <CreateFieldModal
+          open={isCreateFieldModalOpen}
+          onClose={() => {
+            setIsCreateFieldModalOpen(false);
+            setCreatingFieldForExcelCol(null);
+          }}
+          excelColumnName={creatingFieldForExcelCol} // Pass the specific Excel column name
+          existingDbColumnNames={memoizedTargetColumns.map(col => col.columnName)}
+          onSaveField={handleSaveNewField}
+        />
+      )}
     </Dialog>
   );
 };

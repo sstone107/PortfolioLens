@@ -19,7 +19,8 @@ export enum ModuleType {
   ADMIN = "admin",
   SETTINGS = "settings",
   ANALYTICS = "analytics",
-  DATA_IMPORT = "data-import"
+  DATA_IMPORT = "data-import",
+  PARTNERS = "partners"
 }
 
 /**

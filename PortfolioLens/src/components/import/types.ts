@@ -9,11 +9,11 @@ export type FileType = 'xlsx' | 'xls' | 'csv' | 'tsv';
  */
 export interface ColumnMapping {
   excelColumn: string;
-  dbColumn: string;
+  dbColumn: string | null;
   type: ColumnType;
   required?: boolean;
   transform?: string; // Optional transformation function name
-  isNewColumn?: boolean; // Flag to indicate this is a new column that needs to be created
+  isNew?: boolean; // Flag to indicate this is a proposal for a new DB column
   enrichment?: DataEnrichmentConfig; // Optional data enrichment configuration
   confidenceScore?: number; // Confidence score for the mapping (0.0 to 1.0)
   confidenceLevel?: ConfidenceLevel; // Confidence level for the mapping

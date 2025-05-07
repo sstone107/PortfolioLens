@@ -24,7 +24,24 @@ import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { UserImpersonation } from "./pages/admin/UserImpersonation";
 import { ModuleVisibility } from "./pages/admin/ModuleVisibility";
 import { GeoRestrictions } from "./pages/admin/GeoRestrictions";
+import { PartnersPage } from "./pages/partners";
+import { DocCustodianCreate, DocCustodianEdit, DocCustodianShow } from "./pages/partners/doc-custodians";
+import { SellerCreate, SellerEdit, SellerShow } from "./pages/partners/sellers";
+import { PriorServicerCreate, PriorServicerEdit, PriorServicerShow } from "./pages/partners/prior-servicers";
 
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import PieChartIcon from "@mui/icons-material/PieChart";
+import TravelExploreIcon from "@mui/icons-material/TravelExplore";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import MapIcon from "@mui/icons-material/Map";
+import BusinessIcon from "@mui/icons-material/Business";
+import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
+import HandshakeIcon from "@mui/icons-material/Handshake";
+import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
+import StorefrontIcon from "@mui/icons-material/Storefront";
+import SupportAgentIcon from "@mui/icons-material/SupportAgent";
+import DescriptionIcon from "@mui/icons-material/Description";
 import CssBaseline from "@mui/material/CssBaseline";
 import GlobalStyles from "@mui/material/GlobalStyles";
 import routerBindings, {
@@ -44,7 +61,27 @@ import {
   LoanCreate,
   LoanEdit,
   LoanShow,
+  LoanPortfolioMapping,
 } from "./pages/loans";
+import {
+  ServicerList,
+  ServicerCreate,
+  ServicerEdit,
+  ServicerShow,
+} from "./pages/servicers";
+import {
+  InvestorList,
+  InvestorCreate,
+  InvestorEdit,
+  InvestorShow,
+} from "./pages/investors";
+import {
+  PortfolioList,
+  PortfolioCreate,
+  PortfolioEdit,
+  PortfolioShow,
+  PortfolioDashboard,
+} from "./pages/portfolios";
 import { supabaseClient } from "./utility";
 
 function App() {
@@ -66,6 +103,64 @@ function App() {
                 notificationProvider={useNotificationProvider}
                 resources={[
                   {
+                    name: "portfolios",
+                    list: "/portfolios",
+                    create: "/portfolios/create",
+                    edit: "/portfolios/edit/:id",
+                    show: "/portfolios/show/:id",
+                    meta: {
+                      canDelete: true,
+                      icon: <PieChartIcon />,
+                    },
+                  },
+                  {
+                    name: "partners",
+                    list: "/partners",
+                    meta: {
+                      label: "Partners",
+                      icon: <HandshakeIcon />,
+                    },
+                  },
+                  {
+                    name: "doc_custodians",
+                    list: "/partners?tab=0",
+                    create: "/partners/doc-custodians/create",
+                    edit: "/partners/doc-custodians/edit/:id",
+                    show: "/partners/doc-custodians/show/:id",
+                    meta: {
+                      label: "Doc Custodians",
+                      icon: <FolderSpecialIcon />,
+                      canDelete: true,
+                      parent: "partners",
+                    },
+                  },
+                  {
+                    name: "sellers",
+                    list: "/partners?tab=1",
+                    create: "/partners/sellers/create",
+                    edit: "/partners/sellers/edit/:id",
+                    show: "/partners/sellers/show/:id",
+                    meta: {
+                      label: "Sellers",
+                      icon: <StorefrontIcon />,
+                      canDelete: true,
+                      parent: "partners",
+                    },
+                  },
+                  {
+                    name: "prior_servicers",
+                    list: "/partners?tab=2",
+                    create: "/partners/prior-servicers/create",
+                    edit: "/partners/prior-servicers/edit/:id",
+                    show: "/partners/prior-servicers/show/:id",
+                    meta: {
+                      label: "Prior Servicers",
+                      icon: <SupportAgentIcon />,
+                      canDelete: true,
+                      parent: "partners",
+                    },
+                  },
+                  {
                     name: "loans",
                     list: "/loans",
                     create: "/loans/create",
@@ -73,22 +168,24 @@ function App() {
                     show: "/loans/show/:id",
                     meta: {
                       canDelete: true,
+                      icon: <DescriptionIcon />,
                     },
                   },
                   {
-                    name: "data-import",
-                    list: "/import",
+                    name: "loan-portfolio-mapping",
+                    list: "/loans/portfolio-mapping",
                     meta: {
-                      label: "Excel Import",
-                      icon: "CloudUpload",
+                      label: "Loan-Portfolio Mapping",
+                      icon: <MapIcon />,
+                      parent: "loans",
                     },
                   },
                   {
                     name: "batch-import",
                     list: "/batch-import",
                     meta: {
-                      label: "Batch Import",
-                      icon: "Storage",
+                      label: "Template Mapping",
+                      icon: <TravelExploreIcon />,
                     },
                   },
                   {
@@ -99,6 +196,7 @@ function App() {
                     show: "/servicers/show/:id",
                     meta: {
                       canDelete: true,
+                      icon: <AccountBalanceIcon />,
                     },
                   },
                   {
@@ -109,6 +207,7 @@ function App() {
                     show: "/investors/show/:id",
                     meta: {
                       canDelete: true,
+                      icon: <TrendingUpIcon />,
                     },
                   },
                   {
@@ -153,7 +252,20 @@ function App() {
                     }
                   >
                     <Route path="/">
-                      <Route index element={<NavigateToResource resource="loans" />} />
+                      <Route index element={<NavigateToResource resource="portfolios" />} />
+                      
+                      <Route path="portfolios" element={
+                          <ModuleGuard module={ModuleType.LOANS} redirectTo="/unauthorized">
+                            <Outlet />
+                          </ModuleGuard>
+                        }>
+                        <Route index element={<PortfolioList />} />
+                        <Route path="dashboard" element={<PortfolioDashboard />} />
+                        <Route path="create" element={<PortfolioCreate />} />
+                        <Route path="edit/:id" element={<PortfolioEdit />} />
+                        <Route path="show/:id" element={<PortfolioShow />} />
+                      </Route>
+                      
                       <Route path="loans" element={
                           <ModuleGuard module={ModuleType.LOANS} redirectTo="/unauthorized">
                             <Outlet />
@@ -163,6 +275,53 @@ function App() {
                         <Route path="create" element={<LoanCreate />} />
                         <Route path="edit/:id" element={<LoanEdit />} />
                         <Route path="show/:id" element={<LoanShow />} />
+                        <Route path="portfolio-mapping" element={<LoanPortfolioMapping />} />
+                      </Route>
+
+                      <Route path="servicers" element={
+                          <ModuleGuard module={ModuleType.SERVICERS} redirectTo="/unauthorized">
+                            <Outlet />
+                          </ModuleGuard>
+                        }>
+                        <Route index element={<ServicerList />} />
+                        <Route path="create" element={<ServicerCreate />} />
+                        <Route path="edit/:id" element={<ServicerEdit />} />
+                        <Route path="show/:id" element={<ServicerShow />} />
+                      </Route>
+
+                      <Route path="investors" element={
+                          <ModuleGuard module={ModuleType.INVESTORS} redirectTo="/unauthorized">
+                            <Outlet />
+                          </ModuleGuard>
+                        }>
+                        <Route index element={<InvestorList />} />
+                        <Route path="create" element={<InvestorCreate />} />
+                        <Route path="edit/:id" element={<InvestorEdit />} />
+                        <Route path="show/:id" element={<InvestorShow />} />
+                      </Route>
+
+                      {/* Partners Module */}
+                      <Route path="partners" element={
+                          <ModuleGuard module={ModuleType.PARTNERS} redirectTo="/unauthorized">
+                            <Outlet />
+                          </ModuleGuard>
+                        }>
+                        <Route index element={<PartnersPage />} />
+                        
+                        {/* Doc Custodians Routes */}
+                        <Route path="doc-custodians/create" element={<DocCustodianCreate />} />
+                        <Route path="doc-custodians/edit/:id" element={<DocCustodianEdit />} />
+                        <Route path="doc-custodians/show/:id" element={<DocCustodianShow />} />
+                        
+                        {/* Sellers Routes */}
+                        <Route path="sellers/create" element={<SellerCreate />} />
+                        <Route path="sellers/edit/:id" element={<SellerEdit />} />
+                        <Route path="sellers/show/:id" element={<SellerShow />} />
+                        
+                        {/* Prior Servicers Routes */}
+                        <Route path="prior-servicers/create" element={<PriorServicerCreate />} />
+                        <Route path="prior-servicers/edit/:id" element={<PriorServicerEdit />} />
+                        <Route path="prior-servicers/show/:id" element={<PriorServicerShow />} />
                       </Route>
 
                       {/* Excel Import Module */}

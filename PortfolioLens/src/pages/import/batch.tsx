@@ -27,7 +27,7 @@ import { BatchImporter } from '../../components/import/BatchImporter';
  * - Mapping templates
  * - Column mapping with suggestions
  * - Missing column detection and creation
- * - Data enrichment
+ * - Data enrichment test
  */
 export const BatchImportPage: React.FC = () => {
   const [importSuccess, setImportSuccess] = useState<boolean>(false);
@@ -72,22 +72,8 @@ export const BatchImportPage: React.FC = () => {
           Enhanced Batch Import
         </Typography>
         <Typography variant="body1" color="text.secondary" paragraph>
-          Import multiple files (Excel, CSV, TSV) simultaneously into different database tables with advanced mapping and data enrichment features.
+          Import a multi-sheet file (Excel, CSV, TSV) to map to different database tables.
         </Typography>
-        
-        {/* Feature highlights */}
-        <Box sx={{ mb: 3 }}>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <AlertTitle>Enhanced Features</AlertTitle>
-            <ul>
-              <li>Support for multiple file formats (XLSX, XLS, CSV, TSV)</li>
-              <li>Intelligent column mapping with suggestions</li>
-              <li>Automatic missing column detection and creation</li>
-              <li>Save and reuse mapping templates</li>
-              <li>Data validation and enrichment</li>
-            </ul>
-          </Alert>
-        </Box>
         
         <Divider sx={{ mb: 3 }} />
         

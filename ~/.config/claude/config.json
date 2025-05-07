@@ -1,0 +1,75 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_c41e45f0df0082875b7c8f8d3453412d4a864644"
+      ]
+    },
+    "taskmaster": {
+      "command": "npx",
+      "args": ["-y", "task-master-ai"],
+      "env": {
+        "ANTHROPIC_API_KEY": "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",
+        "PERPLEXITY_API_KEY": "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",
+        "MODEL": "claude-3-7-sonnet-20250219",
+        "PERPLEXITY_MODEL": "sonar-pro",
+        "MAX_TOKENS": "64000",
+        "TEMPERATURE": "0.2",
+        "DEFAULT_SUBTASKS": "5",
+        "DEFAULT_PRIORITY": "medium"
+      }
+    },
+    "fha": {
+      "command": "node",
+      "args": ["/mnt/c/Users/sston/CascadeProjects/mcp-postman/build/fha-b2g.js"],
+      "toolOverrides": {
+        "tools": [
+          {
+            "name": "fha-validate-xml",
+            "description": "Validate an XML file against an FHA B2G schema"
+          },
+          {
+            "name": "fha-generate-csharp",
+            "description": "Generate C# code from an FHA B2G schema"
+          },
+          {
+            "name": "fha-search-schema",
+            "description": "Search the FHA B2G schema documentation"
+          },
+          {
+            "name": "fha-get-example",
+            "description": "Get example XML for a specific FHA B2G function"
+          }
+        ]
+      }
+    },
+    "byte": {
+      "command": "node",
+      "args": ["/mnt/c/Users/sston/CascadeProjects/mcp-postman/build/byte-api.js"],
+      "toolOverrides": {
+        "tools": [
+          {
+            "name": "byte-get-documentation",
+            "description": "Get BytePro API documentation in structured format"
+          },
+          {
+            "name": "byte-search-api",
+            "description": "Search the BytePro API documentation by query"
+          },
+          {
+            "name": "byte-get-examples",
+            "description": "Get example request/response for a BytePro API endpoint"
+          }
+        ]
+      }
+    }
+  }
+}
