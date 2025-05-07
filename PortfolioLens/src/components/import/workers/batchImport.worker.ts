@@ -37,20 +37,29 @@ function rankTableSuggestions(sheetName: string, headers: string[], sampleData: 
   const normalizedSheetName = normalizeForMatching(sheetName);
   const suggestions: RankedTableSuggestion[] = [];
 
+  console.log(`[WorkerDEBUG] rankTableSuggestions called for sheet: '${sheetName}' (Normalized: '${normalizedSheetName}')`);
+
   for (const tableName in schemaCache.tables) {
     const dbTable = schemaCache.tables[tableName];
     if (!dbTable) continue;
 
     const normalizedTableName = normalizeForMatching(tableName);
     const nameSimilarityScore = calculateSimilarity(normalizedSheetName, normalizedTableName);
+    console.log(`[WorkerDEBUG] Sheet: '${sheetName}' (Normalized: '${normalizedSheetName}'), DB Table: '${tableName}' (Normalized: '${normalizedTableName}'), Name Similarity: ${nameSimilarityScore}`);
 
-    // Placeholder for type compatibility and content pattern scoring
-    // These functions would analyze sampleData and headers against dbTable.columns
-    const typeCompatibilityScore = calculateTypeCompatibilityScoreForTable(headers, sampleData, dbTable); // Needs implementation
-    const contentPatternScore = calculateContentPatternScoreForTable(headers, sampleData, dbTable); // Needs implementation
+    const typeCompatibilityScore = calculateTypeCompatibilityScoreForTable(headers, sampleData, dbTable); 
+    const contentPatternScore = calculateContentPatternScoreForTable(headers, sampleData, dbTable); 
+    console.log(`[WorkerDEBUG] Scores for DB Table '${tableName}' (Normalized: '${normalizedTableName}') vs Sheet '${normalizedSheetName}' - NameSim: ${nameSimilarityScore}, TypeCompat: ${typeCompatibilityScore}, ContentPattern: ${contentPatternScore}`);
 
-    // Combine scores (example: simple average)
-    const combinedScore = (nameSimilarityScore + typeCompatibilityScore + contentPatternScore) / 3;
+    // Combine scores
+    let combinedScore;
+    if (nameSimilarityScore === 1.0) {
+      combinedScore = 1.0; // Perfect name match overrides other scores for now
+      console.log(`[WorkerDEBUG] Perfect name match for '${tableName}', combinedScore forced to 1.0`);
+    } else {
+      combinedScore = (nameSimilarityScore + typeCompatibilityScore + contentPatternScore) / 3;
+      console.log(`[WorkerDEBUG] Imperfect name match for '${tableName}', combinedScore calculated: ${combinedScore} from (${nameSimilarityScore} + ${typeCompatibilityScore} + ${contentPatternScore}) / 3`);
+    }
 
     // Determine confidence level based on combined score
     let confidenceLevel: 'High' | 'Medium' | 'Low';
@@ -80,22 +89,28 @@ function rankTableSuggestions(sheetName: string, headers: string[], sampleData: 
 
 // Placeholder function - Needs actual implementation
 function calculateTypeCompatibilityScoreForTable(headers: string[], sampleData: Record<string, any>[], dbTable: CachedDbTable): number {
+  console.log(`[WorkerDEBUG] calculateTypeCompatibilityScoreForTable for ${dbTable.tableName} called`);
   // Logic to analyze sample data types for each header and compare with dbTable column types
   // Return a score (e.g., average compatibility across columns)
+  console.log(`[WorkerDEBUG] calculateTypeCompatibilityScoreForTable for ${dbTable.tableName} returning 0 (placeholder)`);
   return 0; // Placeholder
 }
 
 // Placeholder function - Needs actual implementation
 function calculateContentPatternScoreForTable(headers: string[], sampleData: Record<string, any>[], dbTable: CachedDbTable): number {
+  console.log(`[WorkerDEBUG] calculateContentPatternScoreForTable for ${dbTable.tableName} called`);
   // Logic to analyze content patterns in sample data for each header and compare with dbTable column patterns/expectations
   // Return a score
+  console.log(`[WorkerDEBUG] calculateContentPatternScoreForTable for ${dbTable.tableName} returning 0 (placeholder)`);
   return 0; // Placeholder
 }
 
 // Placeholder function - Needs actual implementation
 function calculateContentPatternScoreForColumn(sampleValues: any[], dbColumn: CachedDbColumn): number {
+  console.log(`[WorkerDEBUG] calculateContentPatternScoreForColumn for ${dbColumn.columnName} called`);
   // Logic to analyze content patterns in sampleValues and compare with dbColumn patterns/expectations
   // Return a score (0.0 to 1.0)
+  console.log(`[WorkerDEBUG] calculateContentPatternScoreForColumn for ${dbColumn.columnName} returning 0 (placeholder)`);
   return 0; // Placeholder
 }
 
@@ -136,10 +151,15 @@ function performAutoMapping(
 
         const contentPatternScore = calculateContentPatternScoreForColumn(sampleValues, dbCol); // Needs implementation
 
-        // Combine scores (example: weighted average)
-        // Adjust weights based on importance of each factor
-        const combinedScore = (nameSimilarityScore * 0.4) + (typeCompatibilityScore * 0.3) + (contentPatternScore * 0.3);
-
+        // Combine scores 
+        let combinedScore;
+        if (nameSimilarityScore === 1.0 && isTypeCompatible) { // Perfect name and type match
+            combinedScore = 1.0;
+        } else if (nameSimilarityScore === 1.0) { // Perfect name match, but maybe not type
+            combinedScore = 0.9; // Still very high, but acknowledge potential type mismatch if not 1.0
+        } else {
+            combinedScore = (nameSimilarityScore * 0.4) + (typeCompatibilityScore * 0.3) + (contentPatternScore * 0.3);
+        }
 
         // Determine confidence level for column suggestion
         let confidenceLevel: 'High' | 'Medium' | 'Low';

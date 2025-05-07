@@ -32,7 +32,10 @@ export const useSchemaInfo = () => {
         try {
           infoMap[tableName] = await dbService.getTableInfo(tableName);
         } catch (infoError) {
-          // Optionally store partial results or handle errors differently
+          console.error(`[useSchemaInfo] Error loading table info for ${tableName}:`, infoError);
+          infoMap[tableName] = null as any; // Explicitly set to null on error
+          // Optionally, you could set it to an object like: { error: true, message: (infoError as Error).message }
+          // This would allow richer error display in the UI if needed.
         }
       }
       setTableInfoMap(infoMap);
@@ -76,7 +79,7 @@ export const useBatchImportWorker = (
 
     // Initialize worker and setup message/error handlers
     useEffect(() => {
-        workerRef.current = new Worker(new URL('./workers/batchImport.worker.ts', import.meta.url), { type: 'module' });
+        workerRef.current = new Worker(new URL('./workers/batchImport.worker.ts?v=1', import.meta.url), { type: 'module' });
 
         workerRef.current.onmessage = (event: MessageEvent<any>) => {
             

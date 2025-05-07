@@ -265,8 +265,13 @@ export class AnalysisEngine {
       }
       const headerMatchRatio = headers.length > 0 ? headerMatchCount / headers.length : 0;
 
-      // Calculate combined score (weighted average)
-      const combinedScore = nameSimilarity * 0.4 + headerMatchRatio * 0.6;
+      // Calculate combined score with special handling for perfect name matches
+      let combinedScore;
+      if (nameSimilarity === 1.0) {
+        combinedScore = 1.0; // Perfect name match = 100%
+      } else {
+        combinedScore = nameSimilarity * 0.4 + headerMatchRatio * 0.6;
+      }
       topExistingTableScore = Math.max(topExistingTableScore, combinedScore);
 
       suggestions.push({
