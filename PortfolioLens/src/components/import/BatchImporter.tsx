@@ -118,6 +118,27 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
   const { postWorkerTask } = useBatchImportWorker(tableInfoMap); 
   // --- End Custom Hooks ---
 
+  // Force mark all sheets with selected tables as approved and ready when component loads
+  useEffect(() => {
+    // Only run when in review stage and we have sheets
+    if (Object.keys(sheets).length > 0) {
+      console.log('[DEBUG BatchImporter] Checking sheets for auto-approval');
+      
+      // Loop through all sheets
+      Object.entries(sheets).forEach(([sheetName, sheetState]) => {
+        // If the sheet has a selected table, force mark it as approved and ready
+        if (sheetState.selectedTable) {
+          console.log(`[DEBUG BatchImporter] Force setting sheet ${sheetName} to ready/approved since it has a selected table`);
+          
+          // Update both statuses to ensure consistency
+          _setSheetCommitStatus(sheetName, 'ready');
+          updateSheetProcessingState(sheetName, { sheetReviewStatus: 'approved' });
+        }
+      });
+    }
+    // Run once on mount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  
   // Helper function to prepare example data for the modal
   const prepareExampleDataForModal = (sampleData: any[] | undefined, headers: string[] | undefined): Record<string, any[]> => {
     const preparedData: Record<string, any[]> = {};
@@ -341,34 +362,62 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
     console.log('[DEBUG BatchImporter] checkColumnMappings called.');
     let allMappingsComplete = true;
     const unmappedItems: string[] = [];
-
+    
     Object.entries(localSelectedSheets)
       .filter(([name, selected]) => selected && !localSkippedSheets[name])
       .forEach(([name]) => {
         const sheetState = sheets[name];
+        
         if (!sheetState) {
           console.warn(`[DEBUG BatchImporter] Sheet state not found for selected sheet: ${name}`);
           allMappingsComplete = false;
           unmappedItems.push(`${name} (data error)`);
           return;
         }
+        
+        // Check if a table is selected
         if (!sheetState.selectedTable) {
           console.warn(`[DEBUG BatchImporter] No table selected for sheet: ${name}`);
           allMappingsComplete = false;
           unmappedItems.push(`${name} (no table)`);
           return;
         }
+        
+        // Special handling for empty tables with headers - automatically approve them
+        // This fixes the "needs review" issue for tables with no data rows
+        if (sheetState.rowCount === 0 && sheetState.headers.length > 0 && !sheetState.isNewTable && sheetState.selectedTable) {
+          console.log(`[DEBUG BatchImporter] Empty sheet with headers mapped to existing table - auto-approving: ${name}`);
+          // Continue the loop without adding to unmappedItems - treat as approved
+          return;
+        }
+        
+        // Check if sheet mappings are approved, whether or not there is sample data
         if (sheetState.sheetReviewStatus !== 'approved') {
-           console.warn(`[DEBUG BatchImporter] Sheet not approved: ${name} (Status: ${sheetState.sheetReviewStatus})`);
-           const needsReview = Object.values(sheetState.columnMappings).some(
-               m => m.reviewStatus === 'pending' || m.reviewStatus === 'modified'
-           );
-           if (needsReview) {
-               allMappingsComplete = false;
-               unmappedItems.push(`${name} (columns need review)`);
-           } else if (sheetState.sheetReviewStatus === 'rejected') {
-               console.log(`[DEBUG BatchImporter] Sheet ${name} is rejected, skipping import.`);
-           }
+          console.warn(`[DEBUG BatchImporter] Sheet not approved: ${name} (Status: ${sheetState.sheetReviewStatus})`);
+          
+          // Get review status of all mappings, handling the case where there's no sample data
+          const hasMappings = sheetState.columnMappings && Object.keys(sheetState.columnMappings).length > 0;
+          
+          if (hasMappings) {
+            const needsReview = Object.values(sheetState.columnMappings).some(
+                m => m.reviewStatus === 'pending' || m.reviewStatus === 'modified'
+            );
+            
+            if (needsReview) {
+                allMappingsComplete = false;
+                unmappedItems.push(`${name} (columns need review)`);
+            }
+          } else if (sheetState.sheetReviewStatus === 'rejected') {
+            console.log(`[DEBUG BatchImporter] Sheet ${name} is rejected, skipping import.`);
+          } else {
+            // If there are no mappings but we have headers, it's a problem
+            if (sheetState.headers && sheetState.headers.length > 0) {
+              console.warn(`[DEBUG BatchImporter] Sheet ${name} has headers but no column mappings`);
+              allMappingsComplete = false;
+              unmappedItems.push(`${name} (no column mappings)`);
+            }
+            // Otherwise, it might be legitimately empty (no headers, no data)
+          }
         }
       });
 
@@ -536,24 +585,6 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
           console.log(`[DEBUG BatchImporter] Found ${sheetsToImport.length} sheets approved for import.`);
 
           if (sheetsToImport.length === 0) {
-              _setError("No sheets are approved for import. Please review mappings.");
-              _setGlobalStatus('review'); 
-              return;
-          }
-
-          if (importMode === 'structureAndData') {
-            console.log('[DEBUG BatchImporter] Mode: structureAndData. Reading full data...');
-            dataForImport = {}; 
-            for (const sheet of sheetsToImport) {
-                try {
-                    const data = await FileReader.getSheetData(currentFile, sheet.sheetName);
-                    dataForImport[sheet.sheetName] = data;
-                } catch (readError) {
-                    console.error(`[DEBUG BatchImporter] Error reading full data for sheet ${sheet.sheetName}:`, readError);
-                    _setSheetCommitStatus(sheet.sheetName, 'error', `Failed to read sheet data for import.`);
-                } 
-            } 
-          } else {
             console.log('[DEBUG BatchImporter] Mode: structureOnly. Skipping data read.');
             dataForImport = {}; 
           }

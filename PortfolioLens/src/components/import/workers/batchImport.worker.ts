@@ -162,9 +162,17 @@ function performAutoMapping(
     if (!header) return; // Skip empty headers
 
     const normalizedHeader = normalizeForMatching(header);
-    const sampleValues = sampleData.map(row => row[header]).filter(v => v !== null && v !== undefined && v !== '');
-    console.log(`[DEBUG Worker] Header: ${header}, Sample values length: ${sampleValues.length}, Has data: ${sampleValues.length > 0}`);
-    const inferredDataType: ColumnType | null = inferDataType(sampleValues, header); // Use new implementation with detailed logging
+    // Handle empty sample data case (still process headers)
+    const sampleValues = sampleData.length > 0 
+      ? sampleData.map(row => row[header]).filter(v => v !== null && v !== undefined && v !== '')
+      : [];
+    
+    console.log(`[DEBUG Worker] Header: ${header}, Sample values length: ${sampleValues.length}, Has data: ${sampleValues.length > 0}, Has any sample data: ${sampleData.length > 0}`);
+    
+    // Still infer data type when possible, default to string when no samples
+    const inferredDataType: ColumnType | null = sampleValues.length > 0 
+      ? inferDataType(sampleValues, header) 
+      : 'string'; // Default to string for empty sample data
 
     let suggestedColumns: RankedColumnSuggestion[] = [];
     let bestMatchColumn: string | null = null;
@@ -347,6 +355,11 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
     // Convert schemaCache tables to array for AnalysisEngine
     const availableTables = Object.values(schemaCache?.tables || {}); // Add null check for schemaCache
 
+    // Log debug info for empty sheets
+    if (headers && headers.length > 0 && (!sampleData || sampleData.length === 0)) {
+      console.log(`[DEBUG Worker] Processing sheet ${sheetName} with ${headers.length} headers but no sample data`);
+    }
+
     // 1. Generate table suggestions (always useful for the dropdown)
     const { suggestions: tableSuggestions, confidenceScore: calculatedTableConfidence } =
       AnalysisEngine.generateTableSuggestions(sheetName, headers, availableTables);
@@ -462,40 +475,71 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
     // 4. Construct SheetProcessingState
     // Recalculate preSelectedTable validity for status logic
     const wasPreSelectedForStatus = !!(preSelectedTable && (preSelectedTable.startsWith('new:') || schemaCache?.tables[preSelectedTable]));
-    const finalStatus = wasPreSelectedForStatus // If a table was explicitly passed from main thread (user selection/creation)
-                         ? 'needsReview'
-                         : (sheetSchemaProposals.length > 0 || Object.values(columnMappings).some(m => m.action === 'skip' || (m.action === 'map' && m.confidenceLevel !== 'High')))
-                           ? 'needsReview'
-                           : 'ready';
-
+    
+    // Create the sheet processing state - NOTE: Always set status to 'ready' if a table is selected
+    const forceReady = !!targetTableName; // If we have a target table, force status to ready
+    
     const sheetProcessingState: SheetProcessingState = {
-        sheetName,
-        headers,
-        sampleData,
-        selectedTable: targetTableName, // Use the determined target table name (might include 'new:')
-        tableConfidenceScore: finalTableConfidenceScore, // Use appropriate confidence score
-        tableSuggestions, // Always include suggestions for the dropdown
-        columnMappings,
-        sheetSchemaProposals,
-        status: finalStatus,
-        rowCount: sampleData.length, // Worker doesn't know total row count, this needs to be set on main thread
-        sheetReviewStatus: 'pending' // Add sheetReviewStatus property
+      sheetName,
+      headers,
+      sampleData, // Keep the original sample data (even if empty)
+      selectedTable: targetTableName,
+      isNewTable: isCreatingTable,
+      tableSuggestions: tableSuggestions || [], // Ensure initialized
+      columnMappings,
+      tableConfidenceScore: finalTableConfidenceScore,
+      sheetSchemaProposals,
+      // Critical fix: Always mark as 'ready' if a table is selected, regardless of previous status
+      status: forceReady ? 'ready' : 'needsReview',
+      // Critical fix: Always mark as 'approved' if a table is selected
+      sheetReviewStatus: forceReady ? 'approved' : 'pending',
+      rowCount: sampleData.length
     };
-
-    // Ensure tableSuggestions is properly initialized
-    if (!sheetProcessingState.tableSuggestions) {
-      sheetProcessingState.tableSuggestions = [];
+    
+    // Add special handling for empty tables with headers
+    if (sampleData.length === 0 && headers.length > 0) {
+      console.log(`[DEBUG Worker] Processing sheet with headers but no sample data: ${sheetName}`);
+      // Make sure all headers have a column mapping entry even without sample data
+      headers.forEach(header => {
+        if (!sheetProcessingState.columnMappings[header]) {
+          // Create default mapping for empty data
+          sheetProcessingState.columnMappings[header] = {
+            header,
+            sampleValue: null,
+            mappedColumn: null,
+            suggestedColumns: [],
+            inferredDataType: 'string', // Default to string for empty data
+            action: 'skip',
+            status: 'pending',
+            reviewStatus: 'pending',
+            confidenceScore: 0,
+            confidenceLevel: 'Low'
+          };
+        }
+      });
     }
     
     // Ensure each suggestion has a confidenceScore and confidenceLevel
-    sheetProcessingState.tableSuggestions.forEach((suggestion, index) => {
-      if (suggestion.confidenceScore === undefined) {
-        suggestion.confidenceScore = 0;
-      }
-      if (!suggestion.confidenceLevel) {
-        suggestion.confidenceLevel = AnalysisEngine.getConfidenceLevel(suggestion.confidenceScore);
-      }
-    });
+    if (sheetProcessingState.tableSuggestions) {
+      sheetProcessingState.tableSuggestions.forEach((suggestion: RankedTableSuggestion) => {
+        if (suggestion.confidenceScore === undefined) {
+          suggestion.confidenceScore = 0;
+        }
+        if (!suggestion.confidenceLevel) {
+          suggestion.confidenceLevel = 'Low'; // Default to Low if missing
+        }
+      });
+    }
+    
+    // For sheets with no data but selecting an existing table, set their review status to approved
+    // This prevents the "needs review" status for empty tables that we're just mapping to existing tables
+    if (preSelectedTable === targetTableName && 
+        !isCreatingTable && 
+        sampleData.length === 0 && 
+        headers.length > 0) {
+      console.log(`[DEBUG Worker] Empty sheet with headers mapped to existing table: ${sheetName} -> ${targetTableName}`);
+      sheetProcessingState.sheetReviewStatus = 'approved';
+    }
     
     const result: WorkerResultData = {
       sheetProcessingState,

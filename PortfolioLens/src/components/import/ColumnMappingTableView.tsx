@@ -133,7 +133,7 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                       value={
                           mapping.action === 'create' ? 'create-new-column' :
                           mapping.action === 'map' ? mapping.mappedColumn || '' :
-                          '' // Represents 'skip'
+                          mapping.action === 'skip' ? 'skip-column' : '' // Explicit 'skip-column' value
                       }
                       onChange={(e) => {
                           const selectedValue = e.target.value as string;
@@ -143,10 +143,22 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                                   action: 'create',
                                   openDialog: true // Add this flag to signal that the dialog should be opened
                               });
-                          } else if (!selectedValue) { // Empty value means skip
+                          } else if (selectedValue === 'skip-column') { // Explicit skip action
+                              onMappingUpdate(excelCol, { 
+                                  action: 'skip', 
+                                  mappedColumn: null, 
+                                  newColumnProposal: undefined,
+                                  reviewStatus: 'approved' // Mark as reviewed since it's explicitly skipped
+                              });
+                          } else if (!selectedValue) { // Empty value means skip (default)
                               onMappingUpdate(excelCol, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });
                           } else { // Map to existing column
-                              onMappingUpdate(excelCol, { action: 'map', mappedColumn: selectedValue, newColumnProposal: undefined });
+                              onMappingUpdate(excelCol, { 
+                                  action: 'map', 
+                                  mappedColumn: selectedValue, 
+                                  newColumnProposal: undefined,
+                                  reviewStatus: 'approved' // Mark as reviewed since it's explicitly mapped
+                              });
                           }
                       }}
                       displayEmpty
@@ -159,17 +171,22 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                         }
                       }}
                       renderValue={(selectedValue) => {
-                        if (mapping.action === 'skip' || !selectedValue) return <em>Skip Column</em>;
-                        if (mapping.action === 'create') {
-                          // Show the field name if available, otherwise show a placeholder
-                          const fieldName = mapping.newColumnProposal?.columnName || mapping.mappedColumn;
-                          return `✨ Create: ${fieldName || 'New Field'}`;
+                        if (mapping.action === 'skip' || selectedValue === 'skip-column' || !selectedValue) {
+                          // Consistent styling for skipped columns
+                          return <em style={{ color: '#888' }}>✕ Skipped Column</em>;
                         }
-                        // selectedValue should be the db column name if action is 'map'
-                        return selectedValue;
+                        if (mapping.action === 'create') {
+                          // Show the field name if available
+                          const fieldName = mapping.newColumnProposal?.columnName || 
+                                           mapping.mappedColumn || 
+                                           'New Field';
+                          return <span style={{ color: '#2196f3', fontWeight: 'bold' }}>✨ Create: {fieldName}</span>;
+                        }
+                        // For mapped columns, show the selected DB column name
+                        return <span style={{ color: '#00796b' }}>{selectedValue}</span>;
                       }}
                     >
-                      <MenuItem key={`${excelCol}-skip`} value="" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+                      <MenuItem key={`${excelCol}-skip`} value="skip-column" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
                         <RemoveCircleOutlineIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }}/> Skip This Column
                       </MenuItem>
                       <MenuItem key={`${excelCol}-create`} value="create-new-column" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
@@ -187,14 +204,17 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                           <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
                              <Typography variant="body2">{suggestion.columnName}</Typography>
                              <Box display="flex" alignItems="center">
-                                <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                                     {suggestion.columnName.includes('p_i') && excelCol.toLowerCase().includes('p&i') ? (
-                                         <>(100%)</>
-                                     ) : (
-                                         <>({Math.round(suggestion.confidenceScore * 100)}%)</>
-                                     )}
-                                     <>{suggestion.columnName.includes('p_i') && console.log(`DEBUGGING P&I FIELD [UI]: ${excelCol} → ${suggestion.columnName} with score ${suggestion.confidenceScore * 100}%`)}</>
-                                </Typography>
+                                 <Typography variant="caption" sx={{
+                                     fontStyle: 'italic',
+                                     fontWeight: suggestion.confidenceScore > 0.8 ? 'bold' : 'normal',
+                                     color: suggestion.confidenceScore > 0.8 ? 'success.main' : 
+                                            suggestion.confidenceScore > 0.5 ? 'text.primary' : 'text.secondary',
+                                     bgcolor: suggestion.confidenceScore > 0.8 ? 'success.50' : 'transparent',
+                                     px: suggestion.confidenceScore > 0.8 ? 0.5 : 0,
+                                     borderRadius: '4px'
+                                 }}>
+                                     Match: {Math.round(suggestion.confidenceScore * 100)}%
+                                 </Typography>
                                 <ConfidenceIcon level={suggestion.confidenceLevel} />
                                 {!suggestion.isTypeCompatible && <Tooltip title="Potential type mismatch"><Warning fontSize="small" color="warning" sx={{ ml: 0.5 }} /></Tooltip>}
                              </Box>

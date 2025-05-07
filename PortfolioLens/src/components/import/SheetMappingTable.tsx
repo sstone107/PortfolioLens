@@ -494,12 +494,10 @@ export const SheetMappingTable: React.FC<SheetMappingTableProps> = ({
                       <Chip label="Analyzing..." size="small" />
                     ) : error ? (
                       <Tooltip title={error}><Chip label="Error" color="error" size="small" /></Tooltip>
-                    ) : status === 'ready' ? (
+                    ) : sheetReviewStatus === 'approved' ? (
                       <Chip icon={<CheckCircle />} label="Ready" color="success" size="small" variant="outlined" />
-                    ) : status === 'needsReview' ? (
-                         <Chip icon={<Warning />} label="Needs Review" color="warning" size="small" variant="outlined" />
                     ) : (
-                      <Chip label={status} size="small" />
+                      <Chip icon={<Warning />} label="Needs Review" color="warning" size="small" variant="outlined" />
                     )}
                   </TableCell>
                   <TableCell align="right">

@@ -1,107 +1,35 @@
 import { IResourceComponentsProps } from "@refinedev/core";
 import {
-  useDataGrid,
   List,
   EditButton,
   ShowButton,
   DateField,
 } from "@refinedev/mui";
 import { Button } from "@mui/material";
-import { DataGrid, GridColDef } from "@mui/x-data-grid";
-import React from "react";
+import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Box, Typography } from "@mui/material";
 import MapIcon from "@mui/icons-material/Map";
-
-// Define the loan interface with strict typing
-interface Loan {
-  id: number;
-  loan_number: string;
-  investor_loan_number?: string;
-  servicer_id: number;
-  investor_id: number;
-  upb: number;
-  note_rate: number;
-  loan_status: string;
-  delinquency_status?: string;
-  last_payment_date?: Date;
-  maturity_date?: Date;
-  created_at: Date;
-  updated_at: Date;
-}
+import { LoanSearchProvider, useLoanSearch } from "../../contexts/loanSearchContext";
+import { LoanFilterPanel, LoanSearchResults } from "../../components/loan-search";
 
 /**
- * Loan list component for displaying all loans in a data grid
- * with sorting, filtering, and pagination
+ * Loan list component for displaying all loans with advanced search functionality
  */
-export const LoanList: React.FC<IResourceComponentsProps> = () => {
-  const { dataGridProps } = useDataGrid<Loan>({
-    syncWithLocation: true,
-  });
-
-  // Define columns for the data grid with appropriate types and formatting
-  const columns = React.useMemo<GridColDef<Loan>[]>(
-    () => [
-      { field: "loan_number", headerName: "Loan Number", flex: 1, minWidth: 150 },
-      { field: "investor_loan_number", headerName: "Investor Loan #", flex: 1, minWidth: 150 },
-      {
-        field: "upb",
-        headerName: "UPB",
-        type: "number",
-        width: 120,
-        valueFormatter: (params: any) =>
-          params.value ? params.value.toLocaleString("en-US", {
-            style: "currency",
-            currency: "USD",
-            minimumFractionDigits: 2,
-          }) : "",
-      },
-      {
-        field: "note_rate",
-        headerName: "Note Rate",
-        type: "number",
-        width: 100,
-        valueFormatter: (params: any) =>
-          params.value ? `${(params.value * 100).toFixed(3)}%` : "",
-      },
-      { field: "loan_status", headerName: "Status", width: 120 },
-      { field: "delinquency_status", headerName: "Delinquency", width: 120 },
-      {
-        field: "last_payment_date",
-        headerName: "Last Payment",
-        width: 120,
-        renderCell: (params) => (
-          <DateField value={params.row.last_payment_date} format="MM/DD/YYYY" />
-        ),
-      },
-      {
-        field: "maturity_date",
-        headerName: "Maturity",
-        width: 120,
-        renderCell: (params) => (
-          <DateField value={params.row.maturity_date} format="MM/DD/YYYY" />
-        ),
-      },
-      {
-        field: "actions",
-        headerName: "Actions",
-        sortable: false,
-        renderCell: function render({ row }) {
-          return (
-            <>
-              <EditButton hideText recordItemId={row.id} />
-              <ShowButton hideText recordItemId={row.id} />
-            </>
-          );
-        },
-        align: "center",
-        headerAlign: "center",
-        minWidth: 80,
-      },
-    ],
-    [],
-  );
-
+const LoanListContent: React.FC = () => {
+  const { searchLoans, searchResults, searching } = useLoanSearch();
+  
+  // Initial search on component mount
+  useEffect(() => {
+    // Load initial data
+    searchLoans();
+  }, []);
+  
+  // Handle search button click
+  const handleSearch = () => {
+    searchLoans({ page: 1 }); // Reset to first page when searching
+  };
+  
   return (
     <List
       headerButtons={({ defaultButtons }) => (
@@ -120,11 +48,27 @@ export const LoanList: React.FC<IResourceComponentsProps> = () => {
     >
       <Box sx={{ mb: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          Manage loan records and their associations with portfolios. Use the Portfolio Mapping tool above to associate investor loan numbers with portfolios.
+          Search and filter loans across your portfolio. Use the advanced options to narrow down results and save your frequently used filters for quick access.
         </Typography>
       </Box>
-      <DataGrid {...dataGridProps} columns={columns} autoHeight />
+      
+      {/* Search filter panel */}
+      <LoanFilterPanel onSearch={handleSearch} />
+      
+      {/* Search results */}
+      <LoanSearchResults />
     </List>
+  );
+};
+
+/**
+ * Loan list wrapper with provider
+ */
+export const LoanList: React.FC<IResourceComponentsProps> = () => {
+  return (
+    <LoanSearchProvider>
+      <LoanListContent />
+    </LoanSearchProvider>
   );
 };
 

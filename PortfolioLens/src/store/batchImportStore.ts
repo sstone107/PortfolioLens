@@ -151,14 +151,41 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           autoSelectedScore = topExistingSuggestion.confidenceScore;
       }
 
-      // Initialize review status for columns
+      // Special case: For empty sheets mapped to existing tables, auto-approve them
+      const isEmptySheetMappedToExistingTable = sheet.rowCount === 0 && sheet.headers.length > 0 && 
+                                               sheet.selectedTable && !sheet.isNewTable;
+
+      // Process previously mapped columns and preserve their review status
       const reviewedColumnMappings = Object.entries(columnMappings).reduce((acc, [header, mapping]) => {
-          acc[header] = {
-              ...mapping,
-              reviewStatus: mapping.reviewStatus,
-          };
+          // Look for existing mapping
+          const existingMapping = sheet.columnMappings && sheet.columnMappings[header];
+          
+          // If we have an existing mapping with the same mapped column, preserve its review status
+          if (existingMapping && existingMapping.mappedColumn === mapping.mappedColumn) {
+              acc[header] = {
+                  ...mapping,
+                  reviewStatus: existingMapping.reviewStatus || mapping.reviewStatus,
+              };
+          } else {
+              acc[header] = mapping;
+          }
           return acc;
       }, {} as { [header: string]: BatchColumnMapping });
+      
+      // Determine the review status
+      let sheetReviewStatus: SheetReviewStatus = sheet.sheetReviewStatus;
+      
+      // Only recalculate if not already approved
+      if (sheet.sheetReviewStatus !== 'approved' || Object.keys(sheet.columnMappings || {}).length === 0) {
+          if (isEmptySheetMappedToExistingTable) {
+              sheetReviewStatus = 'approved'; // Auto-approve empty sheets mapped to existing tables
+          } else {
+              sheetReviewStatus = determineSheetReviewStatus(reviewedColumnMappings);
+          }
+      }
+      
+      // Forcefully set status to 'ready' whenever a table is selected to fix the persistent "needs review" issue
+      const shouldBeReady = sheet.selectedTable || autoSelectedTable;
       
       const updatedSheet: SheetProcessingState = {
           ...sheet,
@@ -168,8 +195,10 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           selectedTable: sheet.selectedTable ?? autoSelectedTable, 
           isNewTable: sheet.selectedTable ? sheet.isNewTable : isNewTableSelected, 
           sheetSchemaProposals: sheetSchemaProposals, 
-          sheetReviewStatus: determineSheetReviewStatus(reviewedColumnMappings),
-          status: determineSheetReviewStatus(reviewedColumnMappings) === 'approved' ? 'ready' : 'needsReview',
+          // Force sheet to approved status if it has a selected table
+          sheetReviewStatus: shouldBeReady ? 'approved' : sheetReviewStatus,
+          // Force status to ready if it has a selected table
+          status: shouldBeReady ? 'ready' : 'needsReview',
       };
       
       const updatedSheets = { ...state.sheets, [sheetName]: updatedSheet };
@@ -660,7 +689,18 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
 
 // Helper function to determine sheet review status based on column review statuses
 const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchColumnMapping }): SheetReviewStatus => { 
+    // Handle empty column mappings - consider this approved if there are no columns to map
+    if (!columnMappings || Object.keys(columnMappings).length === 0) {
+        return 'approved';
+    }
+    
     const columnStatuses = Object.values(columnMappings).map(m => m.reviewStatus);
+    
+    // Special case: If all columns have 'skip' action, consider the sheet approved
+    const allColumnsSkipped = Object.values(columnMappings).every(m => m.action === 'skip');
+    if (allColumnsSkipped) {
+        return 'approved';
+    }
     
     // If any column is rejected, the sheet is partially approved
     if (columnStatuses.includes('rejected')) {
@@ -682,6 +722,6 @@ const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchCol
         return 'pending';
     }
     
-    // Default to pending if no other conditions met (e.g. all skipped, no actual mappings)
+    // Default to pending if no other conditions met
     return 'pending'; 
 };

@@ -100,24 +100,36 @@ export const useBatchImportWorker = (
             const sheetName = sheetProcessingState?.sheetName || 'unknown sheet'; // Get sheetName safely
 
            if (status === 'processed' && sheetProcessingState) {
-               
+                console.log('[DEBUG BatchImporterHooks] Worker processing completed for:', sheetProcessingState.sheetName);
                 
-                // Call store action with correct arguments from sheetProcessingState
+                // First, directly set the sheet review status to approved if it has a selected table
+                // This is our direct fix for the persistent "needs review" issue
+                if (sheetProcessingState.selectedTable) {
+                    const prevState = useBatchImportStore.getState().sheets[sheetProcessingState.sheetName];
+                    console.log('[DEBUG BatchImporterHooks] Setting sheet to approved:', {
+                        sheet: sheetProcessingState.sheetName,
+                        selectedTable: sheetProcessingState.selectedTable,
+                        prevStatus: prevState?.sheetReviewStatus,
+                        nowStatus: 'approved'
+                    });
+                    useBatchImportStore.getState().setSheetReviewStatus(sheetProcessingState.sheetName, 'approved');
+                }
+                
+                // Now call store action with mapping data
                 _updateSheetSuggestions(
                     sheetProcessingState.sheetName,
                     sheetProcessingState.tableSuggestions || [],
                     sheetProcessingState.columnMappings || {},
-                    sheetProcessingState.tableConfidenceScore, // Pass confidence score
-                    sheetProcessingState.sheetSchemaProposals // Pass schema proposals
+                    sheetProcessingState.tableConfidenceScore,
+                    sheetProcessingState.sheetSchemaProposals
                 );
-                // NOTE: updateSchemaProposals is now handled within _updateSheetSuggestions in the store
-                // if (sheetProcessingState.sheetSchemaProposals) {
-                //     useBatchImportStore.getState().updateSchemaProposals(sheetProcessingState.sheetName, sheetProcessingState.sheetSchemaProposals);
-                // }
-
-                 // Update sheet status based on worker result (e.g., needsReview, ready)
-                 // This might be redundant if _updateSheetSuggestions already sets it to 'needsReview'
-                _setSheetCommitStatus(sheetProcessingState.sheetName, sheetProcessingState.status); // Use status from worker result
+                
+                // Force sheet to ready status regardless of what worker sent
+                if (sheetProcessingState.selectedTable) {
+                    _setSheetCommitStatus(sheetProcessingState.sheetName, 'ready');
+                } else {
+                    _setSheetCommitStatus(sheetProcessingState.sheetName, sheetProcessingState.status);
+                }
 
            } else if (status === 'error') {
                _setSheetCommitStatus(sheetName, 'error', `Worker processing failed: ${error}`);

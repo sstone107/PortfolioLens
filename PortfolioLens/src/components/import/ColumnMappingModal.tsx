@@ -37,7 +37,9 @@ import {
   ColumnType,
   NewColumnProposal, 
   ReviewStatus,      
-  ConfidenceLevel
+  ConfidenceLevel,
+  RankedColumnSuggestion,
+  TableColumn
 } from './types';
 
 import { VirtualizedColumnMapper } from './VirtualizedColumnMapper';
@@ -113,6 +115,34 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         return 'TEXT';
     }
   };
+  
+  // Helper function to convert DB type to column type
+  const mapDbTypeToColumnType = (dbType: string | undefined): ColumnType => {
+    if (!dbType) return 'string';
+    
+    const typeLC = dbType.toLowerCase();
+    
+    if (
+      typeLC.includes('int') || 
+      typeLC.includes('float') || 
+      typeLC.includes('double') || 
+      typeLC.includes('decimal') || 
+      typeLC.includes('numeric')
+    ) {
+      return 'number';
+    } else if (
+      typeLC.includes('bool')
+    ) {
+      return 'boolean';
+    } else if (
+      typeLC.includes('date') || 
+      typeLC.includes('time')
+    ) {
+      return 'date';
+    } else {
+      return 'string';
+    }
+  };
 
   // Update the state type to potentially hold the full structure
   const [mappings, setMappings] = useState<Record<string, BatchColumnMapping>>({});
@@ -131,13 +161,35 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   }, [sheetState?.selectedTable, isCreatingTable]);
 
   const memoizedExcelHeaders = useMemo(() => {
-    if (!sheetState?.headers) return [];
-    const headers = sheetState.headers.filter(header =>
-      header?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    console.log('[DEBUG ColumnMappingModal] memoizedExcelHeaders:', headers);
-    return headers;
-  }, [sheetState, searchQuery]);
+    // CASE 1: Use headers from sheet state if available
+    if (sheetState?.headers && Array.isArray(sheetState.headers) && sheetState.headers.length > 0) {
+      // Filter based on search query if any
+      const headers = sheetState.headers.filter(header => 
+        header && typeof header === 'string' && 
+        header.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      
+      console.log('[DEBUG ColumnMappingModal] memoizedExcelHeaders from sheet headers:', headers);
+      return headers;
+    }
+    
+    // CASE 2: For empty headers, fall back to table columns from database if table is selected
+    if (sheetState?.selectedTable && tableInfo?.columns && tableInfo.columns.length > 0) {
+      console.log('[DEBUG ColumnMappingModal] No headers in sheet - falling back to table columns');
+      // Use the database columns as headers (skip system columns)
+      const dbHeaders = tableInfo.columns
+        .filter(col => !['id', 'created_at', 'updated_at'].includes(col.columnName))
+        .map(col => col.columnName)
+        .filter(header => header.toLowerCase().includes(searchQuery.toLowerCase()));
+        
+      console.log('[DEBUG ColumnMappingModal] Using tableInfo columns as headers:', dbHeaders);
+      return dbHeaders;
+    }
+    
+    // CASE 3: No headers available
+    console.warn('[DEBUG ColumnMappingModal] No headers found in sheet or table info');
+    return [];
+  }, [sheetState, tableInfo, searchQuery]);
 
   const memoizedTargetColumns = useMemo(() => {
     return (tableInfo?.columns || []).filter(col => !['id', 'created_at', 'updated_at'].includes(col.columnName));
@@ -148,35 +200,187 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
 
     if (open && sheetState) {
       const initialMappings: Record<string, BatchColumnMapping> = {};
-      sheetState.headers?.forEach(header => {
-        const existingMapping = sheetState.columnMappings?.[header];
-        if (existingMapping) {
-          initialMappings[header] = {
-            ...existingMapping, 
-            reviewStatus: existingMapping.reviewStatus || 'pending', 
+      
+      // STRATEGY 1: Use headers from sheet state if available
+      if (sheetState.headers && Array.isArray(sheetState.headers) && sheetState.headers.length > 0) {
+        console.log(`[DEBUG ColumnMappingModal] Processing ${sheetState.headers.length} headers for sheet`);
+        
+        // Process each header
+        sheetState.headers.forEach(header => {
+          if (!header) {
+            console.warn('[DEBUG ColumnMappingModal] Skipping undefined or null header');
+            return;
+          }
+          
+          // Use existing mapping if available (preserves review status)
+          const existingMapping = sheetState.columnMappings?.[header];
+          
+          if (existingMapping) {
+            initialMappings[header] = {
+              ...existingMapping, 
+              // Keep the existing reviewStatus to preserve approved mappings
+              reviewStatus: existingMapping.reviewStatus || 'pending', 
+              suggestedColumns: existingMapping.suggestedColumns || [],
+              status: existingMapping.status || 'pending',
+              confidenceScore: existingMapping.confidenceScore ?? 0,
+              confidenceLevel: existingMapping.confidenceLevel || 'Low',
+            };
+          } else {
+            console.warn(`No existing BatchColumnMapping found for header: ${header}. Creating default.`);
+            
+            // Get sample data if available
+            const hasSampleData = sheetState.sampleData && Array.isArray(sheetState.sampleData) && sheetState.sampleData.length > 0;
+            const sampleValue = hasSampleData ? (sheetState.sampleData[0]?.[header] ?? null) : null;
+            
+            // Create default mapping
+            initialMappings[header] = {
+              header: header,
+              sampleValue: sampleValue,
+              suggestedColumns: [], 
+              inferredDataType: 'string', 
+              status: 'pending', 
+              reviewStatus: 'pending',
+              action: 'skip',
+              mappedColumn: null,
+              newColumnProposal: undefined,
+              confidenceScore: 0,
+              confidenceLevel: 'Low',
+            };
+          }
+        });
+      } else {
+        console.warn(`[DEBUG ColumnMappingModal] Sheet has no headers. Trying alternatives...`);
+        
+        // STRATEGY 2: Try to extract headers from sample data
+        if (sheetState.sampleData && Array.isArray(sheetState.sampleData) && sheetState.sampleData.length > 0) {
+          // Extract headers from the first row of sample data
+          const extractedHeaders = Object.keys(sheetState.sampleData[0]);
+          
+          if (extractedHeaders.length > 0) {
+            console.log(`[DEBUG ColumnMappingModal] Extracted ${extractedHeaders.length} headers from sample data`);
+            // Process each extracted header
+            extractedHeaders.forEach(header => processHeader(header, initialMappings, sheetState));
+          }
+        }
+        
+        // STRATEGY 3: If tableInfo exists and we have a selected table, use its columns as headers
+        if (Object.keys(initialMappings).length === 0 && tableInfo && tableInfo.columns && tableInfo.columns.length > 0) {
+          console.log(`[DEBUG ColumnMappingModal] Using table columns as headers: ${tableInfo.columns.length} columns`);
+          
+          tableInfo.columns.forEach(column => {
+            // Skip system columns like id, created_at that might not be in the import
+            if (['id', 'created_at', 'updated_at'].includes(column.columnName)) {
+              return;
+            }
+            
+            // Get existing mapping for this column name if it exists
+            let existingMapping: BatchColumnMapping | null = null;
+            
+            if (sheetState.columnMappings) {
+              // Try to find if this column was previously mapped
+              Object.values(sheetState.columnMappings).forEach(mapping => {
+                if (mapping && mapping.mappedColumn === column.columnName) {
+                  existingMapping = mapping as BatchColumnMapping;
+                }
+              });
+            }
+            
+            if (existingMapping && typeof existingMapping === 'object') {
+              // We have an existing mapping for this column, use it as a base
+              // Create a new object to avoid type errors with spread
+              initialMappings[column.columnName] = {
+                header: column.columnName,
+                sampleValue: existingMapping.sampleValue || null,
+                suggestedColumns: existingMapping.suggestedColumns || [],
+                inferredDataType: existingMapping.inferredDataType || 'string',
+                status: existingMapping.status || 'pending',
+                reviewStatus: existingMapping.reviewStatus || 'pending',
+                action: existingMapping.action || 'map',
+                mappedColumn: column.columnName,
+                newColumnProposal: existingMapping.newColumnProposal,
+                confidenceScore: existingMapping.confidenceScore || 1,
+                confidenceLevel: existingMapping.confidenceLevel || 'High',
+              };
+            } else {
+              // Create a new mapping for this column
+              const suggestedCol: RankedColumnSuggestion = {
+                columnName: column.columnName,
+                confidenceScore: 1,
+                confidenceLevel: 'High' as const,
+                isTypeCompatible: true
+              };
+              
+              initialMappings[column.columnName] = {
+                header: column.columnName,
+                sampleValue: null,
+                suggestedColumns: [suggestedCol],
+                inferredDataType: mapDbTypeToColumnType(column.dataType),
+                status: 'suggested',
+                reviewStatus: 'pending',
+                action: 'map',
+                mappedColumn: column.columnName,
+                confidenceScore: 1,
+                confidenceLevel: 'High',
+              };
+            }
+          });
+        }
+      }
+      
+      // Helper function to process a header and create mapping
+      function processHeader(header: string, mappings: Record<string, BatchColumnMapping>, state: SheetProcessingState) {
+        // Use existing mapping if available (preserves review status)
+        const existingMapping = state.columnMappings?.[header];
+        
+        if (existingMapping && typeof existingMapping === 'object') {
+          // Create a new object with all required fields to avoid type errors
+          mappings[header] = {
+            header: header,
+            sampleValue: existingMapping.sampleValue || null,
             suggestedColumns: existingMapping.suggestedColumns || [],
+            inferredDataType: existingMapping.inferredDataType || 'string',
+            status: existingMapping.status || 'pending',
+            reviewStatus: existingMapping.reviewStatus || 'pending',
+            action: existingMapping.action || 'skip',
+            mappedColumn: existingMapping.mappedColumn || null,
+            newColumnProposal: existingMapping.newColumnProposal,
+            confidenceScore: existingMapping.confidenceScore || 0,
+            confidenceLevel: existingMapping.confidenceLevel || 'Low',
           };
         } else {
-          console.warn(`No existing BatchColumnMapping found for header: ${header}. Creating default.`);
-          initialMappings[header] = {
+          const hasSampleData = state.sampleData && Array.isArray(state.sampleData) && state.sampleData.length > 0;
+          const sampleValue = hasSampleData ? (state.sampleData[0]?.[header] ?? null) : null;
+          
+          mappings[header] = {
             header: header,
-            sampleValue: sheetState.sampleData?.[0]?.[header] ?? null,
-            suggestedColumns: [], 
-            inferredDataType: null, 
-            status: 'pending', 
+            sampleValue: sampleValue,
+            suggestedColumns: [],
+            inferredDataType: 'string',
+            status: 'pending',
             reviewStatus: 'pending',
-            action: 'skip', 
+            action: 'skip',
             mappedColumn: null,
             newColumnProposal: undefined,
             confidenceScore: 0,
             confidenceLevel: 'Low',
           };
         }
-      });
+      }
+      
+      // Log warning if we still have no mappings
+      if (Object.keys(initialMappings).length === 0) {
+        console.warn('[DEBUG ColumnMappingModal] Failed to create any mappings - all strategies failed');
+      } else {
+        console.log(`[DEBUG ColumnMappingModal] Created ${Object.keys(initialMappings).length} mappings`);
+      }
+      
       setMappings(initialMappings);
       setNewColumnDialogOpen(false);
       setSearchQuery('');
+      
+      // Set view mode based on header count
       setViewMode((sheetState.headers?.length || 0) > 30 ? 'virtualized' : 'table');
+      
       if (isCreatingTable) {
         setEditableTableName(actualTableNameFromSheetState); // Initialize editable name
       }
@@ -256,16 +460,48 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     console.log('[DEBUG ColumnMappingModal] updateColumnMapping:', { excelCol, selectedValue });
 
     if (selectedValue === 'create-new-column') {
+      // Set current Excel column for the new column dialog
       setCurrentExcelColumn(excelCol);
+      
+      // Generate a SQL-friendly name from the Excel column name
       const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+      
+      // Set the suggested name in the dialog
       setNewColumnName(suggestedName);
+      
+      // Use the inferred data type if available or default to string
       setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
+      
+      // Open the new column dialog
       setNewColumnDialogOpen(true);
-      handleMappingUpdate(excelCol, { action: 'create' });
+      
+      // Update the mapping to indicate creation action (will be finalized when dialog is confirmed)
+      handleMappingUpdate(excelCol, { 
+        action: 'create'
+      });
+    } else if (selectedValue === 'skip-column') {
+      // Explicit skip action with UI notification
+      handleMappingUpdate(excelCol, { 
+        action: 'skip', 
+        mappedColumn: null, 
+        newColumnProposal: undefined,
+        reviewStatus: 'approved', // Mark as approved since user explicitly chose to skip
+      });
     } else if (!selectedValue) {
-      handleMappingUpdate(excelCol, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });
+      // Default skip action (when no selection is made)
+      handleMappingUpdate(excelCol, { 
+        action: 'skip', 
+        mappedColumn: null, 
+        newColumnProposal: undefined 
+      });
     } else {
-      handleMappingUpdate(excelCol, { action: 'map', mappedColumn: selectedValue, newColumnProposal: undefined });
+      // Map to an existing column
+      handleMappingUpdate(excelCol, { 
+        action: 'map', 
+        mappedColumn: selectedValue, 
+        newColumnProposal: undefined,
+        reviewStatus: 'approved', // Mark as approved since user explicitly selected a mapping
+      });
     }
   };
 
@@ -277,11 +513,14 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
       alert('Please enter a valid column name.');
       return;
     }
+    
+    // Format to SQL-friendly name
     const formattedColumnName = trimmedName
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, '_')
       .replace(/_+/g, '_');
 
+    // Check for duplicates against existing columns and other planned new columns
     const existingDbCols = memoizedTargetColumns.map(c => c.columnName);
     const otherNewCols = Object.values(mappings)
         .filter(m => m.action === 'create' && m.header !== currentExcelColumn)
@@ -292,6 +531,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         return;
     }
 
+    // Create the column proposal with match percentage information
     const proposal: NewColumnProposal = {
         columnName: formattedColumnName,
         sqlType: mapColumnTypeToSql(newColumnType), 
@@ -301,12 +541,17 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         createStructureOnly: createStructureOnly, 
     };
 
+    // Update the mapping with the new column information and 100% confidence 
+    // since it's user-created
     handleMappingUpdate(currentExcelColumn, {
         action: 'create',
         mappedColumn: formattedColumnName, 
         newColumnProposal: proposal,
         inferredDataType: newColumnType, 
-        reviewStatus: 'approved', 
+        reviewStatus: 'approved',
+        confidenceScore: 1.0, // 100% confidence for user-created columns
+        confidenceLevel: 'High', // High confidence for user-created columns
+        possibleNewColumnName: formattedColumnName, // Store the SQL-friendly name
     });
 
     setNewColumnDialogOpen(false);
@@ -340,12 +585,24 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   };
 
   const getColumnSample = (columnName: string) => {
-    if (!sheetState?.sampleData || sheetState.sampleData.length === 0) return 'No data';
+    // Handle empty dataset cases more explicitly
+    if (!sheetState?.sampleData || sheetState.sampleData.length === 0) {
+      // Return a more informative message for empty tables
+      return 'No sample data available (empty table)';
+    }
+    
+    // Extract and filter sample values
     const samples = sheetState.sampleData
         .map(row => row[columnName])
         .filter(value => value !== undefined && value !== null && value !== '')
         .slice(0, 5);
-    if (samples.length === 0) return '(empty)';
+        
+    if (samples.length === 0) {
+      // More specific message when this column is empty
+      return '(column contains no data)';
+    }
+    
+    // Format sample values with truncation
     const result = samples.map(s => String(s).substring(0, 15)).join(' | ');
     return result.length > 60 ? result.substring(0, 57) + '...' : result;
   };

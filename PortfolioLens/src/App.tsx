@@ -15,6 +15,7 @@ import { UserRoleProvider } from "./contexts/userRoleContext";
 import { UserRoleType } from "./types/userRoles";
 import { UserRoleManagement } from "./pages/users";
 import { AdminProvider } from "./contexts/adminContext";
+import { LoanSearchProvider } from "./contexts/loanSearchContext";
 import { ModuleGuard } from "./components/common/ModuleGuard";
 import { ImpersonationIndicator } from "./components/layout/ImpersonationIndicator";
 import { ModuleType } from "./types/adminTypes";
@@ -42,6 +43,7 @@ import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import SupportAgentIcon from "@mui/icons-material/SupportAgent";
 import DescriptionIcon from "@mui/icons-material/Description";
+import SearchIcon from "@mui/icons-material/Search";
 import CssBaseline from "@mui/material/CssBaseline";
 import GlobalStyles from "@mui/material/GlobalStyles";
 import routerBindings, {
@@ -57,11 +59,12 @@ import { Header } from "./components/header";
 import { ColorModeContextProvider } from "./contexts/color-mode";
 // Import components for each resource
 import {
-  LoanList,
+  LoanList, 
   LoanCreate,
   LoanEdit,
   LoanShow,
   LoanPortfolioMapping,
+  LoanSearch,
 } from "./pages/loans";
 import {
   ServicerList,
@@ -181,6 +184,15 @@ function App() {
                     },
                   },
                   {
+                    name: "loan-search",
+                    list: "/loans/search",
+                    meta: {
+                      label: "Advanced Search",
+                      icon: <SearchIcon />,
+                      parent: "loans",
+                    },
+                  },
+                  {
                     name: "batch-import",
                     list: "/batch-import",
                     meta: {
@@ -244,8 +256,10 @@ function App() {
                       >
                         <ThemedLayoutV2 Header={Header}>
                           <UserRoleProvider>
-                            <ImpersonationIndicator />
-                            <Outlet />
+                            <LoanSearchProvider>
+                              <ImpersonationIndicator />
+                              <Outlet />
+                            </LoanSearchProvider>
                           </UserRoleProvider>
                         </ThemedLayoutV2>
                       </Authenticated>
@@ -276,6 +290,7 @@ function App() {
                         <Route path="edit/:id" element={<LoanEdit />} />
                         <Route path="show/:id" element={<LoanShow />} />
                         <Route path="portfolio-mapping" element={<LoanPortfolioMapping />} />
+                        <Route path="search" element={<LoanSearch />} />
                       </Route>
 
                       <Route path="servicers" element={
