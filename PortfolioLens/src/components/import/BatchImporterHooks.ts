@@ -79,7 +79,13 @@ export const useBatchImportWorker = (
 
     // Initialize worker and setup message/error handlers
     useEffect(() => {
-        workerRef.current = new Worker(new URL('./workers/batchImport.worker.ts?v=1', import.meta.url), { type: 'module' });
+        // Create a URL with a timestamp parameter the Vite-compatible way
+        const workerUrl = new URL('./workers/batchImport.worker.ts', import.meta.url);
+        // Add timestamp as a search parameter rather than in the URL string
+        workerUrl.searchParams.append('v', Date.now().toString());
+        
+        workerRef.current = new Worker(workerUrl, { type: 'module' });
+        console.log(`[INFO] Initializing worker with cache-busting timestamp: ${workerUrl.searchParams.get('v')}`);
 
         workerRef.current.onmessage = (event: MessageEvent<any>) => {
             

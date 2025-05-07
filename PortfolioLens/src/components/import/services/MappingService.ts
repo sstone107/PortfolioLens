@@ -2,12 +2,13 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import {
   ColumnMapping,
   TableMappingSuggestion,
-  ColumnType,
+  ColumnType, 
   MappingTemplate,
   GlobalAttributes,
   SubServicerTag,
   AuditTrailEntry
 } from '../types';
+import { calculateStringSimilarity } from '../utils/StringSimilarity';
 import { supabaseClient } from '../../../utility';
 import { MetadataService } from './MetadataService';
 import { executeSql, applyMigration } from '../../../utility/supabaseMcp';
@@ -540,60 +541,11 @@ export class MappingService {
       'late_charge_grace_days': ['gracedaysforlatecharge', 'latechargedays', 'daysbeforelatecharge', 'grace_days', 'grace_period']
     };
 
-    // Function to calculate name similarity score
+    // Function to calculate name similarity score - completely replaced with shared utility
     const calculateNameSimilarity = (excelCol: string, dbColName: string): number => {
-      // Import the normalizeForMatching function from BatchImporterUtils
-      const { normalizeForMatching } = require('../../BatchImporterUtils');
-      
-      // Fully normalize both strings (removing case, spaces, underscores, etc.)
-      const normalizedExcelCol = normalizeForMatching(excelCol);
-      const normalizedDbCol = normalizeForMatching(dbColName);
-
-      // 1. Exact normalized match (highest priority)
-      // This will catch cases like "Valon Loan ID" matching with "valon_loan_id"
-      if (normalizedExcelCol === normalizedDbCol && normalizedExcelCol !== '') {
-        return 1.0;
-      }
-      
-      // 2. Case-insensitive exact match
-      if (excelCol.toLowerCase() === dbColName.toLowerCase()) {
-        return 1.0;
-      }
-
-      // 3. Substring matches
-      if (normalizedDbCol.includes(normalizedExcelCol) && normalizedExcelCol.length > 3) {
-        return 0.8;
-      } else if (normalizedExcelCol.includes(normalizedDbCol) && normalizedDbCol.length > 3) {
-        return 0.7;
-      }
-
-      // 4. Word-level matching
-      const excelWords = excelCol.toLowerCase().split(/[_\s-]+/).filter(w => w.length > 2);
-      const dbWords = dbColName.toLowerCase().split(/[_\s-]+/).filter(w => w.length > 2);
-      const commonWordCount = excelWords.filter(w => dbWords.includes(w)).length;
-      if (commonWordCount > 0) {
-        return 0.6 * (commonWordCount / Math.max(excelWords.length, dbWords.length));
-      }
-
-      // 5. Field alias matching
-      for (const [key, aliases] of Object.entries(fieldAliases)) {
-        const excelHasKey = normalizedExcelCol.includes(key) ||
-                            aliases.some(a => normalizedExcelCol.includes(a));
-        const dbHasKey = normalizedDbCol.includes(key) ||
-                        aliases.some(a => normalizedDbCol.includes(a));
-
-        if (excelHasKey && dbHasKey) {
-          return 0.5;
-        }
-      }
-
-      // Special handling for specific fields if needed (like the previous late_charge_grace_days example)
-      if (dbColName === 'late_charge_grace_days' &&
-          (normalizedExcelCol.includes('late') || normalizedExcelCol.includes('grace'))) {
-        return 0.6;
-      }
-
-      return 0; // No significant name similarity
+      // Use our shared string similarity implementation that handles special cases
+      // This ensures consistent behavior between worker and main thread
+      return calculateStringSimilarity(excelCol, dbColName);
     };
 
     // Function to check type compatibility
