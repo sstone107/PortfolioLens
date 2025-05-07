@@ -8,7 +8,7 @@ export const SUPABASE_PROJECT_ID = 'kukfbbaevndujnodafnk';
 // For local development, we'll use a public demo project
 // In production, these should be environment variables
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://kukfbbaevndujnodafnk.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1a2ZiYmFldm5kdWpub2RhZm5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODI1MzQ0MDAsImV4cCI6MTk5ODExMDQwMH0.PygYV7pMKEQoQodwDt_HUBDmxqO9ESPecBwkICN_YwA';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1a2ZiYmFldm5kdWpub2RhZm5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYxMjk4NzcsImV4cCI6MjA2MTcwNTg3N30.h32Q0CyVxT4D_Gp9O-nngRo9iUs6CPcEGxq-BpQidxA';
 
 // Verify that credentials are set
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {

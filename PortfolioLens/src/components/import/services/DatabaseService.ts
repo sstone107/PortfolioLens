@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { SchemaCacheService } from './SchemaCacheService'; // <-- ADD IMPORT
+import { SchemaCacheService } from './SchemaCacheService'; 
 import {
   TableInfo,
   ImportJob,
@@ -7,7 +7,7 @@ import {
   MissingColumnInfo,
   TableMappingSuggestion,
   ColumnType,
-  DbColumnInfo // <-- ADD DbColumnInfo
+  DbColumnInfo 
 } from '../types';
 import { MetadataService } from './MetadataService';
 import { MappingService } from './MappingService';
@@ -16,6 +16,7 @@ import { executeSql, applyMigration, SUPABASE_PROJECT_ID } from '../../../utilit
 import { initMcpBridge } from '../../../utility/mcpBridge';
 import SqlExecutionService, { SqlExecutionOptions } from '../../../services/SqlExecutionService';
 import { UserRoleType } from '../../../types/userRoles';
+import { supabaseClient as globalSupabaseClient } from '../../../utility/supabaseClient'; 
 
 /**
  * Connection state enum for tracking database connection status
@@ -83,18 +84,18 @@ export class DatabaseService {
   };
   
   // Specialized services
-  private metadataService!: MetadataService; // Definite assignment in initializeServices
-  private mappingService!: MappingService;   // Definite assignment in initializeServices
-  private importService!: ImportService;     // Definite assignment in initializeServices
-  private schemaCacheService!: SchemaCacheService; // <-- ADD DECLARATION (Definite assignment)
+  private metadataService!: MetadataService; 
+  private mappingService!: MappingService;   
+  private importService!: ImportService;     
+  private schemaCacheService!: SchemaCacheService; 
   
   constructor(customClient?: SupabaseClient) {
     // Initialize MCP bridge to ensure MCP functions are available
-    // initMcpBridge(); // Commented out to bypass MCP server dependency
-    
-    // Store the client if provided (mainly for testing purposes)
-    this.client = customClient || null;
-    
+    // initMcpBridge(); 
+    console.log('[DatabaseService constructor] Initializing. Custom client provided:', !!customClient);
+    // Store the client if provided, otherwise use the global client
+    this.client = customClient || globalSupabaseClient;
+    console.log('[DatabaseService constructor] this.client after assignment:', this.client ? 'Exists' : 'null');
     // Initialize services
     this.initializeServices();
   }
@@ -106,7 +107,7 @@ export class DatabaseService {
   private async initializeServices(): Promise<void> {
     try {
       // Initialize services with minimal logging
-      
+      console.log('[DatabaseService initializeServices] Starting service initialization.');
       // 1. Create SchemaCacheService, passing this DatabaseService instance
       const schemaCacheServiceInstance = new SchemaCacheService(this);
       
@@ -130,7 +131,9 @@ export class DatabaseService {
       this.importService = new ImportService(this.metadataService, this.client || undefined);
 
       // 6. Verify connection (can happen after services are set up)
+      console.log('[DatabaseService initializeServices] Attempting to verify connection...');
       await this.verifyConnection();
+      console.log('[DatabaseService initializeServices] Connection verification process completed. State:', this.connectionState);
 
     } catch (error) {
       console.error('Failed to initialize database services:', error);
@@ -148,9 +151,11 @@ export class DatabaseService {
    */
   async verifyConnection(): Promise<boolean> {
     if (this.connectionState === ConnectionState.CONNECTED) {
+      console.log('[DatabaseService verifyConnection] Already connected.');
       return true;
     }
     
+    console.log('[DatabaseService verifyConnection] Setting state to CONNECTING.');
     this.connectionState = ConnectionState.CONNECTING;
     this.connectionAttempts = 0;
     
@@ -165,10 +170,11 @@ export class DatabaseService {
   private async attemptConnection(): Promise<boolean> {
     try {
       this.connectionAttempts++;
-      
+      console.log(`[DatabaseService attemptConnection] Attempt: ${this.connectionAttempts}`);
       // Execute a simple query to verify connection
       // Execute query with minimal logging
       const { data, error } = await executeSql(`SELECT version();`);
+      console.log('[DatabaseService attemptConnection] executeSql result - data:', data, 'error:', error);
 
       // Enhanced verification logic to handle different result formats
       if (error) {
@@ -179,40 +185,45 @@ export class DatabaseService {
       // Check if the result is valid - more resilient to different result formats
       if (Array.isArray(data)) {
         // Case 1: Standard format - array with one element containing version info
-        if (data.length === 1 && data[0]?.version) { // Added optional chaining for safety
+        if (data.length === 1 && data[0]?.version) { 
+          console.log('[DatabaseService attemptConnection] Connection successful (standard array structure).');
           this.connectionState = ConnectionState.CONNECTED;
           return true;
         }
         // Case 2: Empty array - valid response indicating success but no rows
         else if (data.length === 0) {
+          console.log('[DatabaseService attemptConnection] Connection successful (empty array).');
           this.connectionState = ConnectionState.CONNECTED;
           return true;
         }
         // Case 3: Non-empty array with unexpected structure
-        else { // data.length > 0 but not the expected format
+        else { 
+          console.log('[DatabaseService attemptConnection] Connection successful (unexpected array structure).');
           this.connectionState = ConnectionState.CONNECTED;
           return true;
         }
       } else if (data !== null && typeof data === 'object') {
+        console.log('[DatabaseService attemptConnection] Connection successful (object response).');
         // Case 4: Non-array object response (might happen with some MCP mocks or errors)
-        this.connectionState = ConnectionState.CONNECTED; // Still treat as connected if no error thrown
+        this.connectionState = ConnectionState.CONNECTED; 
         return true;
       }
 
-      // If data is null or some other unexpected type, but no error was thrown
-      this.connectionState = ConnectionState.CONNECTED; // Assume connected if no error
-      return true;
-    } catch (error) {
-      console.error(`Connection attempt ${this.connectionAttempts} failed:`, error);
-      
+      // If data is null or not an array/object, assume failure
+      console.warn('[DatabaseService attemptConnection] Connection verification failed: Invalid data response.');
+      throw new Error('Invalid data response from version query');
+
+    } catch (err) {
+      console.error(`[DatabaseService attemptConnection] Attempt ${this.connectionAttempts} failed:`, err);
       if (this.connectionAttempts < this.MAX_RETRY_ATTEMPTS) {
+        console.log(`[DatabaseService attemptConnection] Retrying in ${this.RETRY_DELAY_MS}ms...`);
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS));
         return this.attemptConnection();
       }
       
       this.connectionState = ConnectionState.ERROR;
-      console.error(`All connection attempts failed after ${this.MAX_RETRY_ATTEMPTS} retries`);
+      console.error(`[DatabaseService attemptConnection] All connection attempts failed after ${this.MAX_RETRY_ATTEMPTS} retries`);
       return false;
     }
   }
@@ -226,31 +237,26 @@ export class DatabaseService {
   }
   
   /**
-   * Execute a database operation with connection pool management
-   * @param operation Function that performs the database operation
-   * @returns Promise resolving to the operation result
+   * Execute a database operation within the connection pool context
+   * @param operation Function to execute, which receives the Supabase client
+   * @returns Promise resolving to the operation's result
    */
-  private async executeWithConnectionPool<T>(operation: () => Promise<T>): Promise<T> {
-    // Verify connection before executing operation
-    if (this.connectionState !== ConnectionState.CONNECTED) {
-      const connected = await this.verifyConnection();
-      if (!connected) {
-        throw new Error('Cannot execute operation: Database connection failed');
-      }
-    }
-    
-    // Acquire connection from pool
+  private async executeWithConnectionPool<T>(operation: (client: SupabaseClient) => Promise<T>): Promise<T> {
+    console.log('[DatabaseService executeWithConnectionPool] Acquiring connection. Current this.client:', this.client ? 'Exists' : 'null', 'Connection state:', this.connectionState);
     await this.connectionPool.acquire();
     
     try {
-      // Execute the operation
-      return await operation();
+      if (!this.client) {
+        console.error('[DatabaseService executeWithConnectionPool] Supabase client is not initialized.');
+        throw new Error('Supabase client is not initialized in DatabaseService.');
+      }
+      return await operation(this.client);
     } finally {
-      // Release connection back to pool
+      console.log('[DatabaseService executeWithConnectionPool] Releasing connection.');
       this.connectionPool.release();
     }
   }
-  
+
   // ------------- Table Metadata Methods -------------
   
   /**
@@ -258,20 +264,25 @@ export class DatabaseService {
    * @returns Promise resolving to array of table names
    */
   async getTables(): Promise<string[]> {
-    // Fetch tables directly, excluding system tables
-    return this.executeWithConnectionPool(async () => {
-        const sql = `
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-            AND table_name NOT IN (
-               'users', 'audit_logs', 'audit_trail', 'sql_execution_log',
-               'user_roles', 'user_role_assignments', 'roles', 'module_visibility'
-            )
-            ORDER BY table_name;
-        `;
-        const results = await this.executeSQL(sql);
-        return results.map((row: any) => row.table_name);
+    // Fetch tables using the RPC
+    return this.executeWithConnectionPool(async (client) => {
+      if (!client) {
+        console.error("Supabase client is not initialized in DatabaseService.");
+        throw new Error("Supabase client not initialized.");
+      }
+
+      // Call the RPC function
+      const { data, error } = await client.rpc('get_public_table_names');
+
+      if (error) {
+        console.error('Error calling get_public_table_names RPC:', error);
+        // Consider more specific error handling or logging here
+        throw error; 
+      }
+
+      // Data should be an array of strings (table names) if the RPC returns SETOF TEXT
+      // If data is null (e.g., function returns no rows), default to an empty array.
+      return data || [];
     });
   }
 
@@ -283,9 +294,9 @@ export class DatabaseService {
    */
   async getColumns(tableName: string, bypassCache: boolean = false): Promise<DbColumnInfo[]> {
      // Ensure table name is properly escaped and single-quoted for SQL literal
-     const escapedTableName = tableName.replace(/'/g, "''"); // Escape single quotes
+     const escapedTableName = tableName.replace(/'/g, "''"); 
 
-     return this.executeWithConnectionPool(async () => {
+     return this.executeWithConnectionPool(async (client) => {
         try {
            // If bypassCache is true, force a schema refresh before fetching columns
            if (bypassCache) {
@@ -300,7 +311,7 @@ export class DatabaseService {
            const columnSql = `
                SELECT column_name, data_type, is_nullable, column_default
                FROM information_schema.columns
-               WHERE table_schema = 'public' AND table_name = '${escapedTableName}' -- Use interpolated single-quoted name
+               WHERE table_schema = 'public' AND table_name = '${escapedTableName}' 
                ORDER BY ordinal_position;
            `;
            
@@ -316,7 +327,7 @@ export class DatabaseService {
                  AND tc.table_schema = kcu.table_schema
                WHERE tc.constraint_type = 'PRIMARY KEY'
                  AND tc.table_schema = 'public'
-                 AND tc.table_name = '${escapedTableName}'; -- Use interpolated single-quoted name
+                 AND tc.table_name = '${escapedTableName}'; 
            `;
 
            const pkResult = await this.executeSQL(pkSql);
@@ -327,17 +338,17 @@ export class DatabaseService {
                // Validate column data before mapping
                if (!col || typeof col.column_name !== 'string') {
                    console.warn(`Invalid column data:`, JSON.stringify(col));
-                   return null; // Will be filtered out below
+                   return null; 
                }
                
                return {
                    columnName: col.column_name,
-                   dataType: col.data_type || 'text', // Default to text if missing
+                   dataType: col.data_type || 'text', 
                    isNullable: col.is_nullable === 'YES',
                    columnDefault: col.column_default,
                    isPrimaryKey: primaryKeys.has(col.column_name)
                };
-           }).filter((col): col is DbColumnInfo => col !== null); // Type guard to filter out null entries
+           }).filter((col): col is DbColumnInfo => col !== null); 
            
            // If no valid columns were found, return a default structure with id column
            if (mappedColumns.length === 0) {
@@ -373,12 +384,12 @@ export class DatabaseService {
    * @returns Promise resolving to table information
    */
   async getTableInfo(tableName: string): Promise<TableInfo> {
-     return this.executeWithConnectionPool(async () => {
+     return this.executeWithConnectionPool(async (client) => {
         // Use the new getColumns method
         const columns = await this.getColumns(tableName);
 
         // TODO: Fetch table description if needed from another source (e.g., pg_description)
-        const description = undefined; // Placeholder
+        const description = undefined; 
 
         // Assuming DbColumnInfo structure is compatible with TableColumn
         return {
@@ -400,7 +411,7 @@ export class DatabaseService {
     mapping: Record<string, ColumnMapping>
   ): Promise<MissingColumnInfo[]> {
      // Correct Implementation: Detect missing columns directly
-     return this.executeWithConnectionPool(async () => {
+     return this.executeWithConnectionPool(async (client) => {
         const tableInfo = await this.getTableInfo(tableName);
         const existingColumns = new Set(tableInfo.columns.map(c => c.columnName.toLowerCase()));
         const missing: MissingColumnInfo[] = [];
@@ -410,15 +421,15 @@ export class DatabaseService {
             // Use targetMapping.dbColumn and check if it's intended for the current tableName
             // Assuming the mapping structure implies the target table, or we filter mappings beforehand.
             // For now, let's assume the mapping passed is only for the relevant tableName.
-            if (targetMapping.dbColumn) { // Check if a db column is specified
+            if (targetMapping.dbColumn) { 
                 const targetDbColumnLower = targetMapping.dbColumn.toLowerCase();
                 if (!existingColumns.has(targetDbColumnLower)) {
                     // Check if already added to avoid duplicates
                     if (!missing.some(m => m.columnName.toLowerCase() === targetDbColumnLower)) {
                          missing.push({
-                            columnName: targetMapping.dbColumn, // Use dbColumn, keep original casing
-                            suggestedType: 'TEXT', // Default SQL type to TEXT, can be refined later
-                            originalType: targetMapping.type // Add the required originalType from the mapping
+                            columnName: targetMapping.dbColumn, 
+                            suggestedType: 'TEXT', 
+                            originalType: targetMapping.type 
                         });
                     }
                 }
@@ -449,7 +460,7 @@ export class DatabaseService {
         // Transform the columns to the format expected by add_columns_batch
         const transformedColumns = missingColumns.map(col => ({
             name: col.columnName,
-            type: col.suggestedType || 'TEXT' // Default to TEXT if type missing
+            type: col.suggestedType || 'TEXT' 
         }));
         
         // Import supabaseClient directly to use RPC
@@ -502,7 +513,7 @@ export class DatabaseService {
    * @returns Promise resolving to array of mappings
    */
   async getMappings(tableName: string): Promise<Record<string, any>[]> {
-    return this.executeWithConnectionPool(() => 
+    return this.executeWithConnectionPool((client) => 
       this.mappingService.getMappings(tableName)
     );
   }
@@ -519,7 +530,7 @@ export class DatabaseService {
     tableName: string,
     mapping: Record<string, ColumnMapping>
   ): Promise<string> {
-    return this.executeWithConnectionPool(() => 
+    return this.executeWithConnectionPool((client) => 
       this.mappingService.saveMappingTemplate(name, tableName, mapping)
     );
   }
@@ -548,7 +559,7 @@ export class DatabaseService {
   suggestColumnMappings(
     sheetData: Record<string, any>[],
     tableInfo: TableInfo
-  ): Record<string, import('../types').ColumnMappingSuggestions> { // Corrected return type
+  ): Record<string, import('../types').ColumnMappingSuggestions> { 
     // The underlying service method returns suggestions, not a final mapping
     return this.mappingService.suggestColumnMappings(sheetData, tableInfo);
   }
@@ -558,9 +569,9 @@ export class DatabaseService {
    * @param sheetNames Array of sheet names
    * @returns Promise resolving to table mapping suggestions
    */
-  async getSuggestedTableMappings(sheetNames: string[]): Promise<TableMappingSuggestion[]> { // Revert parameter to sheetNames
-    return this.executeWithConnectionPool(() =>
-      this.mappingService.getSuggestedTableMappings(sheetNames) // Pass sheetNames
+  async getSuggestedTableMappings(sheetNames: string[]): Promise<TableMappingSuggestion[]> { 
+    return this.executeWithConnectionPool((client) =>
+      this.mappingService.getSuggestedTableMappings(sheetNames) 
     );
   }
   
@@ -578,7 +589,7 @@ export class DatabaseService {
     excelData: Record<string, Record<string, any>[]>,
     createMissingColumns: boolean
   ): Promise<Record<string, ImportResult>> {
-    return this.executeWithConnectionPool(() => 
+    return this.executeWithConnectionPool((client) => 
       this.importService.processBatchImport(jobs, excelData, createMissingColumns)
     );
   }
@@ -591,7 +602,7 @@ export class DatabaseService {
   async createImportJob(
     job: Omit<ImportJob, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'processedRows'>
   ): Promise<string> {
-    return this.executeWithConnectionPool(() => 
+    return this.executeWithConnectionPool((client) => 
       this.importService.createImportJob(job)
     );
   }
@@ -602,7 +613,7 @@ export class DatabaseService {
    * @returns Promise resolving to success status
    */
   async processImportJob(jobId: string): Promise<{ success: boolean, message: string }> {
-    return this.executeWithConnectionPool(() => 
+    return this.executeWithConnectionPool((client) => 
       this.importService.processImportJob(jobId)
     );
   }
@@ -619,7 +630,7 @@ export class DatabaseService {
     params: Record<string, any> = {},
     options: SqlExecutionOptions = {}
   ): Promise<any[]> {
-    return this.executeWithConnectionPool(async () => {
+    return this.executeWithConnectionPool(async (client) => {
       try {
         // Use the secure SQL execution service
         const result = await SqlExecutionService.executeQuery(sql, params, options);
@@ -650,7 +661,7 @@ export class DatabaseService {
     requiredRoles: UserRoleType[] = [],
     options: SqlExecutionOptions = {}
   ): Promise<any[]> {
-    return this.executeWithConnectionPool(async () => {
+    return this.executeWithConnectionPool(async (client) => {
       try {
         // Use the secure SQL execution service with role checks
         const result = await SqlExecutionService.executeSecureQuery(
@@ -679,7 +690,7 @@ export class DatabaseService {
    * @returns Promise resolving to migration result
    */
   async applyMigration(name: string, sql: string): Promise<any> {
-    return this.executeWithConnectionPool(async () => {
+    return this.executeWithConnectionPool(async (client) => {
       try {
         // Log the migration attempt in the SQL execution log
         await SqlExecutionService.executeQuery(
@@ -758,7 +769,7 @@ export class DatabaseService {
    * @returns Promise resolving to execution logs
    */
   async getSqlExecutionLogs(limit: number = 50, offset: number = 0): Promise<any> {
-    return this.executeWithConnectionPool(async () => {
+    return this.executeWithConnectionPool(async (client) => {
       try {
         const result = await SqlExecutionService.getLogs(limit, offset);
         return result;
