@@ -259,7 +259,7 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
       `); 
     }
     
-    // PROTECTION: Check if trying to set a new table to 'ready'
+    // Check if trying to set a new table to 'ready'
     if (updates.status === 'ready') {
       // Multiple checks to identify a new table
       const isNewTableByFlag = !!sheet.isNewTable;
@@ -268,18 +268,34 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                                    sheet.selectedTable.startsWith('import_')));
       const isEffectivelyNew = isNewTableByFlag || isNewTableByPrefix;
       
-      if (isEffectivelyNew) {
+      // Check if we have column mappings for this sheet, which indicates
+      // the user has saved valid mappings and the status should be updated
+      const hasValidMappings = sheet.columnMappings && Object.keys(sheet.columnMappings).length > 0;
+      
+      // NEW BEHAVIOR: Allow 'ready' status for all tables that have mappings
+      // Only block updates for new tables without any mappings
+      if (isEffectivelyNew && !hasValidMappings) {
         console.log(`
-        🛑🛑🛑 CRITICAL PROTECTION: Blocking 'ready' status for new table 🛑🛑🛑
+        🔶 INFO: Keeping 'needsReview' status for new table without mappings
         Sheet: ${sheetName}
-        Caller: ${new Error().stack}
         `);
         
-        // Override status update to 'needsReview' for new tables
+        // Override status update to 'needsReview' only for new tables without mappings
         updates = {
           ...updates,
           status: 'needsReview' as SheetCommitStatus
         };
+      } else if (hasValidMappings) {
+        console.log(`
+        ✅ ALLOWING: 'ready' status for table with saved mappings
+        Sheet: ${sheetName}
+        type: ${isEffectivelyNew ? 'new' : 'existing'}
+        `);
+        
+        // Additionally, ensure sheetReviewStatus is set to 'approved' for consistency
+        if (!updates.sheetReviewStatus) {
+          updates.sheetReviewStatus = 'approved';
+        }
       }
     }
     
@@ -290,13 +306,36 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
     if (updates.columnMappings) {
       updatedSheet.sheetReviewStatus = determineSheetReviewStatus(updatedSheet.columnMappings);
       
-      // FINAL PROTECTION: After updating review status, if it's a new table, ensure status is not 'ready'
+      // Check if new table should be allowed to progress to 'ready' status
       if (updatedSheet.isNewTable && updatedSheet.status === 'ready') {
-        console.log(`
-        ⛔⛔⛔ LAST LINE OF DEFENSE: Forcing new table to 'needsReview' ⛔⛔⛔
-        Sheet: ${sheetName}
-        `);
-        updatedSheet.status = 'needsReview';
+        // Allow 'ready' status if all these conditions are met:
+        // 1. Sheet review status is 'approved'
+        // 2. Column mappings exist and have been reviewed
+        const hasValidMappings = updatedSheet.columnMappings && 
+          Object.keys(updatedSheet.columnMappings).length > 0 &&
+          Object.values(updatedSheet.columnMappings).every(mapping => 
+            (mapping.action === 'skip') || // Skip is always valid
+            (mapping.action === 'map' && mapping.mappedColumn) || // Map with valid target
+            (mapping.action === 'create' && mapping.newColumnProposal) // Create with proposal
+          );
+
+        const isReadyToProgress = hasValidMappings && updatedSheet.sheetReviewStatus === 'approved';
+
+        if (!isReadyToProgress) {
+          console.log(`
+          ⛔⛔⛔ LAST LINE OF DEFENSE: Forcing new table to 'needsReview' ⛔⛔⛔
+          Sheet: ${sheetName}
+          hasValidMappings: ${hasValidMappings}
+          sheetReviewStatus: ${updatedSheet.sheetReviewStatus}
+          `);
+          updatedSheet.status = 'needsReview';
+        } else {
+          console.log(`
+          ✅✅✅ ALLOWING: New table to progress to 'ready' status ✅✅✅
+          Sheet: ${sheetName}
+          All mappings valid and approved
+          `);
+        }
       }
     }
 

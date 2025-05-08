@@ -15,17 +15,20 @@ import {
   Person, 
   Receipt, 
   History, 
-  Article 
+  Article,
+  Comment as CommentIcon
 } from '@mui/icons-material';
-import { useShow, useOne, useList } from "@refinedev/core";
+import { useShow, useList, useGetIdentity } from "@refinedev/core";
 import { useParams } from "react-router-dom";
 import { borrowerService } from "../../services/borrowerService";
+import { usePermission } from "../../hooks/usePermission";
 
 import { LoanSummaryTab } from './tabs/LoanSummaryTab';
 import { BorrowerInfoTab } from './tabs/BorrowerInfoTab';
 import { PaymentHistoryTab } from './tabs/PaymentHistoryTab';
 import { StatusLogTab } from './tabs/StatusLogTab';
 import { DocumentsTab } from './tabs/DocumentsTab';
+import { LoanNotes } from './LoanNotes';
 
 /**
  * TabPanel component to render the content of each tab
@@ -72,25 +75,38 @@ export const LoanDetailView: React.FC = () => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
   const [tabValue, setTabValue] = useState(0);
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   
   // State for borrower data fetched directly
   const [borrowers, setBorrowers] = useState<any[]>([]);
   const [isBorrowerLoading, setIsBorrowerLoading] = useState<boolean>(true);
 
-  // Get loan data
-  const { queryResult } = useShow({
-    resource: "loans",
-    id: id || "",
+  // Get current user identity
+  const { data: identity, isLoading: isIdentityLoading, isError: isIdentityError } = useGetIdentity<any>();
+  
+  // Check if user has internal role permissions
+  const canViewInternalNotes = usePermission({
+    resource: "loan_notes",
+    action: "view_internal",
   });
-  const { data, isLoading, isError } = queryResult;
-  const loan = data?.data;
+
+  // Get loan data
+  const { 
+    queryResult: { data: loanData, isLoading, isError } = { data: undefined, isLoading: true, isError: false } 
+  } = useShow({
+    resource: "loans",
+    id: id, // id from useParams
+    queryOptions: {
+      enabled: !!id, // Fetch only if id is present
+    },
+  });
+  const loan = loanData?.data;
 
   // Fetch borrower data directly from our service
   useEffect(() => {
     if (loan?.id) {
       setIsBorrowerLoading(true);
-      borrowerService.getBorrowersByLoanId(loan.id)
+      borrowerService.getBorrowersByLoanId(String(loan.id))
         .then(({ data, error }) => {
           if (!error && data) {
             setBorrowers(data);
@@ -123,6 +139,8 @@ export const LoanDetailView: React.FC = () => {
     ],
     queryOptions: {
       enabled: !!loan?.id,
+    },
+    meta: {
       pagination: {
         pageSize: 50, // Limit to last 50 payments
       },
@@ -132,7 +150,7 @@ export const LoanDetailView: React.FC = () => {
           order: "desc", // Most recent payments first
         },
       ],
-    },
+    }
   });
 
   // Handle tab change
@@ -219,6 +237,15 @@ export const LoanDetailView: React.FC = () => {
             {...a11yProps(4)} 
             sx={{ textTransform: 'none' }}
           />
+          {/* Only show notes tab for internal users */}
+          {canViewInternalNotes && (
+            <Tab 
+              icon={<CommentIcon />} 
+              label="Notes" 
+              {...a11yProps(5)} 
+              sx={{ textTransform: 'none' }}
+            />
+          )}
         </Tabs>
 
         {/* Tab Content Panels */}
@@ -235,15 +262,28 @@ export const LoanDetailView: React.FC = () => {
           <PaymentHistoryTab 
             payments={paymentData?.data} 
             isLoading={isPaymentLoading} 
-            loanId={loan?.id}
+            loanId={loan?.id ? String(loan.id) : ''}
           />
         </TabPanel>
         <TabPanel value={tabValue} index={3}>
-          <StatusLogTab loanId={loan?.id} />
+          <StatusLogTab loanId={loan?.id ? String(loan.id) : ''} />
         </TabPanel>
         <TabPanel value={tabValue} index={4}>
-          <DocumentsTab loanId={loan?.id} />
+          <DocumentsTab loanId={loan?.id ? String(loan.id) : ''} />
         </TabPanel>
+        {/* Notes Tab (Only for internal users) */}
+        {canViewInternalNotes && (
+          <TabPanel value={tabValue} index={5}>
+            <LoanNotes 
+              loanId={loan?.id ? String(loan.id) : ''}
+              currentUserId={identity?.id ? String(identity.id) : undefined}
+              currentUserName={identity?.name || identity?.email || 'Unknown User'}
+              currentUserAvatar={identity?.avatar}
+              userRole={identity?.role ? String(identity.role) : undefined} 
+              isInternalUser={!!canViewInternalNotes} // Ensure boolean based on permission result
+            />
+          </TabPanel>
+        )}
       </Box>
     </Paper>
   );

@@ -10,8 +10,8 @@ import { ResourceType, OperationType, checkPermission } from '../utils/permissio
 import { useGetIdentity } from '@refinedev/core';
 
 interface UsePermissionProps {
-  resource: ResourceType;
-  action: OperationType;
+  resource: ResourceType | string;
+  action: OperationType | string;
   resourceId?: string;
 }
 
@@ -21,6 +21,9 @@ interface UsePermissionReturn {
   message: string | undefined;
   checkPermission: () => Promise<void>;
 }
+
+// Extended list of internal role names
+const INTERNAL_ROLES = ['Admin', 'Manager', 'LoanOfficer', 'Processor', 'Auditor'];
 
 /**
  * Hook to check if the current user has permission to perform an action on a resource
@@ -47,7 +50,20 @@ export const usePermission = ({
     setIsLoading(true);
     
     try {
-      const { allowed, message } = await checkPermission(resource, action, resourceId);
+      // Special case for loan notes and collaboration features
+      if (resource === 'loan_notes' && action === 'view_internal') {
+        // If user has an internal role (admin, loan officer, processor, etc.)
+        const userRole = identity?.role || '';
+        const isInternalUser = INTERNAL_ROLES.includes(userRole);
+        
+        setIsAllowed(isInternalUser);
+        setMessage(isInternalUser ? undefined : 'Only internal users can access collaboration features');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Default permission check
+      const { allowed, message } = await checkPermission(resource as ResourceType, action as OperationType, resourceId);
       setIsAllowed(allowed);
       setMessage(message);
     } catch (error) {

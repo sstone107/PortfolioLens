@@ -150,7 +150,12 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     // This is critical for ensuring we default to 'create' for new tables
     const isNewTableMapping = isCreatingTable || currentSheetState?.isNewTable === true;
     
-    // Debug logging removed as requested to reduce console noise
+    // Add focused logging to diagnose mapping issues
+    console.log(`[DEBUG] Creating mapping for ${header}`, { 
+      isNewTableMapping, 
+      existingMapCount: Object.keys(existingMappings || {}).length,
+      hasSheetState: currentSheetState !== null 
+    });
     
     if (!currentSheetState) {
       // Fallback if sheetState is null - should ideally not happen if called correctly
@@ -170,10 +175,19 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
       };
     }
 
-    const mappingFromSheetState = currentSheetState.columnMappings?.[header];
+    const mappingFromSheetState = currentSheetState?.columnMappings?.[header];
     const mappingFromExisting = existingMappings?.[header];
 
     const base = mappingFromExisting || mappingFromSheetState;
+    
+    // Add logging for debugging auto-mapping issues
+    if (base) {
+      console.log(`[DEBUG] Found existing mapping for ${header}:`, {
+        action: base.action,
+        mappedColumn: base.mappedColumn,
+        suggestedCount: base.suggestedColumns?.length || 0
+      });
+    }
 
     const sampleVal = currentSheetState?.sampleData?.[0]?.[header] ?? '';
 
@@ -250,18 +264,110 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     // For new tables, ALWAYS use 'create'
     const defaultAction = isNewTableMapping ? 'create' : 'map';
     
+    // Generate improved suggestions for better auto-mapping
+    const suggestedColumns: RankedColumnSuggestion[] = [];
+    if (!isNewTableMapping && tableInfo?.columns && tableInfo.columns.length > 0) {
+      // Get database columns for matching (exclude system columns)
+      const dbColumns = tableInfo.columns
+        .filter(col => !['id', 'created_at', 'updated_at'].includes(col.columnName));
+      
+      // Find exact and fuzzy matches based on column names
+      const headerLower = header.toLowerCase();
+      
+      // First try exact match (case-insensitive)
+      const exactMatches = dbColumns.filter(col => 
+        col.columnName.toLowerCase() === headerLower);
+      
+      if (exactMatches.length > 0) {
+        suggestedColumns.push({
+          columnName: exactMatches[0].columnName,
+          confidenceScore: 0.95,
+          confidenceLevel: 'High',
+          isTypeCompatible: true
+        });
+        console.log(`[DEBUG] Found exact match for ${header}: ${exactMatches[0].columnName}`);
+      }
+      
+      // Then try case-insensitive contains/partial matches
+      const partialMatches = dbColumns.filter(col => {
+        // Skip if already added as exact match
+        if (exactMatches.some(m => m.columnName === col.columnName)) return false;
+        
+        // Look for substring matches
+        const colLower = col.columnName.toLowerCase();
+        return colLower.includes(headerLower) || headerLower.includes(colLower);
+      });
+      
+      partialMatches.forEach(col => {
+        const colLower = col.columnName.toLowerCase();
+        // Calculate score based on string similarity
+        let score = 0.7; // Base score for partial matches
+        
+        // Higher score for begining/ending matches
+        if (colLower.startsWith(headerLower) || headerLower.startsWith(colLower)) {
+          score = 0.85;
+        }
+        
+        // Length similarity also affects confidence 
+        const lengthRatio = Math.min(headerLower.length, colLower.length) / 
+                           Math.max(headerLower.length, colLower.length);
+        score = score * (0.5 + (lengthRatio * 0.5)); // Adjust score by length ratio
+        
+        const confidenceLevel: ConfidenceLevel = 
+          score > 0.8 ? 'High' : 
+          score > 0.6 ? 'Medium' : 'Low';
+        
+        suggestedColumns.push({
+          columnName: col.columnName,
+          confidenceScore: score,
+          confidenceLevel,
+          isTypeCompatible: true
+        });
+        
+        console.log(`[DEBUG] Found partial match for ${header}: ${col.columnName} (score: ${score.toFixed(2)})`);
+      });
+      
+      // Sort suggestions by confidence score
+      suggestedColumns.sort((a, b) => b.confidenceScore - a.confidenceScore);
+    }
+    
+    // Infer data type from sample value if possible
+    let inferredType: ColumnType = 'string';
+    if (sampleVal) {
+      if (typeof sampleVal === 'number' || (!isNaN(Number(sampleVal)) && sampleVal.trim() !== '')) {
+        inferredType = 'number';
+      } else if (sampleVal === 'true' || sampleVal === 'false') {
+        inferredType = 'boolean';
+      } else if (!isNaN(Date.parse(sampleVal))) {
+        inferredType = 'date';
+      }
+    }
+    
+    // For new mapping, try auto-mapping if we have good suggestions
+    let mappedColumn = defaultAction === 'create' ? normalizedHeader : null;
+    let confidenceScore = defaultAction === 'create' ? 1.0 : undefined;
+    let confidenceLevel: ConfidenceLevel | undefined = defaultAction === 'create' ? 'High' : undefined;
+    
+    // Auto-map to the best match if score > 0.85 and not creating a table
+    if (!isNewTableMapping && suggestedColumns.length > 0 && suggestedColumns[0].confidenceScore > 0.85) {
+      mappedColumn = suggestedColumns[0].columnName;
+      confidenceScore = suggestedColumns[0].confidenceScore;
+      confidenceLevel = suggestedColumns[0].confidenceLevel;
+      console.log(`[DEBUG] Auto-mapping ${header} to ${mappedColumn} with confidence ${confidenceScore.toFixed(2)}`);
+    }
+    
     return {
       header: header,
       sampleValue: sampleVal,
-      mappedColumn: defaultAction === 'create' ? normalizedHeader : null,
-      suggestedColumns: [],
-      inferredDataType: 'string', // Default, can be refined
+      mappedColumn,
+      suggestedColumns,
+      inferredDataType: inferredType,
       action: defaultAction,
       status: 'pending',
       reviewStatus: 'pending',
       newColumnProposal: defaultAction === 'create' ? newProposal : undefined,
-      confidenceScore: defaultAction === 'create' ? 1.0 : undefined,
-      confidenceLevel: defaultAction === 'create' ? 'High' : undefined,
+      confidenceScore,
+      confidenceLevel,
       errorMessage: undefined,
     };
   };
@@ -544,49 +650,64 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   const updateColumnMapping = (excelCol: string, selectedValue: string | null) => {
     console.log('[DEBUG ColumnMappingModal] updateColumnMapping:', { excelCol, selectedValue });
 
-    if (selectedValue === 'create-new-column') {
-      // Set current Excel column for the new column dialog
-      setCurrentExcelColumn(excelCol);
+    try {
+      if (!excelCol) {
+        console.error('[ERROR] Missing excelCol in updateColumnMapping');
+        return;
+      }
       
-      // Generate a SQL-friendly name from the Excel column name
-      const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
-      
-      // Set the suggested name in the dialog
-      setNewColumnName(suggestedName);
-      
-      // Use the inferred data type if available or default to string
-      setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
-      
-      // Open the new column dialog
-      setNewColumnDialogOpen(true);
-      
-      // Update the mapping to indicate creation action (will be finalized when dialog is confirmed)
-      handleMappingUpdate(excelCol, { 
-        action: 'create'
-      });
-    } else if (selectedValue === 'skip-column') {
-      // Explicit skip action with UI notification
-      handleMappingUpdate(excelCol, { 
-        action: 'skip', 
-        mappedColumn: null, 
-        newColumnProposal: undefined,
-        reviewStatus: 'approved', // Mark as approved since user explicitly chose to skip
-      });
-    } else if (!selectedValue) {
-      // Default skip action (when no selection is made)
-      handleMappingUpdate(excelCol, { 
-        action: 'skip', 
-        mappedColumn: null, 
-        newColumnProposal: undefined 
-      });
-    } else {
-      // Map to an existing column
-      handleMappingUpdate(excelCol, { 
-        action: 'map', 
-        mappedColumn: selectedValue, 
-        newColumnProposal: undefined,
-        reviewStatus: 'approved', // Mark as approved since user explicitly selected a mapping
-      });
+      if (selectedValue === 'create-new-column') {
+        // Set current Excel column for the new column dialog
+        setCurrentExcelColumn(excelCol);
+        
+        // Generate a SQL-friendly name from the Excel column name
+        const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+        console.log(`[DEBUG] Generated SQL-friendly name for ${excelCol}: ${suggestedName}`);
+        
+        // Set the suggested name in the dialog
+        setNewColumnName(suggestedName);
+        
+        // Use the inferred data type if available or default to string
+        const inferredType = mappings[excelCol]?.inferredDataType || 'string';
+        setNewColumnType(inferredType);
+        
+        // Open the new column dialog
+        setNewColumnDialogOpen(true);
+        
+        // Update the mapping to indicate creation action (will be finalized when dialog is confirmed)
+        handleMappingUpdate(excelCol, { 
+          action: 'create'
+        });
+        console.log(`[DEBUG] Set ${excelCol} to 'create' action, opened dialog`);
+      } else if (selectedValue === 'skip-column') {
+        // Explicit skip action with UI notification
+        handleMappingUpdate(excelCol, { 
+          action: 'skip', 
+          mappedColumn: null, 
+          newColumnProposal: undefined,
+          reviewStatus: 'approved', // Mark as approved since user explicitly chose to skip
+        });
+        console.log(`[DEBUG] Set ${excelCol} to 'skip' action`);
+      } else if (!selectedValue) {
+        // Default skip action (when no selection is made)
+        handleMappingUpdate(excelCol, { 
+          action: 'skip', 
+          mappedColumn: null, 
+          newColumnProposal: undefined 
+        });
+        console.log(`[DEBUG] Set ${excelCol} to 'skip' action (default for empty selection)`);
+      } else {
+        // Map to an existing column
+        handleMappingUpdate(excelCol, { 
+          action: 'map', 
+          mappedColumn: selectedValue, 
+          newColumnProposal: undefined,
+          reviewStatus: 'approved', // Mark as approved since user explicitly selected a mapping
+        });
+        console.log(`[DEBUG] Mapped ${excelCol} to existing column '${selectedValue}'`);
+      }
+    } catch (error) {
+      console.error(`[ERROR] Failed to update column mapping for ${excelCol}:`, error);
     }
   };
 

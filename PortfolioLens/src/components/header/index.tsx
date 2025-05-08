@@ -12,6 +12,8 @@ import { HamburgerMenu, RefineThemedLayoutV2HeaderProps } from "@refinedev/mui";
 import React, { useContext } from "react";
 import { ColorModeContext } from "../../contexts/color-mode";
 import { UniversalLoanSearch } from "../search";
+// Import Greenway Mortgage logo
+import GreenwayLogo from "../../assets/images/greenway-logo.svg";
 
 type IUser = {
   id: number;
@@ -35,6 +37,16 @@ export const Header: React.FC<RefineThemedLayoutV2HeaderProps> = ({
           alignItems="center"
         >
           <HamburgerMenu />
+          <Box
+            component="img"
+            sx={{
+              height: 40,
+              mr: 2,
+              display: { xs: 'none', md: 'flex' },
+            }}
+            alt="Greenway Mortgage logo"
+            src={GreenwayLogo}
+          />
           <Box sx={{ 
             display: { xs: 'none', md: 'flex' },
             ml: 2,

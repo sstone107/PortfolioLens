@@ -58,14 +58,14 @@ export const PortfolioList: React.FC<IResourceComponentsProps> = () => {
         headerName: "Investor", 
         flex: 1, 
         minWidth: 180,
-        valueGetter: (params) => params.row.investor?.name || '',
+        valueGetter: (params: any) => params.row?.investor?.name || '',
       },
       { 
         field: "servicer", 
         headerName: "Servicer", 
         flex: 1, 
         minWidth: 180,
-        valueGetter: (params) => params.row.servicer?.name || '',
+        valueGetter: (params: any) => params.row?.servicer?.name || '',
       },
       { field: "portfolio_type", headerName: "Type", flex: 1, minWidth: 120 },
       {
@@ -83,8 +83,8 @@ export const PortfolioList: React.FC<IResourceComponentsProps> = () => {
         width: 150,
         align: "right",
         headerAlign: "right",
-        valueFormatter: (params) =>
-          params.value
+        valueFormatter: (params: any) =>
+          params && params.value
             ? params.value.toLocaleString("en-US", {
                 style: "currency",
                 currency: "USD",

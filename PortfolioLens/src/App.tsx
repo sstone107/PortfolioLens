@@ -25,6 +25,7 @@ import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { UserImpersonation } from "./pages/admin/UserImpersonation";
 import { ModuleVisibility } from "./pages/admin/ModuleVisibility";
 import { GeoRestrictions } from "./pages/admin/GeoRestrictions";
+import UserManagement from "./pages/admin/UserManagement";
 import { PartnersPage } from "./pages/partners";
 import { DocCustodianCreate, DocCustodianEdit, DocCustodianShow } from "./pages/partners/doc-custodians";
 import { SellerCreate, SellerEdit, SellerShow } from "./pages/partners/sellers";
@@ -46,6 +47,7 @@ import SupportAgentIcon from "@mui/icons-material/SupportAgent";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SearchIcon from "@mui/icons-material/Search";
 import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
+import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import CssBaseline from "@mui/material/CssBaseline";
 import GlobalStyles from "@mui/material/GlobalStyles";
 import routerBindings, {
@@ -106,6 +108,17 @@ function App() {
                 authProvider={authProvider}
                 routerProvider={routerBindings}
                 notificationProvider={useNotificationProvider}
+                options={{
+                  title: {
+                    // Use a styled span with larger text around the app name
+                    text: <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>PortfolioLens</span>,
+                    icon: <ZoomInIcon style={{ color: "#1a8754", fontSize: 48 }} />
+                  },
+                  syncWithLocation: true,
+                  warnWhenUnsavedChanges: true,
+                  useNewQueryKeys: true,
+                  projectId: "nzMoFh-ulbLWj-RR4F3Z",
+                }}
                 resources={[
                   {
                     name: "portfolios",
@@ -247,17 +260,12 @@ function App() {
                     name: "admin",
                     list: "/admin",
                     meta: {
-                      label: "Admin",
-                      icon: "AdminPanelSettings",
+                      label: "Administration",
+                      icon: <SupervisorAccountIcon />,
                     },
                   },
                 ]}
-                options={{
-                  syncWithLocation: true,
-                  warnWhenUnsavedChanges: true,
-                  useNewQueryKeys: true,
-                  projectId: "nzMoFh-ulbLWj-RR4F3Z",
-                }}
+
               >
                 <Routes>
                   <Route
@@ -367,6 +375,7 @@ function App() {
                         <Route path="module-visibility" element={<ModuleVisibility />} />
                         <Route path="geo-restrictions" element={<GeoRestrictions />} />
                         <Route path="roles" element={<UserRoleManagement />} />
+                        <Route path="users" element={<UserManagement />} />
                       </Route>
                       <Route
                         path="users/roles"

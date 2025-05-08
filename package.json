@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@types/string-similarity": "^4.0.2",
+    "pdfjs-dist": "^3.11.174",
     "react-pdf": "^9.2.1",
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-window": "^1.8.11",

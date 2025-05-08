@@ -91,8 +91,8 @@ export const PortfolioShow: React.FC<IResourceComponentsProps> = () => {
       headerName: "UPB", 
       type: "number",
       width: 120,
-      valueFormatter: (params) => 
-        params.value ? params.value.toLocaleString("en-US", {
+      valueFormatter: (params: any) => 
+        params && params.value ? params.value.toLocaleString("en-US", {
           style: "currency",
           currency: "USD",
           minimumFractionDigits: 2,

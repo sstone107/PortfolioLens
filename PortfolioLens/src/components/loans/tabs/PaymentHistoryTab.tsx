@@ -24,18 +24,27 @@ import {
   FormControl,
   InputLabel,
   Select,
-  SelectChangeEvent
+  SelectChangeEvent,
+  Tabs,
+  Tab,
+  Alert
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   CalendarToday as CalendarIcon,
   FilterList as FilterIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  Timeline as TimelineIcon,
+  TableChart as TableIcon,
+  InsertDriveFile as VOMIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { useList } from "@refinedev/core";
 import { formatCurrency } from '../../../utility/formatters';
+import { paymentService, Payment } from '../../../services/paymentService';
+import { downloadVOMPdf } from '../../../utility/pdfGenerator';
+import { PaymentTimeline } from '../PaymentTimeline';
 
 // Interface for component props
 interface PaymentHistoryTabProps {
@@ -101,6 +110,46 @@ const formatPaymentMethod = (method: string): string => {
   }
 };
 
+// Interface for tab panels
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+/**
+ * TabPanel component - displays content for each tab
+ */
+const TabPanel = (props: TabPanelProps) => {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`payment-history-tabpanel-${index}`}
+      aria-labelledby={`payment-history-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ pt: 2 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Helper for accessibility
+ */
+const a11yProps = (index: number) => {
+  return {
+    id: `payment-history-tab-${index}`,
+    'aria-controls': `payment-history-tabpanel-${index}`,
+  };
+};
+
 /**
  * PaymentHistoryTab component - displays payment history with filters and summary
  */
@@ -114,6 +163,7 @@ export const PaymentHistoryTab: React.FC<PaymentHistoryTabProps> = ({
   // State variables for pagination
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [viewMode, setViewMode] = useState(0); // 0 = timeline, 1 = table
   
   // State for filters
   const [dateRange, setDateRange] = useState<{
@@ -122,6 +172,61 @@ export const PaymentHistoryTab: React.FC<PaymentHistoryTabProps> = ({
   }>({ startDate: null, endDate: null });
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
+  // State for enhanced payment data
+  const [enhancedPayments, setEnhancedPayments] = useState<Payment[]>([]);
+  const [paymentLoading, setPaymentLoading] = useState<boolean>(true);
+  const [exportLoading, setExportLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch payment data from our service
+  useEffect(() => {
+    if (loanId) {
+      fetchPayments();
+    }
+  }, [loanId]);
+
+  // Fetch payment data
+  const fetchPayments = async () => {
+    setPaymentLoading(true);
+    try {
+      const { data, error } = await paymentService.getPaymentsByLoanId(loanId);
+      
+      if (error) {
+        console.error("Error fetching payment data:", error);
+        setError("Failed to load payment data");
+      } else {
+        setEnhancedPayments(data);
+        setError(null);
+      }
+    } catch (err) {
+      console.error("Exception in fetchPayments:", err);
+      setError("An unexpected error occurred");
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+  
+  // Handle exporting VOM PDF
+  const handleExportVOM = async () => {
+    setExportLoading(true);
+    try {
+      const { data, error } = await paymentService.generateVOMData(loanId);
+      
+      if (error) {
+        console.error("Error generating VOM data:", error);
+        setError("Failed to generate VOM data");
+      } else if (data) {
+        // Download the PDF
+        downloadVOMPdf(data);
+      }
+    } catch (err) {
+      console.error("Exception in handleExportVOM:", err);
+      setError("Failed to generate VOM PDF");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+  
   // Fetch payment history data
   const { data, isLoading } = useList({
     resource: "payments",
@@ -143,13 +248,15 @@ export const PaymentHistoryTab: React.FC<PaymentHistoryTabProps> = ({
       pageSize: 100, // Get all for summary calculations
     },
     queryOptions: {
-      enabled: !!loanId && !initialPayments,
+      enabled: !!loanId && !initialPayments && enhancedPayments.length === 0,
     },
   });
 
   // Combine data from props and fetch
-  const payments = initialPayments || data?.data || [];
-  const loading = initialLoading || isLoading;
+  const payments = enhancedPayments.length > 0 
+    ? enhancedPayments 
+    : initialPayments || data?.data || [];
+  const loading = paymentLoading || initialLoading || isLoading;
 
   // Calculate payment summary
   const calculateSummary = () => {
@@ -166,11 +273,13 @@ export const PaymentHistoryTab: React.FC<PaymentHistoryTabProps> = ({
     const total = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
     const onTime = payments.filter(p => 
       p.status?.toLowerCase() === 'on time' || 
-      p.status?.toLowerCase() === 'posted'
+      p.status?.toLowerCase() === 'posted' ||
+      (p.days_late !== undefined && p.days_late <= 0)
     ).length;
     const late = payments.filter(p => 
       p.status?.toLowerCase() === 'late' || 
-      p.status?.toLowerCase() === 'missed'
+      p.status?.toLowerCase() === 'missed' ||
+      (p.days_late !== undefined && p.days_late > 0)
     ).length;
 
     return {
@@ -187,8 +296,18 @@ export const PaymentHistoryTab: React.FC<PaymentHistoryTabProps> = ({
   // Filter payments based on selected filters
   const filteredPayments = payments.filter(payment => {
     // Filter by status
-    if (statusFilter !== 'all' && payment.status?.toLowerCase() !== statusFilter.toLowerCase()) {
-      return false;
+    if (statusFilter !== 'all') {
+      // Handle both status field and days_late field
+      if (payment.days_late !== undefined) {
+        const daysLate = payment.days_late;
+        
+        if (statusFilter === 'on time' && daysLate > 0) return false;
+        if (statusFilter === 'late' && daysLate <= 0) return false;
+        if (statusFilter === 'late' && daysLate > 30) return false;
+        if (statusFilter === 'missed' && daysLate <= 30) return false;
+      } else if (payment.status?.toLowerCase() !== statusFilter.toLowerCase()) {
+        return false;
+      }
     }
     
     // Filter by date range
@@ -238,6 +357,25 @@ export const PaymentHistoryTab: React.FC<PaymentHistoryTabProps> = ({
     setPage(0);
   };
 
+  // Handle tab change
+  const handleViewModeChange = (event: React.SyntheticEvent, newValue: number) => {
+    setViewMode(newValue);
+  };
+
+  // Handle view payment details
+  const handleViewPaymentDetails = (paymentId: string) => {
+    // Find the payment in the table and scroll to it
+    const payment = payments.findIndex(p => p.id === paymentId);
+    if (payment !== -1) {
+      // Switch to table view
+      setViewMode(1);
+      // Calculate the page
+      const targetPage = Math.floor(payment / rowsPerPage);
+      setPage(targetPage);
+      // Highlight the row (would require additional state)
+    }
+  };
+
   // If data is loading, show loading indicator
   if (loading) {
     return (
@@ -260,6 +398,13 @@ export const PaymentHistoryTab: React.FC<PaymentHistoryTabProps> = ({
 
   return (
     <Box>
+      {/* Error Alert */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
       {/* Payment Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
@@ -401,150 +546,228 @@ export const PaymentHistoryTab: React.FC<PaymentHistoryTabProps> = ({
             </Button>
             <Button
               variant="contained"
-              startIcon={<DownloadIcon />}
+              startIcon={<VOMIcon />}
+              onClick={handleExportVOM}
+              disabled={exportLoading}
             >
-              Export
+              {exportLoading ? 'Generating...' : 'Export VOM'}
             </Button>
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Payment History Table */}
-      <Paper sx={{ width: '100%', borderRadius: 2, overflow: 'hidden' }}>
-        <TableContainer sx={{ maxHeight: 440 }}>
-          <Table stickyHeader aria-label="payment history table">
-            <TableHead>
-              <TableRow>
-                <TableCell 
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    backgroundColor: theme.palette.background.default 
-                  }}
-                >
-                  Payment Date
-                </TableCell>
-                <TableCell 
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    backgroundColor: theme.palette.background.default 
-                  }}
-                >
-                  Status
-                </TableCell>
-                <TableCell 
-                  align="right"
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    backgroundColor: theme.palette.background.default 
-                  }}
-                >
-                  Amount
-                </TableCell>
-                <TableCell 
-                  align="right"
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    backgroundColor: theme.palette.background.default 
-                  }}
-                >
-                  Principal
-                </TableCell>
-                <TableCell 
-                  align="right"
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    backgroundColor: theme.palette.background.default 
-                  }}
-                >
-                  Interest
-                </TableCell>
-                <TableCell 
-                  align="right"
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    backgroundColor: theme.palette.background.default 
-                  }}
-                >
-                  Escrow
-                </TableCell>
-                <TableCell 
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    backgroundColor: theme.palette.background.default 
-                  }}
-                >
-                  Method
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredPayments
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((payment, index) => {
-                  // Determine row background for alternating rows
-                  const isEven = index % 2 === 0;
-                  
-                  return (
-                    <TableRow
-                      hover
-                      key={payment.id || index}
-                      sx={{ 
-                        '&:last-child td, &:last-child th': { border: 0 },
-                        backgroundColor: isEven ? 'inherit' : alpha(theme.palette.primary.light, 0.05)
-                      }}
-                    >
-                      <TableCell>
-                        {payment.transaction_date
-                          ? new Date(payment.transaction_date).toLocaleDateString()
-                          : 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <PaymentStatusChip status={payment.status || 'Unknown'} />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography fontWeight="medium">
-                          {formatCurrency(payment.amount)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(payment.principal_amount)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(payment.interest_amount)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatCurrency(payment.escrow_amount)}
-                      </TableCell>
-                      <TableCell>
-                        {formatPaymentMethod(payment.payment_method)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              
-              {filteredPayments.length === 0 && (
+      {/* View Mode Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs 
+          value={viewMode} 
+          onChange={handleViewModeChange} 
+          aria-label="payment history view mode"
+        >
+          <Tab 
+            icon={<TimelineIcon />} 
+            label="Timeline" 
+            {...a11yProps(0)} 
+            sx={{ textTransform: 'none' }}
+          />
+          <Tab 
+            icon={<TableIcon />} 
+            label="Detailed View" 
+            {...a11yProps(1)} 
+            sx={{ textTransform: 'none' }}
+          />
+        </Tabs>
+      </Box>
+
+      {/* Timeline View */}
+      <TabPanel value={viewMode} index={0}>
+        <PaymentTimeline 
+          payments={filteredPayments} 
+          isLoading={loading} 
+          loanId={loanId}
+          onExportVOM={handleExportVOM}
+          onViewDetails={handleViewPaymentDetails}
+        />
+      </TabPanel>
+
+      {/* Table View */}
+      <TabPanel value={viewMode} index={1}>
+        <Paper sx={{ width: '100%', borderRadius: 2, overflow: 'hidden' }}>
+          <TableContainer sx={{ maxHeight: 440 }}>
+            <Table stickyHeader aria-label="payment history table">
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                    <Typography variant="body1" color="text.secondary">
-                      No payment records match your filters
-                    </Typography>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Payment Date
+                  </TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Due Date
+                  </TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Status
+                  </TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Days Late
+                  </TableCell>
+                  <TableCell 
+                    align="right"
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Amount
+                  </TableCell>
+                  <TableCell 
+                    align="right"
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Principal
+                  </TableCell>
+                  <TableCell 
+                    align="right"
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Interest
+                  </TableCell>
+                  <TableCell 
+                    align="right"
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Escrow
+                  </TableCell>
+                  <TableCell 
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      backgroundColor: theme.palette.background.default 
+                    }}
+                  >
+                    Method
                   </TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50]}
-          component="div"
-          count={filteredPayments.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-      </Paper>
+              </TableHead>
+              <TableBody>
+                {filteredPayments
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map((payment, index) => {
+                    // Determine row background for alternating rows
+                    const isEven = index % 2 === 0;
+                    
+                    // Get status text based on days late
+                    let statusText = payment.status || 'Unknown';
+                    if (payment.days_late !== undefined) {
+                      const daysLate = payment.days_late;
+                      if (daysLate < 0) {
+                        statusText = `Early (${Math.abs(daysLate)} days)`;
+                      } else if (daysLate === 0) {
+                        statusText = 'On Time';
+                      } else if (daysLate > 0 && daysLate <= 14) {
+                        statusText = `Late (${daysLate} days)`;
+                      } else if (daysLate > 14 && daysLate <= 30) {
+                        statusText = `Late (${daysLate} days)`;
+                      } else {
+                        statusText = `Severely Late (${daysLate} days)`;
+                      }
+                    }
+                    
+                    return (
+                      <TableRow
+                        hover
+                        key={payment.id || index}
+                        sx={{ 
+                          '&:last-child td, &:last-child th': { border: 0 },
+                          backgroundColor: isEven ? 'inherit' : alpha(theme.palette.primary.light, 0.05)
+                        }}
+                      >
+                        <TableCell>
+                          {payment.transaction_date
+                            ? new Date(payment.transaction_date).toLocaleDateString()
+                            : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {payment.due_date
+                            ? new Date(payment.due_date).toLocaleDateString()
+                            : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          <PaymentStatusChip status={statusText} />
+                        </TableCell>
+                        <TableCell>
+                          {payment.days_late !== undefined ? payment.days_late : 'N/A'}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography fontWeight="medium">
+                            {formatCurrency(payment.amount)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(payment.principal_amount)}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(payment.interest_amount)}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(payment.escrow_amount)}
+                        </TableCell>
+                        <TableCell>
+                          {formatPaymentMethod(payment.payment_method)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                
+                {filteredPayments.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                      <Typography variant="body1" color="text.secondary">
+                        No payment records match your filters
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            component="div"
+            count={filteredPayments.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+          />
+        </Paper>
+      </TabPanel>
     </Box>
   );
 };

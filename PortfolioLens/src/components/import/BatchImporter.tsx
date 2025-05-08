@@ -991,11 +991,12 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                 
                 const updatedData: Partial<SheetProcessingState> = {
                   columnMappings: updatedMappings,
-                  // Only mark as 'ready' if fully approved AND not a new table
-                  status: (isSheetFullyApproved && !isNewTable) ? 'ready' : 'needsReview',
-                  // For new tables, if everything is mapped/approved, still set sheetReviewStatus to 'needsReview'
-                  // to ensure it gets proper review
-                  sheetReviewStatus: (isNewTable && isSheetFullyApproved) ? 'needsReview' : determinedSheetReviewStatus
+                  // UPDATED: Always mark as 'ready' if fully approved, regardless of table type
+                  // This ensures new tables can transition to ready state once mappings are saved
+                  status: isSheetFullyApproved ? 'ready' : 'needsReview',
+                  // UPDATED: If everything is mapped/approved, set sheetReviewStatus to 'approved'
+                  // This allows users to complete the workflow for new tables
+                  sheetReviewStatus: isSheetFullyApproved ? 'approved' : determinedSheetReviewStatus
                 };
 
                 // If creating a new table and a name was provided by the modal (e.g., user edited it)
@@ -1023,8 +1024,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                   console.warn(`[DEBUG BatchImporter] New table for ${currentSheetNameForModal} had no name, used fallback: ${updatedData.selectedTable}`);
                 }
 
-                // If it's a brand new table (being created), ensure its status explicitly starts as 'needsReview'
-                // after the first save, prompting for review of generated columns/types.
+                // Handle the state transition for column mappings
                 if (isCreatingTableForModal) {
                     const previousSheetState = sheets[currentSheetNameForModal];
                     const isFirstSaveForThisNewTableSetup = 
@@ -1032,12 +1032,24 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                         Object.keys(previousSheetState.columnMappings).length === 0 ||
                         (!previousSheetState?.selectedTable?.startsWith('new:') && updatedData.selectedTable?.startsWith('new:'));
 
+                    // Only set status for the very first save (no previous mappings)
                     if (isFirstSaveForThisNewTableSetup) {
-                        console.log(`[DEBUG BatchImporter] First save for new table ${currentSheetNameForModal} (${updatedData.selectedTable}), ensuring 'needsReview' status.`);
+                        console.log(`[DEBUG BatchImporter] First save for new table ${currentSheetNameForModal} (${updatedData.selectedTable}).`);
+                        // Initialize with 'needsReview' only if it's the very first save with no mappings
                         updatedData.status = 'needsReview';
-                        // Ensure sheetReviewStatus is also 'needsReview' for this case
-                        updatedData.sheetReviewStatus = 'needsReview'; 
+                        updatedData.sheetReviewStatus = 'pending'; 
+                    } else {
+                        // For subsequent saves when mappings are being updated, set to 'ready'
+                        console.log(`[DEBUG BatchImporter] Subsequent save for new table ${currentSheetNameForModal} with mappings - setting to ready.`);
+                        updatedData.status = 'ready';
+                        updatedData.sheetReviewStatus = 'approved';
                     }
+                }
+                
+                // If we have column mappings but the status wasn't explicitly set, ensure it's 'ready'
+                if (updatedMappings && Object.keys(updatedMappings).length > 0 && !updatedData.status) {
+                    updatedData.status = 'ready';
+                    updatedData.sheetReviewStatus = 'approved';
                 }
                 
                 storeActions.updateSheetProcessingState(currentSheetNameForModal, updatedData);

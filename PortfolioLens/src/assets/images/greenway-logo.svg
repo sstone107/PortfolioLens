@@ -1,0 +1,11 @@
+<svg width="200" height="40" viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .title { fill: #ffffff; font-family: Arial, sans-serif; font-weight: bold; }
+    .subtitle { fill: #ffffff; font-family: Arial, sans-serif; font-size: 10px; }
+  </style>
+  <rect width="200" height="40" fill="#1a8754" rx="4" ry="4"/>
+  <text x="45" y="20" class="title" dominant-baseline="middle" font-size="16">Greenway Mortgage</text>
+  <text x="45" y="30" class="subtitle" dominant-baseline="middle">Portfolio Management System</text>
+  <path d="M15,8 L35,8 L25,28 Z" fill="#3c9970" />
+  <path d="M15,32 L35,32 L25,12 Z" fill="#e9f7ef" opacity="0.8" />
+</svg>

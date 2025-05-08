@@ -48,7 +48,115 @@ import {
   History as HistoryIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
-import { useList, useCreate, useDelete } from "@refinedev/core";
+import { useList, useCreate, useDelete, useGetIdentity } from "@refinedev/core";
+import { Document as PdfDoc, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+// Use local PDF.js worker file (placed in public/vendor directory)
+pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.js';
+
+// Renamed prop from 'document' to 'doc' to avoid shadowing global document
+const DocumentViewerDialog: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  doc: Document | null;
+}> = ({ open, onClose, doc }) => {
+  const [numPages, setNumPages] = React.useState<number>(1);
+
+  // Download handler
+  const handleDownload = () => {
+    if (!doc) return;
+    const url = doc.file_path;
+    const fileName = doc.file_name || 'document.pdf';
+    // Use window.document to avoid shadowing
+    const link = window.document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    window.document.body.appendChild(link);
+    link.click();
+    window.document.body.removeChild(link);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: {
+          height: '80vh',
+          maxHeight: '800px',
+        },
+      }}
+    >
+      <DialogTitle>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6" noWrap sx={{ maxWidth: '70%' }}>
+            {doc?.file_name}
+          </Typography>
+          <Box>
+            <Tooltip title="Download">
+              <IconButton onClick={handleDownload}>
+                <DownloadIcon />
+              </IconButton>
+            </Tooltip>
+            <IconButton onClick={onClose}>
+              <DeleteIcon />
+            </IconButton>
+          </Box>
+        </Box>
+      </DialogTitle>
+      <DialogContent dividers sx={{ display: 'flex', justifyContent: 'center', p: 0 }}>
+        {doc?.mime_type?.includes('pdf') ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', p: 4 }}>
+            <PdfDoc
+              file={doc.file_path}
+              onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+              loading={<Typography>Loading PDF...</Typography>}
+              error={<Typography color="error">Could not load PDF preview.</Typography>}
+            >
+              {Array.from(new Array(numPages), (el, index) => (
+                <Page key={`page_${index + 1}`} pageNumber={index + 1} width={600} />
+              ))}
+            </PdfDoc>
+            <Button
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              sx={{ mt: 2 }}
+              onClick={handleDownload}
+            >
+              Download PDF
+            </Button>
+          </Box>
+        ) : doc?.mime_type?.includes('image') ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '100%' }}>
+            <img
+              src={doc.file_path}
+              alt={doc.file_name}
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+            />
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', p: 4 }}>
+            {getFileIcon(doc?.mime_type || '')}
+            <Typography variant="body1" sx={{ mt: 2 }}>
+              Preview not available. Please download the file to view it.
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              sx={{ mt: 2 }}
+              onClick={handleDownload}
+            >
+              Download
+            </Button>
+          </Box>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 // Document categories/types
 const documentCategories = [
@@ -523,84 +631,6 @@ const DocumentCard: React.FC<{
 };
 
 /**
- * Document Viewer Dialog
- */
-const DocumentViewerDialog: React.FC<{
-  open: boolean;
-  onClose: () => void;
-  document: Document | null;
-}> = ({ open, onClose, document }) => {
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: {
-          height: '80vh',
-          maxHeight: '800px',
-        },
-      }}
-    >
-      <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6" noWrap sx={{ maxWidth: '70%' }}>
-            {document?.file_name}
-          </Typography>
-          <Box>
-            <Tooltip title="Download">
-              <IconButton>
-                <DownloadIcon />
-              </IconButton>
-            </Tooltip>
-            <IconButton onClick={onClose}>
-              <DeleteIcon />
-            </IconButton>
-          </Box>
-        </Box>
-      </DialogTitle>
-      
-      <DialogContent dividers sx={{ display: 'flex', justifyContent: 'center', p: 0 }}>
-        {document?.mime_type?.includes('pdf') ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', p: 4 }}>
-            <PdfIcon sx={{ fontSize: 60, color: 'error.main', mb: 2 }} />
-            <Typography variant="h6">
-              PDF Preview
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
-              PDF preview is available in the full application.
-            </Typography>
-            <Button 
-              variant="contained" 
-              startIcon={<DownloadIcon />} 
-            >
-              Download PDF
-            </Button>
-          </Box>
-        ) : document?.mime_type?.includes('image') ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '100%' }}>
-            <img 
-              src={document.file_path} 
-              alt={document.file_name} 
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
-            />
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', p: 4 }}>
-            {getFileIcon(document?.mime_type || '')}
-            <Typography variant="body1" sx={{ mt: 2 }}>
-              Preview not available. Please download the file to view it.
-            </Typography>
-            <Button 
-              variant="contained" 
-              startIcon={<DownloadIcon />} 
-              sx={{ mt: 2 }}
-            >
-              Download
-            </Button>
-          </Box>
-        )}
       </DialogContent>
     </Dialog>
   );
@@ -615,6 +645,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ loanId }) => {
   const [viewDocument, setViewDocument] = useState<Document | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [filterTab, setFilterTab] = useState(0);
+  const { data: userData } = useGetIdentity<{ id: string; full_name: string }>();
 
   // Fetch documents for this loan
   const { data, isLoading, refetch } = useList({
@@ -647,13 +678,18 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ loanId }) => {
   const { mutate: create } = useCreate();
   
   const handleUpload = (file: File, metadata: any) => {
-    setIsUploading(true);
-    
     // In a real application, you would use a form data upload to a server
     // and then create the document record with the returned file path
     
     // Simulate API call
     setTimeout(() => {
+      setIsUploading(true);
+      if (!userData?.id) {
+        console.error("User ID not available, cannot upload document.");
+        setIsUploading(false);
+        // Optionally, show a user-facing error message
+        return;
+      }
       create({
         resource: "loan_documents",
         values: {
@@ -664,6 +700,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ loanId }) => {
           file_path: URL.createObjectURL(file), // In real app, this would be a server path
           file_size: file.size,
           mime_type: file.type,
+          uploaded_by: userData.id,
         },
       }, {
         onSuccess: () => {
@@ -796,7 +833,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ loanId }) => {
       <DocumentViewerDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        document={viewDocument}
+        doc={viewDocument}
       />
     </Box>
   );

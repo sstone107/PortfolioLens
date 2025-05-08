@@ -133,97 +133,162 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                       // Determine value based on action and mappedColumn from the full mapping object
                       value={
                           mapping.action === 'create' ? 'create-new-column' :
-                          mapping.action === 'map' ? mapping.mappedColumn || '' :
-                          mapping.action === 'skip' ? 'skip-column' : '' // Explicit 'skip-column' value
+                          mapping.action === 'map' && mapping.mappedColumn ? mapping.mappedColumn :
+                          mapping.action === 'skip' || !mapping.action ? 'skip-column' : ''
                       }
+                      // Add a key to force re-render when the mapping changes
+                      key={`select-${excelCol}-${mapping.action}-${mapping.mappedColumn || 'none'}`}
                       onChange={(e) => {
-                          const selectedValue = e.target.value as string;
-                          if (selectedValue === 'create-new-column') {
-                              // For 'create-new-column', we need to pass a special flag to trigger the dialog
-                              onMappingUpdate(excelCol, {
-                                  action: 'create',
-                                  openDialog: true // Add this flag to signal that the dialog should be opened
-                              });
-                          } else if (selectedValue === 'skip-column') { // Explicit skip action
-                              onMappingUpdate(excelCol, { 
-                                  action: 'skip', 
-                                  mappedColumn: null, 
-                                  newColumnProposal: undefined,
-                                  reviewStatus: 'approved' // Mark as reviewed since it's explicitly skipped
-                              });
-                          } else if (!selectedValue) { // Empty value means skip (default)
-                              onMappingUpdate(excelCol, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });
-                          } else { // Map to existing column
-                              onMappingUpdate(excelCol, { 
-                                  action: 'map', 
-                                  mappedColumn: selectedValue, 
-                                  newColumnProposal: undefined,
-                                  reviewStatus: 'approved' // Mark as reviewed since it's explicitly mapped
-                              });
+                          try {
+                              // Add explicit type safety and avoid potential issues with null/undefined
+                              const selectedValue = e.target.value !== null && e.target.value !== undefined ? 
+                                  String(e.target.value) : '';
+                              
+                              console.log(`[DEBUG] Column mapping changed for ${excelCol} to: ${selectedValue}`);
+                              
+                              if (selectedValue === 'create-new-column') {
+                                  // For 'create-new-column', set the correct action first
+                                  // We'll trigger the dialog separately in the parent component
+                                  onMappingUpdate(excelCol, {
+                                      action: 'create'
+                                  });
+                                  
+                                  // Signal to parent component to open dialog via console
+                                  console.log('[ColumnMappingTableView] Create new column requested for:', excelCol);
+                              } else if (selectedValue === 'skip-column') { // Explicit skip action
+                                  onMappingUpdate(excelCol, { 
+                                      action: 'skip', 
+                                      mappedColumn: null, 
+                                      newColumnProposal: undefined,
+                                      reviewStatus: 'approved' // Mark as reviewed since it's explicitly skipped
+                                  });
+                              } else if (!selectedValue) { // Empty value means skip (default)
+                                  onMappingUpdate(excelCol, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });
+                              } else { // Map to existing column
+                                  onMappingUpdate(excelCol, { 
+                                      action: 'map', 
+                                      mappedColumn: selectedValue, 
+                                      newColumnProposal: undefined,
+                                      reviewStatus: 'approved' // Mark as reviewed since it's explicitly mapped
+                                  });
+                              }
+                          } catch (err) {
+                              console.error(`[ERROR] Failed to update mapping for ${excelCol}:`, err);
                           }
                       }}
-                      disabled={false} // Always enable the select
+                      disabled={false} // Never disable the select to ensure it's always interactive
+                      MenuProps={{
+                        // Ensure menu appears above other elements
+                        elevation: 3,
+                        // Improve positioning to avoid cutoff
+                        anchorOrigin: {
+                          vertical: 'bottom',
+                          horizontal: 'left',
+                        },
+                        transformOrigin: {
+                          vertical: 'top',
+                          horizontal: 'left',
+                        },
+                        // Add explicit styles to ensure the menu appears above other elements
+                        PaperProps: {
+                          style: {
+                            zIndex: 9999,
+                            maxHeight: '300px'
+                          }
+                        }
+                      }}  
                       displayEmpty
                       sx={{
                         maxWidth: '300px',
+                        // Add higher z-index for better selection
+                        zIndex: 100,
+                        position: 'relative',
                         '& .MuiSelect-select': {
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap'
+                        },
+                        // Improve dropdown visibility
+                        '&.Mui-focused': {
+                          zIndex: 9999
                         }
                       }}
                       renderValue={(selectedValue) => {
+                        // Add debug logging for value rendering
+                        console.log(`[DEBUG] Rendering select value for ${excelCol}:`, {
+                          selectedValue,
+                          action: mapping.action,
+                          mappedColumn: mapping.mappedColumn
+                        });
+                        
                         if (mapping.action === 'skip' || selectedValue === 'skip-column' || !selectedValue) {
                           // Consistent styling for skipped columns
-                          return <em style={{ color: '#888' }}>✕ Skipped Column</em>;
+                          return <em style={{ color: '#888' }}>✕ Skip this field</em>;
                         }
                         if (mapping.action === 'create') {
-                          // Show the field name if available
-                          const fieldName = mapping.newColumnProposal?.columnName || 
-                                           mapping.mappedColumn || 
-                                           'New Field';
+                          // Show the field name if available, accessing through details object
+                          const fieldName = mapping.newColumnProposal?.details?.columnName || 
+                                            mapping.mappedColumn || 
+                                            'New Field';
                           return <span style={{ color: '#2196f3', fontWeight: 'bold' }}>✨ Create: {fieldName}</span>;
                         }
                         // For mapped columns, show the selected DB column name
-                        return <span style={{ color: '#00796b' }}>{selectedValue}</span>;
+                        return <span style={{ color: '#00796b' }}>{String(selectedValue)}</span>;
                       }}
                     >
                       <MenuItem key={`${excelCol}-skip`} value="skip-column" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
-                        <RemoveCircleOutlineIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }}/> Skip This Column
+                        <RemoveCircleOutlineIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }}/> Skip This Field
                       </MenuItem>
                       <MenuItem key={`${excelCol}-create`} value="create-new-column" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                         <AddIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }}/> Create New Field...
                       </MenuItem>
                       <Divider key={`${excelCol}-div1`} />
+                      
                       {/* Suggestions from mapping object */}
-                      {suggestions.length > 0 && (
+                      {mapping.suggestedColumns && mapping.suggestedColumns.length > 0 && (
                           <MenuItem key={`${excelCol}-suggestion-header`} disabled sx={{ fontStyle: 'italic', fontWeight:'bold' }}>
                             <Typography variant="body2">Suggestions:</Typography>
                           </MenuItem>
                       )}
-                      {suggestions.map((suggestion) => (
-                        <MenuItem key={`${excelCol}-sugg-${suggestion.columnName}`} value={suggestion.columnName}> {/* Made key more unique */}
+                      {mapping.suggestedColumns && mapping.suggestedColumns.map((suggestion) => (
+                        <MenuItem 
+                          key={`${excelCol}-sugg-${suggestion.columnName}`} 
+                          value={suggestion.columnName}
+                          sx={{
+                            bgcolor: suggestion.confidenceScore > 0.8 ? 'rgba(76, 175, 80, 0.05)' : 'transparent',
+                            '&:hover': {
+                              bgcolor: suggestion.confidenceScore > 0.8 ? 'rgba(76, 175, 80, 0.1)' : undefined
+                            }
+                          }}
+                        >
                           <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
-                             <Typography variant="body2">{suggestion.columnName}</Typography>
+                             <Typography variant="body2">
+                               {suggestion.confidenceScore > 0.8 && '✓ '}
+                               {suggestion.columnName}
+                             </Typography>
                              <Box display="flex" alignItems="center">
-                                 <Typography variant="caption" sx={{
-                                     fontStyle: 'italic',
-                                     fontWeight: suggestion.confidenceScore > 0.8 ? 'bold' : 'normal',
-                                     color: suggestion.confidenceScore > 0.8 ? 'success.main' : 
-                                            suggestion.confidenceScore > 0.5 ? 'text.primary' : 'text.secondary',
-                                     bgcolor: suggestion.confidenceScore > 0.8 ? 'success.50' : 'transparent',
-                                     px: suggestion.confidenceScore > 0.8 ? 0.5 : 0,
-                                     borderRadius: '4px'
-                                 }}>
-                                     Match: {Math.round(suggestion.confidenceScore * 100)}%
-                                 </Typography>
+                                 <Chip
+                                   size="small"
+                                   label={suggestion.confidenceScore ? 
+                                     `Match: ${Math.round(suggestion.confidenceScore * 100)}%` : 
+                                     'No match score'}
+                                   color={suggestion.confidenceScore > 0.8 ? 'success' : 
+                                         suggestion.confidenceScore > 0.5 ? 'primary' : 'default'}
+                                   variant={suggestion.confidenceScore > 0.7 ? 'filled' : 'outlined'}
+                                   sx={{ 
+                                     fontSize: '0.7rem',
+                                     height: '20px',
+                                     mr: 0.5
+                                   }}
+                                 />
                                 <ConfidenceIcon level={suggestion.confidenceLevel} />
                                 {!suggestion.isTypeCompatible && <Tooltip title="Potential type mismatch"><Warning fontSize="small" color="warning" sx={{ ml: 0.5 }} /></Tooltip>}
                              </Box>
                           </Box>
                         </MenuItem>
                       ))}
-                      {suggestions.length > 0 && <Divider key={`${excelCol}-div2`} />}
+                      {mapping.suggestedColumns && mapping.suggestedColumns.length > 0 && <Divider key={`${excelCol}-div2`} />}
+                      
                       {/* Existing DB Columns (if not creating table) */}
                       {!isCreatingTable && targetColumns.length > 0 && (
                           <MenuItem key={`${excelCol}-existing-header`} disabled sx={{ fontStyle: 'italic', fontWeight:'bold' }}>
@@ -231,9 +296,9 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                           </MenuItem>
                       )}
                       {!isCreatingTable && targetColumns
-                          .filter(col => !suggestions.some(s => s.columnName === col.columnName)) // Exclude suggestions
+                          .filter(col => !mapping.suggestedColumns?.some(s => s.columnName === col.columnName)) // Exclude suggestions
                           .map((col: TableColumnType) => (
-                              <MenuItem key={`${excelCol}-existing-${col.columnName}`} value={col.columnName}> {/* Made key more unique */}
+                              <MenuItem key={`${excelCol}-existing-${col.columnName}`} value={col.columnName}>
                                   {col.columnName} ({col.dataType})
                               </MenuItem>
                       ))}
@@ -244,7 +309,7 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
               {/* Data Type Cell - Now editable */}
               <TableCell>
                 <Box display="flex" alignItems="center">
-                  <FormControl size="small">
+                  <FormControl fullWidth variant="outlined" size="small" style={{ width: '100%' }}>
                     <Select
                       value={mapping.inferredDataType || 'string'}
                       onChange={(e) => {
@@ -257,12 +322,16 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                         
                         // If creating a new column, update the SQL type too
                         if (mapping.action === 'create' && mapping.newColumnProposal) {
+                          // Create a proper new column proposal with the details object
                           updateObj.newColumnProposal = {
                             ...mapping.newColumnProposal,
-                            sqlType: newType === 'string' ? 'TEXT' :
-                                    newType === 'number' ? 'NUMERIC' :
-                                    newType === 'boolean' ? 'BOOLEAN' :
-                                    newType === 'date' ? 'TIMESTAMP WITH TIME ZONE' : 'TEXT'
+                            details: {
+                              ...mapping.newColumnProposal.details,
+                              sqlType: newType === 'string' ? 'TEXT' :
+                                      newType === 'number' ? 'NUMERIC' :
+                                      newType === 'boolean' ? 'BOOLEAN' :
+                                      newType === 'date' ? 'TIMESTAMP WITH TIME ZONE' : 'TEXT'
+                            }
                           };
                         }
                         
