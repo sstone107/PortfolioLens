@@ -76,20 +76,87 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
           </TableRow>
         </TableHead>
         <TableBody>
+          {/* Log the excelHeaders array for debugging */}
+          {console.log('[DEBUG ColumnMappingTableView] excelHeaders:', excelHeaders, 'mappings keys:', Object.keys(mappings))}
+          
+          {/* First render a message if there are no headers at all */}
+          {excelHeaders.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={4} align="center">
+                {isCreatingTable ? (
+                  <Box sx={{ py: 2 }}>
+                    <Typography variant="body2" sx={{ color: 'info.main', fontWeight: 'medium' }}>
+                      This is an empty sheet with no data or headers.
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+                      Default columns will be created automatically. You can modify them below or add more columns as needed.
+                    </Typography>
+                    <Button 
+                      variant="outlined" 
+                      color="primary" 
+                      size="small"
+                      sx={{ mt: 2 }}
+                      onClick={() => {
+                        // Force refresh default columns
+                        const defaultHeaders = ['id', 'name', 'description', 'created_date', 'status'];
+                        defaultHeaders.forEach(header => {
+                          // Create a default mapping for this header
+                          onMappingUpdate(header, {
+                            header: header,
+                            action: 'create',
+                            mappedColumn: header,
+                            inferredDataType: header.includes('date') ? 'date' : 
+                                             header === 'id' ? 'number' : 'string',
+                            reviewStatus: 'pending',
+                            status: 'pending',
+                          });
+                        });
+                      }}
+                    >
+                      Create Default Columns
+                    </Button>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" sx={{ py: 2, color: 'text.secondary' }}>
+                    No columns found in this sheet. Please check that the sheet contains headers.
+                  </Typography>
+                )}
+              </TableCell>
+            </TableRow>
+          )}
+          
+          {/* Then map over all available headers */}
           {excelHeaders.map(excelCol => {
             // Get the full mapping object, provide a default if somehow missing
             const mapping: BatchColumnMapping = mappings[excelCol] || ({
                 header: excelCol,
-                action: 'skip',
+                action: isCreatingTable ? 'create' : 'skip', // Default to create for new tables
                 status: 'pending',
                 reviewStatus: 'pending',
-                mappedColumn: null,
+                mappedColumn: isCreatingTable ? excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_') : null,
                 suggestedColumns: [],
-                inferredDataType: null,
-                sampleValue: null,
-                confidenceScore: 0,
-                confidenceLevel: 'Low',
+                inferredDataType: 'string', // Default type
+                sampleValue: '',
+                confidenceScore: isCreatingTable ? 1.0 : 0,
+                confidenceLevel: isCreatingTable ? 'High' : 'Low',
+                // Add newColumnProposal for create action
+                newColumnProposal: isCreatingTable ? {
+                  type: 'new_column' as const,
+                  details: {
+                    columnName: excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_'),
+                    sqlType: 'TEXT', // Default
+                    isNullable: true,
+                    sourceSheet: sheetState?.sheetName || '',
+                    sourceHeader: excelCol
+                  }
+                } : undefined
             } as BatchColumnMapping);
+            
+            // Log if mapping is missing unexpectedly
+            if (!mappings[excelCol]) {
+              console.log(`[DEBUG] Missing mapping for column ${excelCol}, using default`);
+            }
+            
             const suggestions = mapping.suggestedColumns || [];
 
             return (
@@ -131,10 +198,15 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                   <FormControl sx={{ flex: '1 1 auto' }} size="small">
                     <Select
                       // Determine value based on action and mappedColumn from the full mapping object
+                      // FIXED: Don't default to skip without an explicit 'skip' action, to prevent resetting
                       value={
                           mapping.action === 'create' ? 'create-new-column' :
                           mapping.action === 'map' && mapping.mappedColumn ? mapping.mappedColumn :
-                          mapping.action === 'skip' || !mapping.action ? 'skip-column' : ''
+                          mapping.action === 'skip' ? 'skip-column' : 
+                          // If no action or mappedColumn but inferredDataType exists, keep it mappable
+                          (mapping.inferredDataType && !mapping.action && !mapping.mappedColumn) ? 'create-new-column' :
+                          // Last fallback
+                          '' 
                       }
                       // Add a key to force re-render when the mapping changes
                       key={`select-${excelCol}-${mapping.action}-${mapping.mappedColumn || 'none'}`}
@@ -214,12 +286,6 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                         }
                       }}
                       renderValue={(selectedValue) => {
-                        // Add debug logging for value rendering
-                        console.log(`[DEBUG] Rendering select value for ${excelCol}:`, {
-                          selectedValue,
-                          action: mapping.action,
-                          mappedColumn: mapping.mappedColumn
-                        });
                         
                         if (mapping.action === 'skip' || selectedValue === 'skip-column' || !selectedValue) {
                           // Consistent styling for skipped columns
@@ -312,8 +378,26 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                   <FormControl fullWidth variant="outlined" size="small" style={{ width: '100%' }}>
                     <Select
                       value={mapping.inferredDataType || 'string'}
+                      MenuProps={{
+                        anchorOrigin: {
+                          vertical: 'bottom',
+                          horizontal: 'left',
+                        },
+                        transformOrigin: {
+                          vertical: 'top',
+                          horizontal: 'left',
+                        },
+                        PaperProps: {
+                          style: {
+                            zIndex: 9999,
+                            maxHeight: '300px'
+                          }
+                        }
+                      }}
                       onChange={(e) => {
                         const newType = e.target.value as ColumnType;
+                        
+                        console.log(`[DEBUG TypeChange] Changing type for ${excelCol} from ${mapping.inferredDataType} to ${newType}`);
                         
                         // Create the update object
                         const updateObj: Partial<BatchColumnMapping> = {
@@ -322,27 +406,44 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                         
                         // If creating a new column, update the SQL type too
                         if (mapping.action === 'create' && mapping.newColumnProposal) {
+                          // Import the mapColumnTypeToSql helper
+                          const mapTypeToSql = (type: ColumnType): string => {
+                            switch (type) {
+                              case 'string': return 'TEXT';
+                              case 'number': return 'NUMERIC';
+                              case 'boolean': return 'BOOLEAN';
+                              case 'date': return 'TIMESTAMP WITH TIME ZONE';
+                              default: return 'TEXT';
+                            }
+                          };
+                          
                           // Create a proper new column proposal with the details object
                           updateObj.newColumnProposal = {
                             ...mapping.newColumnProposal,
                             details: {
                               ...mapping.newColumnProposal.details,
-                              sqlType: newType === 'string' ? 'TEXT' :
-                                      newType === 'number' ? 'NUMERIC' :
-                                      newType === 'boolean' ? 'BOOLEAN' :
-                                      newType === 'date' ? 'TIMESTAMP WITH TIME ZONE' : 'TEXT'
+                              sqlType: mapTypeToSql(newType)
                             }
                           };
+                          
                         }
+                        
+                        // Update status to indicate user change
+                        updateObj.status = 'userModified';
+                        updateObj.reviewStatus = 'approved';
                         
                         onMappingUpdate(excelCol, updateObj);
                       }}
+                      key={`select-${excelCol}-${mapping.inferredDataType || 'string'}-${Date.now()}`}
                       disabled={false} // Always enable the select
                       size="small"
                       sx={{
                         minWidth: 100,
                         '& .MuiSelect-select': {
                           color: 'text.primary'
+                        },
+                        '&.Mui-focused': {
+                          zIndex: 9999
                         }
                       }}
                     >
