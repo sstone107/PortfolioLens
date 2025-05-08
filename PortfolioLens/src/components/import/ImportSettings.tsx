@@ -9,13 +9,7 @@ import {
   Checkbox,
   FormControlLabel,
 } from '@mui/material';
-
-export interface ImportSettings {
-  useFirstRowAsHeader: boolean;
-  useSheetNameForTableMatch: boolean;
-  inferDataTypes: boolean;
-  createMissingColumns: boolean;
-}
+import { ImportSettings } from './types';
 
 interface ImportSettingsDialogProps {
   open: boolean;
@@ -41,71 +35,54 @@ export const ImportSettingsDialog: React.FC<ImportSettingsDialogProps> = ({
     setLocalSettings(settings);
   }, [settings]);
 
-  // Handle setting changes
-  const handleChange = (setting: keyof ImportSettings) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setLocalSettings({
       ...localSettings,
-      [setting]: e.target.checked,
+      [event.target.name]: event.target.checked,
     });
   };
 
-  // Apply settings and close
   const handleApply = () => {
-    onApply(localSettings);
-    onClose();
+    // Ensure all fields are present when applying, even if not directly editable in this dialog version
+    const fullSettingsToApply: ImportSettings = {
+      useFirstRowAsHeader: localSettings.useFirstRowAsHeader,
+      useSheetNameForTableMatch: localSettings.useSheetNameForTableMatch,
+      inferDataTypes: localSettings.inferDataTypes,
+      createMissingColumns: localSettings.createMissingColumns,
+      // Carry over other settings not directly editable in this dialog
+      enableDataEnrichment: settings.enableDataEnrichment || false,
+      applyGlobalAttributes: settings.applyGlobalAttributes || false,
+      useSubServicerTags: settings.useSubServicerTags || false,
+      createAuditTrail: settings.createAuditTrail || false,
+    };
+    onApply(fullSettingsToApply);
   };
 
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogTitle>Import Settings</DialogTitle>
       <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1, minWidth: '300px' }}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={localSettings.useFirstRowAsHeader}
-                onChange={handleChange('useFirstRowAsHeader')}
-              />
-            }
-            label="Use first row as column headers"
-          />
-          
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={localSettings.useSheetNameForTableMatch}
-                onChange={handleChange('useSheetNameForTableMatch')}
-              />
-            }
-            label="Auto-match tables by sheet name"
-          />
-          
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={localSettings.inferDataTypes}
-                onChange={handleChange('inferDataTypes')}
-              />
-            }
-            label="Auto-detect column data types"
-          />
-          
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={localSettings.createMissingColumns}
-                onChange={handleChange('createMissingColumns')}
-              />
-            }
-            label="Create missing columns in tables"
-          />
-        </Stack>
+        <FormControlLabel
+          control={<Checkbox checked={localSettings.useFirstRowAsHeader} onChange={handleChange} name="useFirstRowAsHeader" />}
+          label="Use first row as header"
+        />
+        <FormControlLabel
+          control={<Checkbox checked={localSettings.useSheetNameForTableMatch} onChange={handleChange} name="useSheetNameForTableMatch" />}
+          label="Use sheet name for table match"
+        />
+        <FormControlLabel
+          control={<Checkbox checked={localSettings.inferDataTypes} onChange={handleChange} name="inferDataTypes" />}
+          label="Infer data types"
+        />
+        <FormControlLabel
+          control={<Checkbox checked={localSettings.createMissingColumns} onChange={handleChange} name="createMissingColumns" />}
+          label="Create missing columns"
+        />
+        {/* TODO: Add controls for other ImportSettings fields if they should be user-configurable */}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleApply} variant="contained">Apply</Button>
+        <Button onClick={handleApply}>Apply</Button>
       </DialogActions>
     </Dialog>
   );

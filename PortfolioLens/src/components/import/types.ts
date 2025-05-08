@@ -159,6 +159,11 @@ export interface TableInfo {
   description?: string;
 }
 
+export type TableInfoExtended = TableInfo & { 
+  isNewTableProposal?: boolean; 
+  sourceSheet?: string; // Optional: if it's a new table, which sheet proposed it
+};
+
 // Missing column information for dynamic column creation
 export interface MissingColumnInfo {
   columnName: string;
@@ -194,7 +199,6 @@ export interface ImportSettings {
 export type ConfidenceLevel = 'High' | 'Medium' | 'Low';
 export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'modified';
 export type SheetReviewStatus = 'pending' | 'approved' | 'rejected' | 'partiallyApproved';
-
 
 // --- Batch Import Enhancement Types (Schema Cache & Ranking) ---
 
@@ -270,37 +274,43 @@ export interface ColumnMappingSuggestions {
   inferredDataType: ColumnType | null; // Inferred data type from sample data
 }
 
-
 // --- Batch Import Enhancement Types (Processing State) ---
 
 /**
  * Interface for a proposed new column schema change
  */
 export interface NewColumnProposal {
-  columnName: string; // Sanitized proposed name
-  sqlType: string; // Proposed SQL data type (e.g., TEXT, DECIMAL(18,2))
-  isNullable?: boolean; // Whether the new column should be nullable
-  defaultValue?: string; // Default value for the new column
-  // Add source sheet/column info for context if needed
-  sourceSheet?: string;
-  sourceHeader?: string;
-  createStructureOnly?: boolean; // Flag to indicate only creating the column structure, not importing data
+  type: 'new_column';
+  details: {
+    columnName: string; // Sanitized proposed name
+    sqlType: string;
+    isNullable?: boolean;
+    defaultValue?: string;
+    comment?: string; // Added comment
+    sourceSheet?: string;
+    sourceHeader?: string;
+    createStructureOnly?: boolean; // if true, only schema, no data insert from this col
+    is_primary_key?: boolean; // Added from BatchImporter usage
+  };
 }
 
 /**
  * Interface for a proposed new table schema change
  */
 export interface NewTableProposal {
-  tableName: string; // Proposed new table name
-  columns: NewColumnProposal[]; // Columns for the new table
-  sourceSheet: string; // The sheet this table is proposed for
+  type: 'new_table';
+  details: {
+    name: string; // Changed from tableName for consistency with NewColumnProposal.details.name
+    columns: NewColumnProposal['details'][]; // Array of column details, not full NewColumnProposal objects
+    comment?: string; // Added comment
+    sourceSheet: string;
+  };
 }
 
 /**
  * Union type for any schema proposal
  */
-export type SchemaProposal = NewColumnProposal | NewTableProposal;
-
+export type SchemaProposal = NewTableProposal | NewColumnProposal;
 
 /**
  * Interface for mapping a single sheet header to a DB column during batch processing
@@ -352,6 +362,7 @@ export interface BatchImportState {
   commitProgress: { processedSheets: number, totalSheets: number, currentSheet: string | null } | null;
   error: string | null;
   schemaCacheStatus: 'idle' | 'loading' | 'ready' | 'error';
+  importSettings: ImportSettings | null; // Added importSettings
 }
 
 /**

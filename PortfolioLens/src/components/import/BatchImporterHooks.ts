@@ -4,12 +4,15 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { DatabaseService } from './services/DatabaseService';
 import { TableInfo } from './types';
 import { useBatchImportStore } from '../../store/batchImportStore';
+import { shallow } from 'zustand/shallow';
 
 /**
  * Custom hook to manage loading and caching of database schema information.
  */
 export const useSchemaInfo = () => {
-  const { setSchemaCacheStatus, setError: setStoreError } = useBatchImportStore();
+  // Get store actions directly from getState to avoid subscription and re-renders
+  const { setSchemaCacheStatus, setError } = useBatchImportStore.getState();
+
   const [tables, setTables] = useState<string[]>([]);
   const [tableInfoMap, setTableInfoMap] = useState<Record<string, TableInfo>>({});
   const [isLoadingTables, setIsLoadingTables] = useState(false);
@@ -34,31 +37,30 @@ export const useSchemaInfo = () => {
         } catch (infoError) {
           console.error(`[useSchemaInfo] Error loading table info for ${tableName}:`, infoError);
           infoMap[tableName] = null as any; // Explicitly set to null on error
-          // Optionally, you could set it to an object like: { error: true, message: (infoError as Error).message }
-          // This would allow richer error display in the UI if needed.
         }
       }
       setTableInfoMap(infoMap);
       setSchemaCacheStatus('ready');
     } catch (error) {
-      setStoreError(`Error loading database schema: ${error instanceof Error ? error.message : String(error)}`);
+      setError(`Error loading database schema: ${error instanceof Error ? error.message : String(error)}`);
       setSchemaCacheStatus('error');
     } finally {
       setIsLoadingTables(false);
     }
-  }, [dbService, setSchemaCacheStatus, setStoreError]);
+  }, [dbService]); // Only depend on dbService, not on store actions
 
   // Load schema on initial hook mount
   useEffect(() => {
     loadSchemaInfo();
   }, [loadSchemaInfo]);
 
-  return {
+  // Return a stable reference to the state object
+  return useMemo(() => ({
     tables,
     tableInfoMap,
     isLoadingTables,
-    loadSchemaInfo, // Expose reload function if needed
-};
+    loadSchemaInfo,
+  }), [tables, tableInfoMap, isLoadingTables, loadSchemaInfo]);
 }
 /**
  * Custom hook to manage the Web Worker for batch import processing.
@@ -67,15 +69,31 @@ export const useBatchImportWorker = (
     tableInfoMap: Record<string, TableInfo> // Pass tableInfoMap as argument
 ) => {
     const workerRef = React.useRef<Worker | null>(null);
-    const {
-        sheets,
-        globalStatus,
-        schemaCacheStatus,
-        // Removed tableInfoMap from store destructuring
-        updateSheetSuggestions: _updateSheetSuggestions,
-        setSheetCommitStatus: _setSheetCommitStatus,
-        setError: _setError,
-    } = useBatchImportStore();
+    
+    // Don't subscribe to store changes - manually get the data when we need it
+    // Using getState to avoid triggering re-renders due to Zustand subscriptions
+    const [sheets, setSheets] = useState(useBatchImportStore.getState().sheets);
+    const [globalStatus, setGlobalStatus] = useState(useBatchImportStore.getState().globalStatus);
+    const [schemaCacheStatus, setSchemaCacheStatus] = useState(useBatchImportStore.getState().schemaCacheStatus);
+    
+    // Update only when needed
+    useEffect(() => {
+      const unsubscribe = useBatchImportStore.subscribe((state) => {
+        setSheets(state.sheets);
+        setGlobalStatus(state.globalStatus);
+        setSchemaCacheStatus(state.schemaCacheStatus);
+      });
+      return () => unsubscribe();
+    }, []);
+    
+    // Get store actions directly from getState to avoid subscription and re-renders
+    const { 
+        updateSheetSuggestions, 
+        setSheetCommitStatus, 
+        setError, 
+        setSheetReviewStatus, 
+        setGlobalStatus 
+    } = useBatchImportStore.getState();
 
     // Initialize worker and setup message/error handlers
     useEffect(() => {
@@ -87,13 +105,12 @@ export const useBatchImportWorker = (
         workerRef.current = new Worker(workerUrl, { type: 'module' });
         console.log(`[INFO] Initializing worker with cache-busting timestamp: ${workerUrl.searchParams.get('v')}`);
 
-        workerRef.current.onmessage = (event: MessageEvent<any>) => {
-            
+        const handleWorkerMessage = (event: MessageEvent<any>) => {
             // Destructure based on the actual worker result structure
             const { sheetProcessingState, status, error } = event.data;
 
             if (!sheetProcessingState && status !== 'error') {
-                _setError('Received invalid data from processing worker.');
+                setError('Received invalid data from processing worker.');
                 return;
             }
 
@@ -102,21 +119,36 @@ export const useBatchImportWorker = (
            if (status === 'processed' && sheetProcessingState) {
                 console.log('[DEBUG BatchImporterHooks] Worker processing completed for:', sheetProcessingState.sheetName);
                 
-                // First, directly set the sheet review status to approved if it has a selected table
-                // This is our direct fix for the persistent "needs review" issue
+                // Only auto-approve sheets that have a selected table that is NOT a new table
+                // New tables (starting with 'import_' or containing 'new:') need manual column mapping
                 if (sheetProcessingState.selectedTable) {
-                    const prevState = useBatchImportStore.getState().sheets[sheetProcessingState.sheetName];
-                    console.log('[DEBUG BatchImporterHooks] Setting sheet to approved:', {
-                        sheet: sheetProcessingState.sheetName,
-                        selectedTable: sheetProcessingState.selectedTable,
-                        prevStatus: prevState?.sheetReviewStatus,
-                        nowStatus: 'approved'
-                    });
-                    useBatchImportStore.getState().setSheetReviewStatus(sheetProcessingState.sheetName, 'approved');
+                    const selectedTable = sheetProcessingState.selectedTable;
+                    
+                    // Don't auto-approve if this is a new table that needs to have columns mapped
+                    const isNewTable = selectedTable.startsWith('new:') || 
+                                      selectedTable.startsWith('import_') || 
+                                      !!sheetProcessingState.isNewTable;
+                                      
+                    if (!isNewTable) {
+                        console.log('[DEBUG BatchImporterHooks] Auto-approving existing table:', {
+                            sheet: sheetProcessingState.sheetName,
+                            selectedTable: selectedTable,
+                            nowStatus: 'approved'
+                        });
+                        setSheetReviewStatus(sheetProcessingState.sheetName, 'approved');
+                    } else {
+                        console.log('[DEBUG BatchImporterHooks] Not auto-approving new table (requires column mapping):', {
+                            sheet: sheetProcessingState.sheetName,
+                            selectedTable: selectedTable,
+                            isNewTable: true
+                        });
+                        // Explicitly set to 'pending' to ensure manual mapping
+                        setSheetReviewStatus(sheetProcessingState.sheetName, 'pending');
+                    }
                 }
                 
                 // Now call store action with mapping data
-                _updateSheetSuggestions(
+                updateSheetSuggestions(
                     sheetProcessingState.sheetName,
                     sheetProcessingState.tableSuggestions || [],
                     sheetProcessingState.columnMappings || {},
@@ -126,21 +158,22 @@ export const useBatchImportWorker = (
                 
                 // Force sheet to ready status regardless of what worker sent
                 if (sheetProcessingState.selectedTable) {
-                    _setSheetCommitStatus(sheetProcessingState.sheetName, 'ready');
+                    setSheetCommitStatus(sheetProcessingState.sheetName, 'ready');
                 } else {
-                    _setSheetCommitStatus(sheetProcessingState.sheetName, sheetProcessingState.status);
+                    setSheetCommitStatus(sheetProcessingState.sheetName, sheetProcessingState.status);
                 }
 
            } else if (status === 'error') {
-               _setSheetCommitStatus(sheetName, 'error', `Worker processing failed: ${error}`);
-           } else {
+               setSheetCommitStatus(sheetName, 'error', `Worker processing failed: ${error}`);
            }
         };
 
-        workerRef.current.onerror = (error) => {
-            _setError(`Worker error: ${error.message}`);
-            // Potentially set global status to error?
+        const handleWorkerError = (error: ErrorEvent) => {
+            setError(`Worker error: ${error.message}`);
         };
+
+        workerRef.current.onmessage = handleWorkerMessage;
+        workerRef.current.onerror = handleWorkerError;
 
         return () => {
             if (workerRef.current) {
@@ -148,7 +181,7 @@ export const useBatchImportWorker = (
                 workerRef.current = null;
             }
         };
-    }, [_updateSheetSuggestions, _setSheetCommitStatus, _setError]); // Dependencies are store actions
+    }, []); // Empty dependency array to initialize only once
 
     // Function to post a single task to the worker
     const postWorkerTask = useCallback((sheet: SheetProcessingState) => {
@@ -163,19 +196,17 @@ export const useBatchImportWorker = (
             };
             // Log task data without large arrays
             workerRef.current.postMessage(taskData);
-            // Optionally update sheet status to 'processing'
-            _setSheetCommitStatus(sheet.sheetName, 'processing'); // Set status to processing
-        } else {
-            // Optionally set sheet status to error if it couldn't be posted?
-            // _setSheetCommitStatus(sheet.sheetName, 'error', 'Failed to initiate processing.');
+            
+            // Get fresh reference to the action
+            const { setSheetCommitStatus } = useBatchImportStore.getState();
+            setSheetCommitStatus(sheet.sheetName, 'processing'); // Set status to processing
         }
-    }, [schemaCacheStatus, tableInfoMap, _setSheetCommitStatus]); // Added _setSheetCommitStatus dependency
+    }, [schemaCacheStatus, tableInfoMap]); // Dependencies that won't cause infinite loops
 
     // Effect to automatically post tasks when file reading is complete and schema is ready
     useEffect(() => {
         // Only proceed if schema is ready and global status indicates file reading is complete
         if (schemaCacheStatus === 'ready' && globalStatus === 'fileReadComplete') {
-            
             // Get the current sheets from the store
             const currentSheets = Object.values(sheets);
             let tasksPosted = 0;
@@ -190,13 +221,17 @@ export const useBatchImportWorker = (
             
             // If tasks were posted, update global status to analyzing
             if (tasksPosted > 0) {
-                useBatchImportStore.getState().setGlobalStatus('analyzing');
+                // Get fresh reference to the action
+                const { setGlobalStatus } = useBatchImportStore.getState();
+                setGlobalStatus('analyzing');
             }
         }
-    }, [schemaCacheStatus, globalStatus, sheets, postWorkerTask]);
+    }, [schemaCacheStatus, globalStatus, sheets, postWorkerTask]); 
 
-    // Return the function to post tasks manually (still needed for re-processing on table change)
-    return { postWorkerTask };
+    // Return the function to post tasks manually with memoization to maintain stable reference
+    return useMemo(() => ({ 
+        postWorkerTask 
+    }), [postWorkerTask]);
 };
 
 

@@ -12,7 +12,8 @@ import {
   ReviewStatus,
   GlobalStatus,
   SheetCommitStatus,
-  ColumnType
+  ColumnType,
+  ImportSettings
 } from '../components/import/types';
 
 // Helper function to map abstract ColumnType to a basic SQL type
@@ -60,6 +61,7 @@ interface BatchImportActions {
   setSheetCommitStatus: (sheetName: string, status: SheetCommitStatus, error?: string) => void; 
   setError: (errorMessage: string | null) => void;
   resetState: () => void;
+  setImportSettings: (settings: ImportSettings | null) => void;
 
   // --- Review and Approval Actions ---
   approveSheetMapping: (sheetName: string) => void; 
@@ -85,6 +87,7 @@ const initialState: BatchImportState = {
   commitProgress: null,
   error: null,
   schemaCacheStatus: 'idle',
+  importSettings: null,
 };
 
 // Create the Zustand store
@@ -350,37 +353,46 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
 
       const sanitizedNewName = newRawTableName.trim().replace(/\s+/g, '_'); 
       let updatedSheetSchemaProposals = sheet.sheetSchemaProposals ? [...sheet.sheetSchemaProposals] : [];
-      const proposalIndex = updatedSheetSchemaProposals.findIndex(proposal => 'tableName' in proposal && proposal.tableName === sheet.selectedTable?.substring(4) && proposal.sourceSheet === sheetName);
+      // Find the NewTableProposal to update
+      const proposalIndex = updatedSheetSchemaProposals.findIndex(
+        proposal => 
+          proposal.type === 'new_table' && 
+          proposal.details.name === sheet.selectedTable?.substring(4) && // Use details.name
+          proposal.details.sourceSheet === sheetName // Use details.sourceSheet
+      );
 
       if (proposalIndex !== -1) {
         const oldProposal = updatedSheetSchemaProposals[proposalIndex] as NewTableProposal;
-        updatedSheetSchemaProposals[proposalIndex] = { ...oldProposal, tableName: sanitizedNewName };
+        updatedSheetSchemaProposals[proposalIndex] = { 
+          ...oldProposal, 
+          details: { ...oldProposal.details, name: sanitizedNewName } // Update details.name
+        };
       } else {
-        // If no existing proposal, create one (this might need adjustment based on exact logic)
-        // This case might indicate that selectedTable was `new:...` but no proposal was initially made, or name changed so much it didn't match.
-        // For now, let's assume if isNewTable is true, we should ensure a proposal reflects the new name.
         console.warn(`[DEBUG Store] updateNewTableNameForSheet: No matching NewTableProposal found for sheet ${sheetName} with old name ${sheet.selectedTable}. Creating/Updating.`);
-        // Attempt to find *any* NewTableProposal for this sheet or add a new one.
-        // This logic might need to be more robust based on application flow.
         let foundAndUpdated = false;
         updatedSheetSchemaProposals = updatedSheetSchemaProposals.map(p => {
-            if ('tableName' in p && p.sourceSheet === sheetName) {
+            if (p.type === 'new_table' && p.details.sourceSheet === sheetName) { // Use details.sourceSheet
                 foundAndUpdated = true;
-                return { ...(p as NewTableProposal), tableName: sanitizedNewName };
+                return { ...(p as NewTableProposal), details: { ...(p as NewTableProposal).details, name: sanitizedNewName } }; // Update details.name
             }
             return p;
         });
         if (!foundAndUpdated) {
             updatedSheetSchemaProposals.push({
-                sourceSheet: sheetName,
-                tableName: sanitizedNewName,
-                columns: sheet.columnMappings ? Object.entries(sheet.columnMappings).map(([excelCol, cm]) => ({
-                    columnName: cm.dbColumn || excelCol, 
-                    sqlType: mapColumnTypeToSqlType(cm.inferredDataType), 
-                    isNullable: true, 
-                    sourceHeader: excelCol, 
-                })) : [],
-            });
+                type: 'new_table',
+                details: {
+                    name: sanitizedNewName,
+                    sourceSheet: sheetName,
+                    columns: sheet.columnMappings ? Object.entries(sheet.columnMappings).map(([excelCol, cm]) => ({
+                        columnName: cm.dbColumn || excelCol, 
+                        sqlType: mapColumnTypeToSqlType(cm.inferredDataType), 
+                        isNullable: true, 
+                        sourceHeader: excelCol,
+                        // Ensure all required fields for NewColumnProposal['details'] are present or handled
+                    })) : [],
+                    // comment: '' // Optional, can be added if needed
+                }
+            } as NewTableProposal);
         }
       }
 
@@ -401,6 +413,8 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
   resetState: () => set((state) => {
     return initialState;
   }),
+
+  setImportSettings: (settings) => set({ importSettings: settings }),
 
   // --- Review and Approval Action Implementations ---
   approveSheetMapping: (sheetName) => set((state) => {
@@ -609,35 +623,51 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
   }),
 
   updateOverallSchemaProposals: () => set((state) => {
-    const aggregatedProposals: SchemaProposal[] = [];
-    const proposalKeys = new Set<string>();
+    const allProposals: SchemaProposal[] = [];
     Object.values(state.sheets).forEach(sheet => {
-      if (sheet.sheetReviewStatus !== 'rejected' && sheet.sheetSchemaProposals) {
-        sheet.sheetSchemaProposals.forEach(proposal => {
-          let key: string;
-          if ('sourceHeader' in proposal && proposal.sourceHeader !== undefined) { 
-            key = `${sheet.selectedTable}:${proposal.columnName}`;
-          } else if ('tableName' in proposal) { 
-            key = `new_table:${proposal.tableName}`;
-          } else {
-            return;
-          }
-          if (!proposalKeys.has(key)) {
-            if ('sourceHeader' in proposal) {
-              const colMapping = sheet.columnMappings[proposal.sourceHeader!];
-              if (colMapping && colMapping.reviewStatus !== 'rejected') {
-                aggregatedProposals.push(proposal);
-                proposalKeys.add(key);
-              }
-            } else {
-              aggregatedProposals.push(proposal);
-              proposalKeys.add(key);
-            }
-          }
-        });
+      if (sheet.sheetSchemaProposals) {
+        allProposals.push(...sheet.sheetSchemaProposals);
       }
     });
-    return { overallSchemaProposals: aggregatedProposals };
+
+    // Deduplicate proposals based on type and name/columnName + sourceSheet
+    const newProposalsMap: { [key: string]: SchemaProposal } = {};
+    allProposals.forEach(proposal => {
+      let uniqueKey = '';
+      if (proposal.type === 'new_table') {
+        uniqueKey = `table-${proposal.details.name}-${proposal.details.sourceSheet}`;
+        // Ensure existing is also checked for type before merging
+        const existing = newProposalsMap[uniqueKey];
+        if (existing && existing.type === 'new_table') {
+            newProposalsMap[uniqueKey] = { 
+                ...existing, 
+                details: { ...existing.details, ...proposal.details } 
+            };
+        } else {
+            newProposalsMap[uniqueKey] = proposal;
+        }
+      } else if (proposal.type === 'new_column') {
+        // For NewColumnProposal, unique key might involve table name if applicable, 
+        // or be based on columnName and sourceSheet if it's adding to an existing table not yet defined in this batch's NewTableProposals
+        // Assuming for now it's about the column within its source sheet context or a target table name if provided
+        // This part of the key might need refinement based on how NewColumnProposals are associated with tables.
+        // Let's use sourceHeader if available for uniqueness within a sheet context if columnName is not unique enough.
+        uniqueKey = `column-${proposal.details.columnName}-${proposal.details.sourceSheet}-${proposal.details.sourceHeader || ''}`;
+        const existing = newProposalsMap[uniqueKey];
+        if (existing && existing.type === 'new_column') {
+            newProposalsMap[uniqueKey] = { 
+                ...existing, 
+                details: { ...existing.details, ...proposal.details } 
+            };
+        } else {
+            newProposalsMap[uniqueKey] = proposal;
+        }
+      }      
+    });
+
+    return {
+      overallSchemaProposals: Object.values(newProposalsMap),
+    };
   }),
 
   setGlobalStatus: (status) => set({ globalStatus: status }),
@@ -688,9 +718,13 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
 }));
 
 // Helper function to determine sheet review status based on column review statuses
-const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchColumnMapping }): SheetReviewStatus => { 
-    // Handle empty column mappings - consider this approved if there are no columns to map
-    if (!columnMappings || Object.keys(columnMappings).length === 0) {
+const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchColumnMapping }, headers?: string[]): SheetReviewStatus => {
+    // If there are headers but no column mappings, sheet is pending
+    if ((!columnMappings || Object.keys(columnMappings).length === 0) && headers && headers.length > 0) {
+        return 'pending';
+    }
+    // If no headers and no mappings, it's approved (nothing to map)
+    if ((!columnMappings || Object.keys(columnMappings).length === 0) && (!headers || headers.length === 0)) {
         return 'approved';
     }
     

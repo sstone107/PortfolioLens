@@ -356,8 +356,8 @@ export class ImportService {
     try {
       // Transform the proposals to the format expected by add_columns_batch
       const transformedColumns = proposals.map(col => ({
-        name: col.columnName,
-        type: col.sqlType || 'TEXT' // Use the proposed SQL type or default to TEXT
+        name: col.details.columnName,
+        type: col.details.sqlType || 'TEXT'
       }));
       
       // Call the add_columns_batch RPC
@@ -390,7 +390,7 @@ export class ImportService {
             // Otherwise assume all were created
             return true;
           })
-          .map(p => p.columnName);
+          .map(p => p.details.columnName);
         
         return {
           success: true,

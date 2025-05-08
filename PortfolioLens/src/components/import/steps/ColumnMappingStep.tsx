@@ -4,7 +4,7 @@ import { Check as CheckIcon, WarningAmber as WarningIcon, Edit as EditIcon } fro
 import { SheetProcessingState } from '../types'; // Use SheetProcessingState
 
 // Updated props to reflect store usage
-interface ColumnMappingStepProps {
+export interface ColumnMappingStepProps {
   sheets: { [sheetName: string]: SheetProcessingState }; // Pass the sheets object from the store
   localSelectedSheets: Record<string, boolean>; // UI state for selection
   localSkippedSheets: Record<string, boolean>; // UI state for skipping

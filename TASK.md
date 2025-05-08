@@ -1,6 +1,6 @@
 # PortfolioLens Project Tasks
 
-## Current Tasks (2025-05-01)
+## Current Tasks (2025-05-07)
 - [x] Initialize project setup and create Task Master structure
 - [ ] Work on Task ID: 2 - Authentication and Permission System
   - [x] Set Up Supabase Auth
@@ -9,6 +9,7 @@
   - [ ] Develop Admin Capabilities
   - [ ] Add IP/Geography Limitations
   - [ ] Implement Export/Download Permissions
+- [ ] Apply Supabase migration 010_loan_detail_view_tables.sql
 
 ## Upcoming Tasks
 - [x] Parameter Type Handling and Connection Verification Fixes (Completed 2025-05-03)

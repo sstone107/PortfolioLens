@@ -22,20 +22,25 @@ import {
 import { FixedSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
 
-// Define types for AutoSizer
-interface AutoSizerProps {
-  children: (size: { width: number; height: number }) => React.ReactNode;
+import { BatchColumnMapping, ColumnMapping, TableColumn, ColumnMappingSuggestions, ConfidenceLevel } from './types'; // Import BatchColumnMapping and ConfidenceLevel
+
+// Define AutocompleteOption interface here
+interface AutocompleteOption {
+  label: string;
+  value: string;
+  disabled?: boolean;
+  isSuggestion?: boolean;
+  isNew?: boolean;
+  score?: number; 
 }
-import { BatchColumnMapping, ColumnMapping, TableColumn, ColumnMappingSuggestions } from './types'; // Import BatchColumnMapping
 
 interface VirtualizedColumnMapperProps {
   excelColumns: string[];
   tableColumns: TableColumn[];
   mappings: Record<string, Partial<BatchColumnMapping>>; // Change expected type
-  onMappingChange: (excelColumn: string, dbColumn: string | null) => void;
+  onMappingUpdate: (excelCol: string, changes: Partial<BatchColumnMapping>) => void; // Ensure this matches modal's handler
   exampleData?: Record<string, any>[];
   isCreatingTable: boolean; // Add isCreatingTable prop
-  columnSuggestions: Record<string, ColumnMappingSuggestions | undefined>; // Update type to match ColumnMappingModal
 }
 
 /**
@@ -106,7 +111,7 @@ export const VirtualizedColumnMapper: React.FC<VirtualizedColumnMapperProps> = (
   const RowRenderer = ({ index, style }: { index: number; style: React.CSSProperties }) => {
     const excelColumn = filteredColumns[index];
     // Get the full mapping object, provide a default if somehow missing
-    const mapping: BatchColumnMapping = mappings[excelColumn] || ({
+    const baseMapping: BatchColumnMapping = {
         header: excelColumn, // Ensure header is always defined
         action: 'skip',
         status: 'pending',
@@ -117,7 +122,11 @@ export const VirtualizedColumnMapper: React.FC<VirtualizedColumnMapperProps> = (
         sampleValue: null,
         confidenceScore: 0, // Add default confidence
         confidenceLevel: 'Low', // Add default confidence level
-    } as BatchColumnMapping); // Assert type for the default object
+        // Ensure all other BatchColumnMapping fields have defaults if necessary
+    };
+    const partialMapping = mappings[excelColumn];
+    const mapping: BatchColumnMapping = { ...baseMapping, ...partialMapping, header: excelColumn };
+
     const isMapped = mapping.action === 'map' || mapping.action === 'create';
     // Update display logic for new columns
     const displayDbColumn = mapping.action === 'map'
@@ -129,7 +138,7 @@ export const VirtualizedColumnMapper: React.FC<VirtualizedColumnMapperProps> = (
     const suggestions = mapping.suggestedColumns || []; // Use suggestions from the mapping object
 
     // Helper for confidence icon
-    const ConfidenceIcon = ({ level }: { level?: ConfidenceLevel }) => {
+    const ConfidenceIconDisplay = ({ level }: { level?: ConfidenceLevel }) => { // Renamed to avoid conflict if ConfidenceIcon is imported/global
         switch (level) {
             case 'High': return <CheckCircleIcon fontSize="inherit" color="success" sx={{ ml: 0.5 }} />;
             case 'Medium': return <ErrorIcon fontSize="inherit" color="warning" sx={{ ml: 0.5 }} />; // Using Error for Medium for visibility
@@ -168,7 +177,7 @@ export const VirtualizedColumnMapper: React.FC<VirtualizedColumnMapperProps> = (
           {/* Display Confidence and Review Status */}
            <Box sx={{ display: 'flex', alignItems: 'center', fontSize: '0.8rem' }}>
                 <Typography variant="caption" color="text.secondary">Confidence:</Typography>
-                <ConfidenceIcon level={mapping.confidenceLevel} />
+                <ConfidenceIconDisplay level={mapping.confidenceLevel} />
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>Review:</Typography>
                 {/* Add Review Status Icon/Button Here - TBD based on interaction design */}
                 <Chip label={mapping.reviewStatus || 'pending'} size="small" variant="outlined" sx={{ ml: 0.5, height: '18px', fontSize: '0.7rem' }} />
@@ -198,92 +207,173 @@ export const VirtualizedColumnMapper: React.FC<VirtualizedColumnMapperProps> = (
                     options.push({ label: '----', value: 'divider-sugg', disabled: true });
                 }
 
-                // Add all existing table columns (filter out those already suggested)
-                options.push({ label: 'All Fields:', value: 'all-fields-header', disabled: true });
-                existingTableColumns
-                    .filter(colName => !suggestions.some(s => s.columnName === colName))
-                    .forEach(colName => {
-                        options.push(colName);
+                // Add table columns
+                if (tableColumns.length > 0 && !isCreatingTable) {
+                    options.push({ label: 'Map to Existing Field:', value: 'existing-header', disabled: true });
+                    tableColumns.forEach(col => {
+                        // Only add if not already a top suggestion (to avoid duplicates in simple lists)
+                        // More sophisticated de-duplication might be needed if suggestion text matches column text
+                        if (!suggestions.some(s => s.columnName === col.columnName)) {
+                            options.push({ label: col.columnName, value: col.columnName });
+                        }
                     });
-
-                // Add Skip and Create options
-                options.push({ label: '----', value: 'divider-action', disabled: true });
-                options.push({ label: 'Skip This Column', value: 'skip-column' }); // Use a specific value for skip
-                options.push({ label: '➕ Create New Field...', value: 'create-new-column' });
-
-                return options;
-            }, [tableColumns, suggestions])} // Use suggestions from mapping
-            getOptionDisabled={(option) => typeof option === 'object' && !!option.disabled}
-            // Determine value based on action and mappedColumn
-            value={
-                mapping.action === 'create' ? 'create-new-column' : // Show create if action is create
-                mapping.action === 'map' ? mapping.mappedColumn : // Show mapped column if action is map
-                'skip-column' // Default to skip
-            }
-            onChange={(_, newValue) => {
-                const selectedValue = typeof newValue === 'object' && newValue !== null ? newValue.value : newValue;
-
-                if (selectedValue === 'create-new-column') {
-                    // Trigger parent modal to open create dialog
-                    onMappingUpdate(excelColumn, { action: 'create' }); // Signal intent to create
-                } else if (selectedValue === 'skip-column') {
-                    onMappingUpdate(excelColumn, { action: 'skip', mappedColumn: null, newColumnProposal: undefined });
-                } else if (selectedValue) {
-                    // Map to existing column
-                    onMappingUpdate(excelColumn, { action: 'map', mappedColumn: selectedValue, newColumnProposal: undefined });
+                    options.push({ label: '----', value: 'divider-existing', disabled: true });
                 }
-            }}
-            getOptionLabel={(option) => typeof option === 'string' ? option : option.label}
-            isOptionEqualToValue={(option, value) => {
-                 if (!value) return false; // Handle null/undefined value case
-                 const optionValue = typeof option === 'string' ? option : option.value;
-                 const compareValue = typeof value === 'string' ? value : value.value; // Handle case where value might be object initially
-                 return optionValue === compareValue;
-            }}
-            renderOption={(props, option) => {
-                 const key = typeof option === 'string' ? option : option.value;
-                 const style: React.CSSProperties = { padding: '4px 16px' };
-                 if (typeof option === 'object' && option.disabled) {
-                     style.fontWeight = 'bold';
-                     style.fontStyle = 'italic';
-                 }
-                 if (option === 'skip-column') {
-                     style.color = 'grey'; // Style skip option
-                 }
-                 if (option === 'create-new-column') {
-                     style.color = 'green'; // Style create option
-                 }
-                 return (
-                     <li {...props} key={key} style={style}>
-                         {typeof option === 'string' ? option : option.label}
-                     </li>
-                 );
+                
+                // Add standard actions
+                options.push({ label: 'Skip this field', value: 'skip-column', isNew: false });
+                if (isCreatingTable) {
+                  options.push({ label: `✨ Create new field: '${excelColumn}'`, value: 'create-new-column-auto', isNew: true });
+                } else {
+                  options.push({ label: `✨ Create new field...`, value: 'create-new-column', isNew: true });
+                }
+
+                return options.sort((a, b) => {
+                    // Keep headers on top, then sort by score if suggestion, then by label
+                    if (a.disabled && !b.disabled) return -1;
+                    if (!a.disabled && b.disabled) return 1;
+                    if (a.isSuggestion && b.isSuggestion) return (b.score || 0) - (a.score || 0);
+                    if (a.isSuggestion && !b.isSuggestion) return -1;
+                    if (!a.isSuggestion && b.isSuggestion) return 1;
+                    return a.label.localeCompare(b.label);
+                });
+            }, [tableColumns, suggestions, isCreatingTable, excelColumn])}
+            value={(() => {
+                const allOptions: AutocompleteOption[] = useMemo(() => {
+                    const existingTableColumns = tableColumns.map(col => col.columnName);
+                    const optionsArr: AutocompleteOption[] = [];
+                    if (suggestions.length > 0) {
+                        optionsArr.push({ label: 'Suggestions:', value: 'suggestions-header', disabled: true });
+                        suggestions.forEach(sugg => {
+                            optionsArr.push({
+                                label: `${sugg.columnName} (${Math.round(sugg.confidenceScore * 100)}%)`,
+                                value: sugg.columnName,
+                                isSuggestion: true,
+                                score: sugg.confidenceScore,
+                            });
+                        });
+                        optionsArr.push({ label: '----', value: 'divider-sugg', disabled: true });
+                    }
+                    if (tableColumns.length > 0 && !isCreatingTable) {
+                        optionsArr.push({ label: 'Map to Existing Field:', value: 'existing-header', disabled: true });
+                        tableColumns.forEach(col => {
+                            if (!suggestions.some(s => s.columnName === col.columnName)) {
+                                optionsArr.push({ label: col.columnName, value: col.columnName });
+                            }
+                        });
+                        optionsArr.push({ label: '----', value: 'divider-existing', disabled: true });
+                    }
+                    optionsArr.push({ label: 'Skip this field', value: 'skip-column', isNew: false });
+                    if (isCreatingTable) {
+                      optionsArr.push({ label: `✨ Create new field: '${excelColumn}'`, value: 'create-new-column-auto', isNew: true });
+                    } else {
+                      optionsArr.push({ label: `✨ Create new field...`, value: 'create-new-column', isNew: true });
+                    }
+                    return optionsArr;
+                }, [tableColumns, suggestions, isCreatingTable, excelColumn]); 
+
+                if (mapping.action === 'map' && mapping.mappedColumn) {
+                  return allOptions.find((opt: AutocompleteOption) => opt.value === mapping.mappedColumn) || null;
+                } else if (mapping.action === 'create') {
+                  if (isCreatingTable) return allOptions.find((opt: AutocompleteOption) => opt.value === 'create-new-column-auto') || null;
+                  return allOptions.find((opt: AutocompleteOption) => opt.value === 'create-new-column') || null;
+                } else if (mapping.action === 'skip') {
+                  return allOptions.find((opt: AutocompleteOption) => opt.value === 'skip-column') || null;
+                }
+                return null; // Default if no match or unmapped
+              })()}
+            onChange={(event, newValue) => {
+              if (typeof newValue === 'string') {
+                // This case should ideally not happen if options are objects
+                // For safety, treat as selecting the value directly if it's a string
+                const selectedOption = (tableColumns.find(tc => tc.columnName === newValue) || suggestions.find(s => s.columnName === newValue));
+                if (selectedOption) {
+                    onMappingUpdate(excelColumn, { 
+                        mappedColumn: typeof selectedOption === 'object' && 'columnName' in selectedOption ? selectedOption.columnName : String(selectedOption),
+                        action: 'map',
+                        status: 'userModified',
+                        reviewStatus: 'pending', // Reset review status on change
+                        // If selected from suggestions, store confidence
+                        confidenceScore: typeof selectedOption === 'object' && 'confidenceScore' in selectedOption ? selectedOption.confidenceScore : undefined,
+                        confidenceLevel: typeof selectedOption === 'object' && 'confidenceLevel' in selectedOption ? selectedOption.confidenceLevel : undefined,
+                    });
+                }
+              } else if (newValue && typeof newValue === 'object' && 'value' in newValue) {
+                const option = newValue as AutocompleteOption;
+                if (option.value === 'skip-column') {
+                  onMappingUpdate(excelColumn, { action: 'skip', mappedColumn: null, status: 'userModified', reviewStatus: 'pending' });
+                } else if (option.value === 'create-new-column' || option.value === 'create-new-column-auto') {
+                  onMappingUpdate(excelColumn, { 
+                    action: 'create', 
+                    mappedColumn: null, // No existing DB column
+                    newColumnProposal: { // Initial proposal
+                        columnName: excelColumn.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase(), // Sanitize header for SQL
+                        sqlType: 'TEXT', // Default, user can change later. Corrected from dataType
+                        // isPrimaryKey: false, // Default
+                        // isNullable: true, // Default
+                    },
+                    status: 'userModified', 
+                    reviewStatus: 'pending' 
+                  });
+                } else if (option.value && !option.disabled) {
+                  onMappingUpdate(excelColumn, { 
+                    mappedColumn: option.value, 
+                    action: 'map', 
+                    status: 'userModified', 
+                    reviewStatus: 'pending',
+                    confidenceScore: option.score,
+                    confidenceLevel: option.score !== undefined ? (option.score > 0.8 ? 'High' : option.score > 0.5 ? 'Medium' : 'Low') : undefined,
+                  });
+                }
+              }
             }}
             renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Map to Database Column"
+              <TextField 
+                {...params} 
+                label="Map to DB Field / Action"
                 variant="outlined"
-                fullWidth
-                size="small"
-                // Update helper text for create action
-                helperText={mapping.action === 'create' ? `Creating: ${mapping.newColumnProposal?.columnName || 'New Field'}` : undefined}
+                sx={{ flexGrow: 1, mr:1 }}
               />
             )}
-            sx={{ flexGrow: 1 }}
+            getOptionLabel={(option) => {
+                if (typeof option === 'string') return option; // For initial value if it's a string
+                return option.label;
+            }}
+            isOptionEqualToValue={(option, value) => {
+                // value can be the string representation of the selected db column, or an AutocompleteOption object
+                if (typeof value === 'string') {
+                    return option.value === value;
+                }
+                // If value is an object (which it should be from options)
+                return option.value === value.value;
+            }}
+            renderOption={(props, option, { selected }) => (
+                <MenuItem {...props} key={option.value} value={option.value} disabled={option.disabled}>
+                  {option.label}
+                  {option.isSuggestion && option.score !== undefined && (
+                    <Chip label={`${Math.round(option.score * 100)}%`} size="small" sx={{ ml: 1, opacity: 0.7 }}/>
+                  )}
+                </MenuItem>
+            )}
+            // filterOptions={(options, params) => {
+            //     // Custom filter logic if needed - for now, default MUI filter is fine
+            //     return options;
+            // }}
+            selectOnFocus
+            clearOnBlur
+            handleHomeEndKeys
+            fullWidth
+            autoHighlight
+            freeSolo={false} // Disallow free text entry, must select an option
           />
+
         </Box>
 
         {exampleVals.length > 0 && (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>Samples:</Typography>
             {exampleVals.map((val, i) => (
-              <Chip 
-                key={i} 
-                label={val.length > 20 ? val.substring(0, 20) + '...' : val} 
-                size="small" 
-                variant="outlined"
-                title={val}
-              />
+              <Chip key={i} label={val} size="small" variant="outlined" sx={{ mr: 0.5, maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={val} />
             ))}
           </Box>
         )}
@@ -292,7 +382,7 @@ export const VirtualizedColumnMapper: React.FC<VirtualizedColumnMapperProps> = (
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 1, backgroundColor: 'grey.100' }}>
       {/* Header with search and filters */}
       <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>

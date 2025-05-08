@@ -75,7 +75,7 @@ const SuppressMuiWarnings = () => {
   return null;
 };
 
-interface ColumnMappingModalProps {
+export interface ColumnMappingModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (mappings: Record<string, BatchColumnMapping>, newTableName?: string) => void; 
@@ -144,7 +144,70 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     }
   };
 
-  // Update the state type to potentially hold the full structure
+  // Helper function to get or create a complete BatchColumnMapping
+  const getOrCreateMappingForHeader = (
+    header: string,
+    currentSheetState: SheetProcessingState | null,
+    existingMappings?: Record<string, BatchColumnMapping> // Optional existing mappings to check first
+  ): BatchColumnMapping => {
+    if (!currentSheetState) {
+      // Fallback if sheetState is null - should ideally not happen if called correctly
+      return {
+        header: header,
+        sampleValue: '',
+        mappedColumn: null,
+        suggestedColumns: [],
+        inferredDataType: null,
+        action: 'map',
+        status: 'pending',
+        reviewStatus: 'pending',
+        newColumnProposal: undefined,
+        confidenceScore: undefined,
+        confidenceLevel: undefined,
+        errorMessage: undefined,
+      };
+    }
+
+    const mappingFromSheetState = currentSheetState.columnMappings?.[header];
+    const mappingFromExisting = existingMappings?.[header];
+
+    const base = mappingFromExisting || mappingFromSheetState;
+
+    const sampleVal = currentSheetState?.sampleData?.[0]?.[header] ?? '';
+
+    if (base) {
+      return {
+        header: base.header || header,
+        sampleValue: base.sampleValue ?? sampleVal,
+        mappedColumn: base.mappedColumn,
+        suggestedColumns: base.suggestedColumns || [],
+        inferredDataType: base.inferredDataType,
+        action: base.action || 'map',
+        status: base.status || 'pending',
+        reviewStatus: base.reviewStatus || 'pending',
+        newColumnProposal: base.newColumnProposal,
+        confidenceScore: base.confidenceScore,
+        confidenceLevel: base.confidenceLevel,
+        errorMessage: base.errorMessage,
+      };
+    }
+
+    return {
+      header: header,
+      sampleValue: sampleVal,
+      mappedColumn: null,
+      suggestedColumns: [],
+      inferredDataType: null,
+      action: 'map',
+      status: 'pending',
+      reviewStatus: 'pending',
+      newColumnProposal: undefined,
+      confidenceScore: undefined,
+      confidenceLevel: undefined,
+      errorMessage: undefined,
+    };
+  };
+
   const [mappings, setMappings] = useState<Record<string, BatchColumnMapping>>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'table' | 'virtualized'>('table'); 
@@ -154,10 +217,22 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   const [newColumnType, setNewColumnType] = useState<ColumnType>('string');
   const [createStructureOnly, setCreateStructureOnly] = useState<boolean>(false); 
   const [editableTableName, setEditableTableName] = useState<string>(''); // State for editable table name
+  
+  // Initialize editableTableName when the modal opens
+  useEffect(() => {
+    if (open && isCreatingTable && sheetState?.selectedTable) {
+      // Extract the table name from the selectedTable value by removing 'new:' prefix
+      const currentTableName = sheetState.selectedTable.startsWith('new:') 
+        ? sheetState.selectedTable.substring(4) 
+        : '';
+      
+      setEditableTableName(currentTableName);
+    }
+  }, [open, isCreatingTable, sheetState]);
 
   const actualTableNameFromSheetState = useMemo(() => {
-      if (!sheetState?.selectedTable) return 'Unknown Table';
-      return isCreatingTable ? sheetState.selectedTable.substring(4) : sheetState.selectedTable;
+    if (!sheetState?.selectedTable) return 'Unknown Table';
+    return isCreatingTable ? sheetState.selectedTable.substring(4) : sheetState.selectedTable;
   }, [sheetState?.selectedTable, isCreatingTable]);
 
   const memoizedExcelHeaders = useMemo(() => {
@@ -195,202 +270,66 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     return (tableInfo?.columns || []).filter(col => !['id', 'created_at', 'updated_at'].includes(col.columnName));
   }, [tableInfo]);
 
-  useEffect(() => {
-    console.log('[DEBUG ColumnMappingModal] useEffect for mapping init. Deps:', { open, sheetState, tableInfo });
+  const initialMappings = useMemo(() => {
+    const mappings: Record<string, BatchColumnMapping> = {};
+    if (sheetState?.headers) {
+      sheetState.headers.forEach(header => {
+        // Pass sheetState directly, getOrCreateMappingForHeader will handle its columnMappings
+        mappings[header] = getOrCreateMappingForHeader(header, sheetState);
+      });
+    }
+    return mappings;
+  }, [sheetState]);
 
-    if (open && sheetState) {
-      const initialMappings: Record<string, BatchColumnMapping> = {};
-      
-      // STRATEGY 1: Use headers from sheet state if available
-      if (sheetState.headers && Array.isArray(sheetState.headers) && sheetState.headers.length > 0) {
-        console.log(`[DEBUG ColumnMappingModal] Processing ${sheetState.headers.length} headers for sheet`);
+  useEffect(() => {
+    if (sheetState) {
+      const currentHeaders = sheetState.headers;
+      const newProcessedMappings: Record<string, BatchColumnMapping> = {};
+
+      currentHeaders.forEach(header => {
+        const local = mappings[header];
+        const initial = initialMappings[header];
         
-        // Process each header
-        sheetState.headers.forEach(header => {
-          if (!header) {
-            console.warn('[DEBUG ColumnMappingModal] Skipping undefined or null header');
-            return;
-          }
-          
-          // Use existing mapping if available (preserves review status)
-          const existingMapping = sheetState.columnMappings?.[header];
-          
-          if (existingMapping) {
-            initialMappings[header] = {
-              ...existingMapping, 
-              // Keep the existing reviewStatus to preserve approved mappings
-              reviewStatus: existingMapping.reviewStatus || 'pending', 
-              suggestedColumns: existingMapping.suggestedColumns || [],
-              status: existingMapping.status || 'pending',
-              confidenceScore: existingMapping.confidenceScore ?? 0,
-              confidenceLevel: existingMapping.confidenceLevel || 'Low',
-            };
-          } else {
-            console.warn(`No existing BatchColumnMapping found for header: ${header}. Creating default.`);
-            
-            // Get sample data if available
-            const hasSampleData = sheetState.sampleData && Array.isArray(sheetState.sampleData) && sheetState.sampleData.length > 0;
-            const sampleValue = hasSampleData ? (sheetState.sampleData[0]?.[header] ?? null) : null;
-            
-            // Create default mapping
-            initialMappings[header] = {
-              header: header,
-              sampleValue: sampleValue,
-              suggestedColumns: [], 
-              inferredDataType: 'string', 
-              status: 'pending', 
-              reviewStatus: 'pending',
-              action: 'skip',
-              mappedColumn: null,
-              newColumnProposal: undefined,
-              confidenceScore: 0,
-              confidenceLevel: 'Low',
-            };
-          }
-        });
-      } else {
-        console.warn(`[DEBUG ColumnMappingModal] Sheet has no headers. Trying alternatives...`);
-        
-        // STRATEGY 2: Try to extract headers from sample data
-        if (sheetState.sampleData && Array.isArray(sheetState.sampleData) && sheetState.sampleData.length > 0) {
-          // Extract headers from the first row of sample data
-          const extractedHeaders = Object.keys(sheetState.sampleData[0]);
-          
-          if (extractedHeaders.length > 0) {
-            console.log(`[DEBUG ColumnMappingModal] Extracted ${extractedHeaders.length} headers from sample data`);
-            // Process each extracted header
-            extractedHeaders.forEach(header => processHeader(header, initialMappings, sheetState));
-          }
+        // Start with a base, prioritizing local, then initial, then fresh default
+        const baseForConstruction = local || initial || getOrCreateMappingForHeader(header, sheetState);
+
+        newProcessedMappings[header] = {
+          header: header, // Always use the current header from iteration
+          sampleValue: baseForConstruction.sampleValue ?? sheetState?.sampleData?.[0]?.[header] ?? '',
+          mappedColumn: baseForConstruction.mappedColumn,
+          suggestedColumns: baseForConstruction.suggestedColumns || [],
+          inferredDataType: baseForConstruction.inferredDataType,
+          action: baseForConstruction.action || 'map',
+          status: baseForConstruction.status || 'pending',
+          reviewStatus: baseForConstruction.reviewStatus || 'pending',
+          newColumnProposal: baseForConstruction.newColumnProposal,
+          confidenceScore: baseForConstruction.confidenceScore,
+          confidenceLevel: baseForConstruction.confidenceLevel,
+          errorMessage: baseForConstruction.errorMessage,
+        };
+      });
+
+      // Prune mappings for headers that no longer exist
+      Object.keys(mappings).forEach(header => {
+        if (!currentHeaders.includes(header)) {
+          // This would modify newProcessedMappings if we were building upon it
+          // But since we are creating it fresh, we just don't add old headers.
+        } else if (!newProcessedMappings[header]) {
+           // This case implies a header was in localMappings but not currentHeaders,
+           // effectively handled by iterating currentHeaders only for construction.
         }
-        
-        // STRATEGY 3: If tableInfo exists and we have a selected table, use its columns as headers
-        if (Object.keys(initialMappings).length === 0 && tableInfo && tableInfo.columns && tableInfo.columns.length > 0) {
-          console.log(`[DEBUG ColumnMappingModal] Using table columns as headers: ${tableInfo.columns.length} columns`);
-          
-          tableInfo.columns.forEach(column => {
-            // Skip system columns like id, created_at that might not be in the import
-            if (['id', 'created_at', 'updated_at'].includes(column.columnName)) {
-              return;
-            }
-            
-            // Get existing mapping for this column name if it exists
-            let existingMapping: BatchColumnMapping | null = null;
-            
-            if (sheetState.columnMappings) {
-              // Try to find if this column was previously mapped
-              Object.values(sheetState.columnMappings).forEach(mapping => {
-                if (mapping && mapping.mappedColumn === column.columnName) {
-                  existingMapping = mapping as BatchColumnMapping;
-                }
-              });
-            }
-            
-            if (existingMapping && typeof existingMapping === 'object') {
-              // We have an existing mapping for this column, use it as a base
-              // Create a new object to avoid type errors with spread
-              initialMappings[column.columnName] = {
-                header: column.columnName,
-                sampleValue: existingMapping.sampleValue || null,
-                suggestedColumns: existingMapping.suggestedColumns || [],
-                inferredDataType: existingMapping.inferredDataType || 'string',
-                status: existingMapping.status || 'pending',
-                reviewStatus: existingMapping.reviewStatus || 'pending',
-                action: existingMapping.action || 'map',
-                mappedColumn: column.columnName,
-                newColumnProposal: existingMapping.newColumnProposal,
-                confidenceScore: existingMapping.confidenceScore || 1,
-                confidenceLevel: existingMapping.confidenceLevel || 'High',
-              };
-            } else {
-              // Create a new mapping for this column
-              const suggestedCol: RankedColumnSuggestion = {
-                columnName: column.columnName,
-                confidenceScore: 1,
-                confidenceLevel: 'High' as const,
-                isTypeCompatible: true
-              };
-              
-              initialMappings[column.columnName] = {
-                header: column.columnName,
-                sampleValue: null,
-                suggestedColumns: [suggestedCol],
-                inferredDataType: mapDbTypeToColumnType(column.dataType),
-                status: 'suggested',
-                reviewStatus: 'pending',
-                action: 'map',
-                mappedColumn: column.columnName,
-                confidenceScore: 1,
-                confidenceLevel: 'High',
-              };
-            }
-          });
-        }
-      }
-      
-      // Helper function to process a header and create mapping
-      function processHeader(header: string, mappings: Record<string, BatchColumnMapping>, state: SheetProcessingState) {
-        // Use existing mapping if available (preserves review status)
-        const existingMapping = state.columnMappings?.[header];
-        
-        if (existingMapping && typeof existingMapping === 'object') {
-          // Create a new object with all required fields to avoid type errors
-          mappings[header] = {
-            header: header,
-            sampleValue: existingMapping.sampleValue || null,
-            suggestedColumns: existingMapping.suggestedColumns || [],
-            inferredDataType: existingMapping.inferredDataType || 'string',
-            status: existingMapping.status || 'pending',
-            reviewStatus: existingMapping.reviewStatus || 'pending',
-            action: existingMapping.action || 'skip',
-            mappedColumn: existingMapping.mappedColumn || null,
-            newColumnProposal: existingMapping.newColumnProposal,
-            confidenceScore: existingMapping.confidenceScore || 0,
-            confidenceLevel: existingMapping.confidenceLevel || 'Low',
-          };
-        } else {
-          const hasSampleData = state.sampleData && Array.isArray(state.sampleData) && state.sampleData.length > 0;
-          const sampleValue = hasSampleData ? (state.sampleData[0]?.[header] ?? null) : null;
-          
-          mappings[header] = {
-            header: header,
-            sampleValue: sampleValue,
-            suggestedColumns: [],
-            inferredDataType: 'string',
-            status: 'pending',
-            reviewStatus: 'pending',
-            action: 'skip',
-            mappedColumn: null,
-            newColumnProposal: undefined,
-            confidenceScore: 0,
-            confidenceLevel: 'Low',
-          };
-        }
-      }
-      
-      // Log warning if we still have no mappings
-      if (Object.keys(initialMappings).length === 0) {
-        console.warn('[DEBUG ColumnMappingModal] Failed to create any mappings - all strategies failed');
-      } else {
-        console.log(`[DEBUG ColumnMappingModal] Created ${Object.keys(initialMappings).length} mappings`);
-      }
-      
-      setMappings(initialMappings);
-      setNewColumnDialogOpen(false);
-      setSearchQuery('');
-      
-      // Set view mode based on header count
-      setViewMode((sheetState.headers?.length || 0) > 30 ? 'virtualized' : 'table');
-      
-      if (isCreatingTable) {
-        setEditableTableName(actualTableNameFromSheetState); // Initialize editable name
-      }
-    } else if (open && !sheetState) {
-      setMappings({});
-      if (isCreatingTable) {
-        setEditableTableName(''); // Reset if creating but no sheet state
+      });
+       // Create a new object for setMappings to ensure re-render if changed.
+      const finalMappingsToSet: Record<string, BatchColumnMapping> = {};
+      currentHeaders.forEach(header => {
+        finalMappingsToSet[header] = newProcessedMappings[header];
+      });
+
+      if (JSON.stringify(finalMappingsToSet) !== JSON.stringify(mappings)) {
+        setMappings(finalMappingsToSet);
       }
     }
-  }, [open, sheetState, tableInfo, isCreatingTable, actualTableNameFromSheetState]); 
+  }, [sheetState, initialMappings, mappings]);
 
   const handleMappingUpdate = (excelCol: string, changes: Partial<BatchColumnMapping>) => {
     console.log('[DEBUG ColumnMappingModal] handleMappingUpdate:', { excelCol, changes });

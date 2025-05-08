@@ -13,7 +13,7 @@ import { SchemaCacheService } from '../services/SchemaCacheService';
 import { DatabaseService } from '../services/DatabaseService';
 import { ImportService } from '../services/ImportService.chunked'; 
 
-interface ReviewImportStepProps {
+export interface ReviewImportStepProps {
   workbookInfo: WorkbookInfo;
   sheetTableMappings: Record<string, string>;
   selectedSheets: Record<string, boolean>;
