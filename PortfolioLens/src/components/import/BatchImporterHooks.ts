@@ -1,6 +1,8 @@
 import { SheetProcessingState, RankedTableSuggestion } from './types'; // <-- ADDED Import + RankedTableSuggestion
 import * as React from 'react'; // <-- ADDED React import
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
+// Use React.useState instead of useState directly
+const { useState } = React;
 import { DatabaseService } from './services/DatabaseService';
 import { TableInfo } from './types';
 import { useBatchImportStore } from '../../store/batchImportStore';
@@ -10,8 +12,11 @@ import { shallow } from 'zustand/shallow';
  * Custom hook to manage loading and caching of database schema information.
  */
 export const useSchemaInfo = () => {
-  // Get store actions directly from getState to avoid subscription and re-renders
-  const { setSchemaCacheStatus, setError } = useBatchImportStore.getState();
+  // Get store actions but memoize them to ensure stable reference
+  const storeActions = useMemo(() => ({
+    setSchemaCacheStatus: useBatchImportStore.getState().setSchemaCacheStatus,
+    setError: useBatchImportStore.getState().setError
+  }), []);
 
   const [tables, setTables] = useState<string[]>([]);
   const [tableInfoMap, setTableInfoMap] = useState<Record<string, TableInfo>>({});
@@ -22,7 +27,7 @@ export const useSchemaInfo = () => {
 
   const loadSchemaInfo = useCallback(async () => {
     setIsLoadingTables(true);
-    setSchemaCacheStatus('loading');
+    storeActions.setSchemaCacheStatus('loading');
     try {
       // TODO: Replace with SchemaCacheService fetch later if available
       const fetchedTables = await dbService.getTables();
@@ -40,14 +45,14 @@ export const useSchemaInfo = () => {
         }
       }
       setTableInfoMap(infoMap);
-      setSchemaCacheStatus('ready');
+      storeActions.setSchemaCacheStatus('ready');
     } catch (error) {
-      setError(`Error loading database schema: ${error instanceof Error ? error.message : String(error)}`);
-      setSchemaCacheStatus('error');
+      storeActions.setError(`Error loading database schema: ${error instanceof Error ? error.message : String(error)}`);
+      storeActions.setSchemaCacheStatus('error');
     } finally {
       setIsLoadingTables(false);
     }
-  }, [dbService]); // Only depend on dbService, not on store actions
+  }, [dbService, storeActions]); // Include storeActions in dependencies
 
   // Load schema on initial hook mount
   useEffect(() => {
@@ -73,27 +78,21 @@ export const useBatchImportWorker = (
     // Don't subscribe to store changes - manually get the data when we need it
     // Using getState to avoid triggering re-renders due to Zustand subscriptions
     const [sheets, setSheets] = useState(useBatchImportStore.getState().sheets);
-    const [globalStatus, setGlobalStatus] = useState(useBatchImportStore.getState().globalStatus);
-    const [schemaCacheStatus, setSchemaCacheStatus] = useState(useBatchImportStore.getState().schemaCacheStatus);
+    const [globalStatus, setLocalGlobalStatus] = useState(useBatchImportStore.getState().globalStatus);
+    const [schemaCacheStatus, setLocalSchemaCacheStatus] = useState(useBatchImportStore.getState().schemaCacheStatus);
     
     // Update only when needed
     useEffect(() => {
       const unsubscribe = useBatchImportStore.subscribe((state) => {
         setSheets(state.sheets);
-        setGlobalStatus(state.globalStatus);
-        setSchemaCacheStatus(state.schemaCacheStatus);
+        setLocalGlobalStatus(state.globalStatus);
+        setLocalSchemaCacheStatus(state.schemaCacheStatus);
       });
       return () => unsubscribe();
     }, []);
     
     // Get store actions directly from getState to avoid subscription and re-renders
-    const { 
-        updateSheetSuggestions, 
-        setSheetCommitStatus, 
-        setError, 
-        setSheetReviewStatus, 
-        setGlobalStatus 
-    } = useBatchImportStore.getState();
+    const storeActions = useBatchImportStore.getState();
 
     // Initialize worker and setup message/error handlers
     useEffect(() => {
@@ -110,66 +109,85 @@ export const useBatchImportWorker = (
             const { sheetProcessingState, status, error } = event.data;
 
             if (!sheetProcessingState && status !== 'error') {
-                setError('Received invalid data from processing worker.');
+                storeActions.setError('Received invalid data from processing worker.');
                 return;
             }
 
             const sheetName = sheetProcessingState?.sheetName || 'unknown sheet'; // Get sheetName safely
 
-           if (status === 'processed' && sheetProcessingState) {
-                console.log('[DEBUG BatchImporterHooks] Worker processing completed for:', sheetProcessingState.sheetName);
+            if (status === 'processed' && sheetProcessingState) {
+                // Timestamp for correlated logs
+                const timestamp = new Date().toISOString();
+                console.log(`[DEBUG ${timestamp}] Worker processing completed for:`, sheetProcessingState.sheetName);
                 
-                // Only auto-approve sheets that have a selected table that is NOT a new table
-                // New tables (starting with 'import_' or containing 'new:') need manual column mapping
                 if (sheetProcessingState.selectedTable) {
                     const selectedTable = sheetProcessingState.selectedTable;
                     
-                    // Don't auto-approve if this is a new table that needs to have columns mapped
-                    const isNewTable = selectedTable.startsWith('new:') || 
-                                      selectedTable.startsWith('import_') || 
-                                      !!sheetProcessingState.isNewTable;
-                                      
-                    if (!isNewTable) {
-                        console.log('[DEBUG BatchImporterHooks] Auto-approving existing table:', {
-                            sheet: sheetProcessingState.sheetName,
-                            selectedTable: selectedTable,
-                            nowStatus: 'approved'
-                        });
-                        setSheetReviewStatus(sheetProcessingState.sheetName, 'approved');
+                    // Get full trace of who's calling and current status
+                    console.log(`[DEBUG ${timestamp}] Processing sheet with selected table:`, {
+                        sheetName: sheetProcessingState.sheetName,
+                        selectedTable: selectedTable,
+                        currentStatus: sheetProcessingState.status,
+                        isNewTable: sheetProcessingState.isNewTable,
+                        sheetReviewStatus: sheetProcessingState.sheetReviewStatus,
+                        callStack: new Error().stack,
+                    });
+                    
+                    // Enhanced new table detection - check multiple indicators
+                    const isNewTableByPrefix = selectedTable.startsWith('new:') || selectedTable.startsWith('import_');
+                    const isNewTableByFlag = !!sheetProcessingState.isNewTable;
+                    const isEffectivelyNewTable = isNewTableByPrefix || isNewTableByFlag;
+                    
+                    console.log(`[DEBUG ${timestamp}] New table detection for ${sheetProcessingState.sheetName}:`, {
+                        byPrefix: isNewTableByPrefix,
+                        byFlag: isNewTableByFlag,
+                        effectivelyNew: isEffectivelyNewTable,
+                    });
+                    
+                    // Set proper review status based on whether it's a new table
+                    if (!isEffectivelyNewTable) {
+                        // Auto-approve existing tables
+                        console.log(`[DEBUG ${timestamp}] Auto-approving existing table: ${sheetProcessingState.sheetName}`);
+                        storeActions.setSheetReviewStatus(sheetProcessingState.sheetName, 'approved');
                     } else {
-                        console.log('[DEBUG BatchImporterHooks] Not auto-approving new table (requires column mapping):', {
-                            sheet: sheetProcessingState.sheetName,
-                            selectedTable: selectedTable,
-                            isNewTable: true
-                        });
-                        // Explicitly set to 'pending' to ensure manual mapping
-                        setSheetReviewStatus(sheetProcessingState.sheetName, 'pending');
+                        // Never auto-approve new tables - they need manual review
+                        console.log(`[DEBUG ${timestamp}] Setting new table to 'pending': ${sheetProcessingState.sheetName}`);
+                        storeActions.setSheetReviewStatus(sheetProcessingState.sheetName, 'pending');
                     }
-                }
-                
-                // Now call store action with mapping data
-                updateSheetSuggestions(
-                    sheetProcessingState.sheetName,
-                    sheetProcessingState.tableSuggestions || [],
-                    sheetProcessingState.columnMappings || {},
-                    sheetProcessingState.tableConfidenceScore,
-                    sheetProcessingState.sheetSchemaProposals
-                );
-                
-                // Force sheet to ready status regardless of what worker sent
-                if (sheetProcessingState.selectedTable) {
-                    setSheetCommitStatus(sheetProcessingState.sheetName, 'ready');
+                    
+                    // Now call store action with mapping data
+                    console.log(`[DEBUG ${timestamp}] Updating sheet suggestions for: ${sheetProcessingState.sheetName}`);
+                    storeActions.updateSheetSuggestions(
+                        sheetProcessingState.sheetName,
+                        sheetProcessingState.tableSuggestions || [],
+                        sheetProcessingState.columnMappings || {},
+                        sheetProcessingState.tableConfidenceScore,
+                        sheetProcessingState.sheetSchemaProposals
+                    );
+                    
+                    // Determine commit status based on whether it's a new table or existing
+                    if (isEffectivelyNewTable) {
+                        // CRITICAL FIX: Always force new tables to 'needsReview' status
+                        // This prevents them being automatically set to 'ready'
+                        console.log(`[DEBUG ${timestamp}] IMPORTANT: Setting new table ${sheetProcessingState.sheetName} to 'needsReview'`);
+                        storeActions.setSheetCommitStatus(sheetProcessingState.sheetName, 'needsReview');
+                    } else {
+                        // Existing tables can be set to 'ready'
+                        console.log(`[DEBUG ${timestamp}] Setting existing table ${sheetProcessingState.sheetName} to 'ready'`);
+                        storeActions.setSheetCommitStatus(sheetProcessingState.sheetName, 'ready');
+                    }
                 } else {
-                    setSheetCommitStatus(sheetProcessingState.sheetName, sheetProcessingState.status);
+                    // No table selected for the sheet
+                    console.log(`[DEBUG ${timestamp}] No selected table for sheet ${sheetProcessingState.sheetName}, setting status to:`, sheetProcessingState.status);
+                    storeActions.setSheetCommitStatus(sheetProcessingState.sheetName, sheetProcessingState.status as SheetCommitStatus);
                 }
-
-           } else if (status === 'error') {
-               setSheetCommitStatus(sheetName, 'error', `Worker processing failed: ${error}`);
+            } else if (status === 'error') {
+               storeActions.setSheetCommitStatus(sheetName, 'error', `Worker processing failed: ${error}`);
            }
         };
 
         const handleWorkerError = (error: ErrorEvent) => {
-            setError(`Worker error: ${error.message}`);
+            storeActions.setError(`Worker error: ${error.message}`);
         };
 
         workerRef.current.onmessage = handleWorkerMessage;
@@ -197,9 +215,8 @@ export const useBatchImportWorker = (
             // Log task data without large arrays
             workerRef.current.postMessage(taskData);
             
-            // Get fresh reference to the action
-            const { setSheetCommitStatus } = useBatchImportStore.getState();
-            setSheetCommitStatus(sheet.sheetName, 'processing'); // Set status to processing
+            // Use our storeActions reference
+            storeActions.setSheetCommitStatus(sheet.sheetName, 'processing'); // Set status to processing
         }
     }, [schemaCacheStatus, tableInfoMap]); // Dependencies that won't cause infinite loops
 
@@ -221,9 +238,8 @@ export const useBatchImportWorker = (
             
             // If tasks were posted, update global status to analyzing
             if (tasksPosted > 0) {
-                // Get fresh reference to the action
-                const { setGlobalStatus } = useBatchImportStore.getState();
-                setGlobalStatus('analyzing');
+                // Use our storeActions reference
+                storeActions.setGlobalStatus('analyzing');
             }
         }
     }, [schemaCacheStatus, globalStatus, sheets, postWorkerTask]); 

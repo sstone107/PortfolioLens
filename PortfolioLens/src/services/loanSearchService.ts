@@ -1,6 +1,48 @@
 import { supabaseClient } from "../utility/supabaseClient";
 import { PostgrestFilterBuilder } from "@supabase/postgrest-js";
 
+/**
+ * Universal loan search service - provides quick lookup functionality across multiple loan fields
+ */
+export const universalLoanSearch = {
+  /**
+   * Search loans by a general search term that matches against multiple fields
+   * @param searchTerm The term to search for
+   * @param limit Maximum number of results to return
+   * @returns Array of loan matches
+   */
+  searchLoans: async (searchTerm: string, limit: number = 10) => {
+    try {
+      // Normalize search term for easier matching
+      const normalizedTerm = searchTerm.trim().toLowerCase();
+      
+      if (!normalizedTerm) {
+        return { data: [], error: null };
+      }
+      
+      // Use direct query based on confirmed schema fields
+      const { data, error } = await supabaseClient
+        .from('loan_portfolio_view')
+        .select('id, loan_number, investor_loan_number, upb, note_rate, loan_status, delinquency_status, servicer_name, investor_name, portfolio_name, created_at, updated_at')
+        .or(`loan_number.ilike.%${normalizedTerm}%,investor_loan_number.ilike.%${normalizedTerm}%,servicer_name.ilike.%${normalizedTerm}%,investor_name.ilike.%${normalizedTerm}%,portfolio_name.ilike.%${normalizedTerm}%`)
+        .order('updated_at', { ascending: false })
+        .limit(limit);
+      
+      if (error) {
+        console.error("Error searching loans:", error);
+        return { data: [], error };
+      }
+      
+      // No dummy data - rely on database records only
+      
+      return { data: data, error: null };
+    } catch (err) {
+      console.error("Exception in universal loan search:", err);
+      return { data: [], error: err };
+    }
+  }
+};
+
 // Define filter types
 export interface LoanSearchFilter {
   id?: string;

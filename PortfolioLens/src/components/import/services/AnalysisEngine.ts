@@ -11,6 +11,7 @@ import {
   SchemaProposal   // Added
 } from '../types';
 import { inferDataType as inferDataTypeFromModule } from '../dataTypeInference';
+import { toSqlFriendlyName } from '../utils/stringUtils'; // UPDATED import
 
 /**
  * AnalysisEngine provides advanced mapping capabilities for Excel imports
@@ -33,7 +34,7 @@ export class AnalysisEngine {
     return str
       .toLowerCase()
       .replace(/[_\s-]/g, '') // Remove underscores, spaces, hyphens
-      .replace(/[^a-z0-9]/gi, ''); // Remove non-alphanumeric chars
+      .replace(/[^a-z0-9]/gi, ''); // Remove non-alphanumeric chars while preserving numbers
   };
     
     const normalizedStr1 = normalize(str1);
@@ -288,22 +289,26 @@ export class AnalysisEngine {
 
     // Propose a new table if the best existing match is below the threshold
     if (topExistingTableScore < newTableThreshold) {
-      const proposedTableName = this.sanitizeColumnName(`import_${sheetName}`); // Example naming convention
+      const proposedTableName = toSqlFriendlyName(sheetName); // Changed to use toSqlFriendlyName
       const newTableProposal: NewTableProposal = {
-        tableName: proposedTableName,
-        sourceSheet: sheetName,
-        columns: headers.map(header => ({
-          columnName: this.sanitizeColumnName(header),
-          sqlType: 'TEXT', // Default to TEXT, refinement can happen in column mapping
-          isNullable: true,
+        type: 'new_table', // Added type discriminator
+        details: {         // Nested properties under 'details'
+          name: proposedTableName, // 'name' instead of 'tableName'
           sourceSheet: sheetName,
-          sourceHeader: header,
-        }))
+          columns: headers.map(header => ({
+            // This creates NewColumnProposal['details'] objects
+            columnName: toSqlFriendlyName(header),
+            sqlType: 'TEXT', 
+            isNullable: true,
+            sourceSheet: sheetName,
+            sourceHeader: header,
+          })),
+        }
       };
 
-      suggestions.unshift({ // Add to the beginning of the list
-        tableName: proposedTableName,
-        confidenceScore: 0, // Score is not applicable for new proposal
+      suggestions.unshift({
+        tableName: proposedTableName, // This remains for RankedTableSuggestion's direct property
+        confidenceScore: 0, 
         confidenceLevel: 'Low', // Or maybe a specific level for 'new'?
         matchType: 'new',
         isNewTableProposal: true,
@@ -367,33 +372,37 @@ export class AnalysisEngine {
     }
 
     // --- Case 2: Selected table is a NEW table proposal ---
-    if (typeof selectedTableInfo === 'object' && selectedTableInfo !== null && 'sourceSheet' in selectedTableInfo) { // Check if it's a NewTableProposal
+    if (typeof selectedTableInfo === 'object' && selectedTableInfo !== null && 'type' in selectedTableInfo && selectedTableInfo.type === 'new_table') { // Refined type guard
         const newTableProposal = selectedTableInfo as NewTableProposal;
         for (const header of headers) {
             const sampleValues = sampleData.map(row => row[header]);
             const inferredDataType = this.inferDataType(sampleValues, header);
-            const sanitizedName = this.sanitizeColumnName(header);
+            const sanitizedName = toSqlFriendlyName(header); // Changed to use toSqlFriendlyName
             const sqlType = this.getSqlTypeFromInferredType(inferredDataType);
 
             // Find corresponding column proposal in the new table structure
-            const proposedCol = newTableProposal.columns.find(c => c.sourceHeader === header);
+            // newTableProposal.details.columns contains NewColumnProposal['details'] objects
+            const proposedCol = newTableProposal.details.columns.find(c => c.sourceHeader === header);
 
             const newColumnProposal: NewColumnProposal = {
-                columnName: proposedCol?.columnName || sanitizedName,
-                sqlType: proposedCol?.sqlType || sqlType,
-                isNullable: true,
-                sourceSheet: newTableProposal.sourceSheet,
-                sourceHeader: header,
+                type: 'new_column', // Added type discriminator
+                details: {          // Nested properties under 'details'
+                    columnName: proposedCol?.columnName || sanitizedName,
+                    sqlType: proposedCol?.sqlType || sqlType,
+                    isNullable: true,
+                    sourceSheet: newTableProposal.details.sourceSheet,
+                    sourceHeader: header,
+                }
             };
 
             columnMappings[header] = {
                 header,
                 sampleValue: sampleData.length > 0 ? sampleData[0][header] : null,
-                mappedColumn: newColumnProposal.columnName, // Map to the proposed new column name
+                mappedColumn: newColumnProposal.details.columnName, // Map to the proposed new column name
                 suggestedColumns: [], // No suggestions needed for a new table initially
                 inferredDataType,
                 action: 'create', // Action is to create this column
-                newColumnProposal: newColumnProposal,
+                newColumnProposal: newColumnProposal, // Store the full NewColumnProposal object
                 status: 'suggested', // Status is suggested (as part of new table)
                 reviewStatus: 'pending', // Requires review
                 confidenceScore: 1.0, // High confidence as it's part of the new table structure
@@ -452,28 +461,35 @@ export class AnalysisEngine {
         } else {
           // This database column is already mapped, create a new column instead
           action = 'create';
-          const sanitizedName = this.sanitizeColumnName(header);
+          const sanitizedName = toSqlFriendlyName(header); // Changed to use toSqlFriendlyName
           const sqlType = this.getSqlTypeFromInferredType(inferredDataType);
           newColumnProposal = {
-            columnName: sanitizedName,
-            sqlType: sqlType,
-            isNullable: true,
-            sourceHeader: header,
+            type: 'new_column',
+            details: {
+                columnName: sanitizedName,
+                sqlType: sqlType,
+                isNullable: true,
+                sourceSheet: undefined, // Or derive from sheet context if available
+                sourceHeader: header,
+            }
           };
           mappedColumn = null;
         }
       } else {
         // Low confidence or no match -> Default to 'create'
         action = 'create';
-        const sanitizedName = this.sanitizeColumnName(header);
+        const sanitizedName = toSqlFriendlyName(header); // Changed to use toSqlFriendlyName
         // Use the inferred type to get a better SQL type suggestion
         const sqlType = this.getSqlTypeFromInferredType(inferredDataType);
         newColumnProposal = {
-          columnName: sanitizedName,
-          sqlType: sqlType, // Use refined SQL type
-          isNullable: true, // Default new columns to nullable
-          // sourceSheet: existingTable.tableName, // Context might be ambiguous, remove for now
-          sourceHeader: header,
+            type: 'new_column',
+            details: {
+                columnName: sanitizedName,
+                sqlType: sqlType,
+                isNullable: true,
+                sourceSheet: undefined, // Or derive from sheet context if available
+                sourceHeader: header,
+            }
         };
         mappedColumn = null; // Explicitly null when creating
       }
@@ -526,14 +542,14 @@ export class AnalysisEngine {
       }
 
       // If the selected table itself is a new proposal, return that.
-      if (selectedTableInfo && typeof selectedTableInfo === 'object' && selectedTableInfo !== null && 'sourceSheet' in selectedTableInfo) {
+      if (selectedTableInfo && typeof selectedTableInfo === 'object' && selectedTableInfo !== null && 'type' in selectedTableInfo && selectedTableInfo.type === 'new_table') { // Refined type guard
           // We might refine the columns based on final review status later,
           // but for now, the initial proposal is the main schema change.
           // Ensure columns reflect the 'create' action from mappings.
-          const newTableProposal = { ...selectedTableInfo } as NewTableProposal; // Clone to avoid modifying original
-          newTableProposal.columns = Object.values(columnMappings)
+          const newTableProposal = { ...(selectedTableInfo as NewTableProposal) }; // Clone to avoid modifying original
+          newTableProposal.details.columns = Object.values(columnMappings)
               .filter(m => m.action === 'create' && m.newColumnProposal)
-              .map(m => m.newColumnProposal!); // Map final proposed columns
+              .map(m => m.newColumnProposal!.details); // Map final proposed column details
           return [newTableProposal];
       }
 
@@ -546,7 +562,7 @@ export class AnalysisEngine {
               // Check if a column with the proposed name already exists (case-insensitive check might be good)
               const alreadyExists = existingTable.columns.some(
                   c => c && c.columnName && mapping.newColumnProposal &&
-                      c.columnName.toLowerCase() === mapping.newColumnProposal.columnName.toLowerCase()
+                      c.columnName.toLowerCase() === mapping.newColumnProposal.details.columnName.toLowerCase()
               );
               if (!alreadyExists) {
                   proposals.push(mapping.newColumnProposal);

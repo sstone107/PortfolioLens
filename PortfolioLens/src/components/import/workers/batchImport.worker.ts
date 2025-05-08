@@ -412,72 +412,53 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
             targetTableName,
             availableTables // Pass available tables to look up by name
         );
-    } else if (isCreatingTable) {
-        // For a new table, suggest creating all columns
+    } else if (isCreatingTable || !targetTableName) {
+        // For a new table or unmapped table, create all columns with consistent behavior
         headers.forEach(header => {
-            const inferredDataType = inferDataType(sampleData.map(row => row[header]), header);
-            // Generate proposal for this single column using a temporary mapping structure
-            // Create a correctly typed temporary mapping object for proposal generation
-            const tempMappingForProposal: { [header: string]: BatchColumnMapping } = {
-                [header]: {
-                    header,
-                    sampleValue: sampleData.length > 0 ? sampleData[0][header] : null,
-                    mappedColumn: null,
-                    suggestedColumns: [],
-                    inferredDataType,
-                    action: 'create', // Correct literal type
-                    status: 'pending', // Correct literal type
-                    // Add optional fields if needed by BatchColumnMapping, e.g., confidenceScore
-                    confidenceScore: 0,
-                    confidenceLevel: 'Low',
-                    reviewStatus: 'pending', // Add reviewStatus property
-                }
+            // Create SQL-friendly column name from header - CONSISTENT ACROSS ALL CASES
+            const sqlFriendlyName = header.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+            const inferredType = inferDataType(sampleData.map(row => row[header]), header);
+            const sqlType = mapColumnTypeToSql(inferredType);
+            
+            // Create new column proposal - CONSISTENT ACROSS ALL CASES
+            const newColumnProposal: NewColumnProposal = {
+                columnName: sqlFriendlyName,
+                sqlType: sqlType,
+                isNullable: true,
+                sourceSheet: sheetName,
+                sourceHeader: header
             };
-            const proposalArray = AnalysisEngine.generateSchemaProposals(tempMappingForProposal, targetTableName!, availableTables);
-            // Cast to NewColumnProposal if needed for the newColumnProposal property
-            const proposal = proposalArray.length > 0 ? proposalArray[0] as NewColumnProposal : undefined;
-
-            // Construct the final column mapping for the state
+            
+            // Setup the column mapping with 'create' action by default for new tables
+            // CONSISTENT FORMAT FOR ALL NEW TABLE CASES
             columnMappings[header] = {
                 header,
                 sampleValue: sampleData.length > 0 ? sampleData[0][header] : null,
-                mappedColumn: null, // No existing column to map to
+                mappedColumn: sqlFriendlyName, // Always set mappedColumn to SQL-friendly name
                 suggestedColumns: [],
-                inferredDataType,
-                action: 'create',
-                newColumnProposal: proposal, // Attach the generated proposal
+                inferredDataType: inferredType,
+                action: 'create', // Always default to create for new tables
+                newColumnProposal: newColumnProposal, // Always include proposal
                 status: 'suggested',
-                reviewStatus: 'pending' // Add reviewStatus property
+                reviewStatus: 'pending',
+                confidenceScore: 1.0, // Always high confidence
+                confidenceLevel: 'High' // Always high confidence
             };
-            if (proposal) {
-                // Only add if it's a NewColumnProposal (not a NewTableProposal)
-                if ('columnName' in proposal && 'sqlType' in proposal) {
-                    sheetSchemaProposals.push(proposal);
-                }
-            }
+            
+            // Also add proposal to sheetSchemaProposals
+            sheetSchemaProposals.push(newColumnProposal);
         });
-    } else {
-      // If no table selected or suggested, create empty mappings
-      headers.forEach(header => {
-        columnMappings[header] = {
-          header,
-          sampleValue: sampleData.length > 0 ? sampleData[0][header] : null,
-          mappedColumn: null,
-          suggestedColumns: [],
-          inferredDataType: inferDataType(sampleData.map(row => row[header]), header),
-          action: 'skip',
-          status: 'pending',
-          reviewStatus: 'pending' // Add reviewStatus property
-        };
-      });
+        
+        // Debug logging removed to reduce console noise
     }
 
     // 4. Construct SheetProcessingState
     // Recalculate preSelectedTable validity for status logic
     const wasPreSelectedForStatus = !!(preSelectedTable && (preSelectedTable.startsWith('new:') || schemaCache?.tables[preSelectedTable]));
     
-    // Create the sheet processing state - NOTE: Always set status to 'ready' if a table is selected
-    const forceReady = !!targetTableName; // If we have a target table, force status to ready
+    // Create the sheet processing state - For new tables, always need review
+    // Only force ready for mapped existing tables
+    const forceReady = !!targetTableName && !isCreatingTable; 
     
     const sheetProcessingState: SheetProcessingState = {
       sheetName,
@@ -489,9 +470,9 @@ self.onmessage = (event: MessageEvent<WorkerTaskData>) => {
       columnMappings,
       tableConfidenceScore: finalTableConfidenceScore,
       sheetSchemaProposals,
-      // Critical fix: Always mark as 'ready' if a table is selected, regardless of previous status
+      // Only mark as 'ready' if an EXISTING table is selected (not new tables)
       status: forceReady ? 'ready' : 'needsReview',
-      // Critical fix: Always mark as 'approved' if a table is selected
+      // Only mark as 'approved' for existing tables, new tables need review
       sheetReviewStatus: forceReady ? 'approved' : 'pending',
       rowCount: sampleData.length
     };

@@ -92,17 +92,20 @@ export const BorrowerInfoTab: React.FC<BorrowerInfoTabProps> = ({
 
   // Function to get full name
   const getFullName = (borrower: any) => {
-    return [
-      borrower.first_name,
-      borrower.middle_name,
-      borrower.last_name
-    ].filter(Boolean).join(' ');
+    // Try to use original fields first, then fall back to imported fields
+    const firstName = borrower.first_name || borrower.borrower_first_name;
+    const middleName = borrower.middle_name || borrower.borrower_middle_name;
+    const lastName = borrower.last_name || borrower.borrower_last_name;
+    
+    return [firstName, middleName, lastName].filter(Boolean).join(' ');
   };
 
   // Function to get borrower initials for avatar
   const getInitials = (borrower: any) => {
-    const first = borrower.first_name?.[0] || '';
-    const last = borrower.last_name?.[0] || '';
+    const firstName = borrower.first_name || borrower.borrower_first_name;
+    const lastName = borrower.last_name || borrower.borrower_last_name;
+    const first = firstName?.[0] || '';
+    const last = lastName?.[0] || '';
     return (first + last).toUpperCase();
   };
 
@@ -165,9 +168,9 @@ export const BorrowerInfoTab: React.FC<BorrowerInfoTabProps> = ({
                     </Typography>
                     
                     <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                      {borrower.ssn_last_four && (
+                      {(borrower.ssn_last_four || borrower.borrower_ssn_last_four) && (
                         <Chip 
-                          label={`SSN: xxx-xx-${borrower.ssn_last_four}`} 
+                          label={`SSN: xxx-xx-${borrower.ssn_last_four || borrower.borrower_ssn_last_four}`} 
                           size="small"
                           variant="outlined"
                         />
@@ -176,6 +179,15 @@ export const BorrowerInfoTab: React.FC<BorrowerInfoTabProps> = ({
                       {borrower.borrower_type && (
                         <Chip 
                           label={borrower.borrower_type} 
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                      
+                      {/* Add a type indicator based on is_primary if no borrower_type is set */}
+                      {!borrower.borrower_type && borrower.is_primary !== undefined && (
+                        <Chip 
+                          label={borrower.is_primary ? "Primary" : "Co-Borrower"} 
                           size="small"
                           variant="outlined"
                         />
@@ -194,21 +206,21 @@ export const BorrowerInfoTab: React.FC<BorrowerInfoTabProps> = ({
                 <ContactItem 
                   icon={<Phone fontSize="small" />}
                   label="Phone Number"
-                  value={borrower.phone_number}
+                  value={borrower.phone_number || borrower.borrower_phone_number_cell || borrower.borrower_phone_number_home}
                 />
                 
                 <ContactItem 
                   icon={<Email fontSize="small" />}
                   label="Email Address"
-                  value={borrower.email}
+                  value={borrower.email || borrower.borrower_email_address}
                 />
                 
                 <ContactItem 
                   icon={<Home fontSize="small" />}
                   label="Mailing Address"
                   value={
-                    borrower.mailing_address
-                      ? `${borrower.mailing_address}, ${borrower.mailing_city || ''}, ${borrower.mailing_state || ''} ${borrower.mailing_zip || ''}`
+                    (borrower.mailing_address || borrower.borrower_mailing_address_1)
+                      ? `${borrower.mailing_address || borrower.borrower_mailing_address_1}${borrower.borrower_mailing_address_2 ? ', ' + borrower.borrower_mailing_address_2 : ''}, ${borrower.mailing_city || borrower.borrower_mailing_city || ''}, ${borrower.mailing_state || borrower.borrower_mailing_state || ''} ${borrower.mailing_zip || borrower.borrower_mailing_zipcode || ''}`
                       : null
                   }
                 />
@@ -221,14 +233,14 @@ export const BorrowerInfoTab: React.FC<BorrowerInfoTabProps> = ({
                 </Typography>
                 
                 <Grid container spacing={2}>
-                  {borrower.credit_score && (
+                  {(borrower.credit_score || borrower.borrower_current_credit_score) && (
                     <Grid item xs={6}>
                       <Box sx={{ mb: 1 }}>
                         <Typography variant="caption" color="text.secondary" display="block">
                           Credit Score
                         </Typography>
                         <Typography variant="body1" fontWeight="medium">
-                          {borrower.credit_score}
+                          {borrower.credit_score || borrower.borrower_current_credit_score || borrower.borrower_originating_fico}
                         </Typography>
                       </Box>
                     </Grid>

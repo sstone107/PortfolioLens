@@ -29,6 +29,7 @@ import { PartnersPage } from "./pages/partners";
 import { DocCustodianCreate, DocCustodianEdit, DocCustodianShow } from "./pages/partners/doc-custodians";
 import { SellerCreate, SellerEdit, SellerShow } from "./pages/partners/sellers";
 import { PriorServicerCreate, PriorServicerEdit, PriorServicerShow } from "./pages/partners/prior-servicers";
+import { LoanDetailView } from "./components/loans";
 
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -44,6 +45,7 @@ import StorefrontIcon from "@mui/icons-material/Storefront";
 import SupportAgentIcon from "@mui/icons-material/SupportAgent";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SearchIcon from "@mui/icons-material/Search";
+import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
 import CssBaseline from "@mui/material/CssBaseline";
 import GlobalStyles from "@mui/material/GlobalStyles";
 import routerBindings, {
@@ -175,6 +177,16 @@ function App() {
                     },
                   },
                   {
+                    name: "loan-detail",
+                    list: "/loans/detail/:id",
+                    show: "/loans/detail/:id",
+                    meta: {
+                      label: "Loan Details",
+                      icon: <AssignmentIndIcon />,
+                      parent: "loans",
+                    },
+                  },
+                  {
                     name: "loan-portfolio-mapping",
                     list: "/loans/portfolio-mapping",
                     meta: {
@@ -291,6 +303,7 @@ function App() {
                         <Route path="show/:id" element={<LoanShow />} />
                         <Route path="portfolio-mapping" element={<LoanPortfolioMapping />} />
                         <Route path="search" element={<LoanSearch />} />
+                        <Route path="detail/:id" element={<LoanDetailView />} />
                       </Route>
 
                       <Route path="servicers" element={

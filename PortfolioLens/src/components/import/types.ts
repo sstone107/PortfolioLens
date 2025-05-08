@@ -198,9 +198,7 @@ export interface ImportSettings {
 
 export type ConfidenceLevel = 'High' | 'Medium' | 'Low';
 export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'modified';
-export type SheetReviewStatus = 'pending' | 'approved' | 'rejected' | 'partiallyApproved';
-
-// --- Batch Import Enhancement Types (Schema Cache & Ranking) ---
+export type SheetReviewStatus = 'pending' | 'approved' | 'rejected' | 'partiallyApproved' | 'needsReview';
 
 /**
  * Interface for a cached database column (stored in IndexedDB)

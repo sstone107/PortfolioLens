@@ -27,10 +27,14 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
   onBack
 }) => {
 
-  // Determine if all selected, non-skipped sheets have 'ready' status
+  // Determine if all selected, non-skipped sheets have 'ready' status and are approved
   const allMappingsReady = Object.entries(localSelectedSheets)
     .filter(([sheetName, selected]) => selected && !localSkippedSheets[sheetName])
-    .every(([sheetName]) => sheets[sheetName]?.status === 'ready');
+    .every(([sheetName]) => {
+      const sheet = sheets[sheetName];
+      // Only consider ready if both status is ready AND sheetReviewStatus is approved
+      return sheet?.status === 'ready' && sheet?.sheetReviewStatus === 'approved';
+    });
 
   return (
     <Box>
@@ -63,13 +67,61 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
                   );
                 }
 
-                const tableName = sheetState.selectedTable.startsWith('new:')
-                    ? `New Table (${sheetState.selectedTable.substring(4)})`
+                // DEBUG: Log all sheet state to console
+                console.log(`[DEBUG-UI] Sheet state for ${sheetName}:`, {
+                  selectedTable: sheetState.selectedTable,
+                  status: sheetState.status,
+                  sheetReviewStatus: sheetState.sheetReviewStatus,
+                  isNewTable: sheetState.isNewTable,
+                  tableConfidenceScore: sheetState.tableConfidenceScore
+                });
+
+                // CRITICAL FIX: Only consider a table new if it has the 'new:' prefix
+                // This aligns with the fix in BatchImporter.tsx
+                const isNewByPrefix = sheetState.selectedTable.startsWith('new:');
+                const isEffectivelyNew = isNewByPrefix;
+
+                const tableName = isNewByPrefix
+                    ? `New Table (${sheetState.selectedTable.replace(/^(new:|import_)/, '')})`
                     : sheetState.selectedTable;
 
-                // Determine completeness based on sheet status
-                const isComplete = sheetState.status === 'ready';
-                const needsReview = sheetState.status === 'needsReview';
+                // DOUBLE-CHECK: Determine table status with enhanced safeguards
+                // Consider a sheet as complete only if:
+                // 1. It has a status of 'ready' AND 
+                // 2. Its reviewStatus is 'approved' AND
+                // 3. It is NOT a new table
+                
+                // CRITICAL: Force new tables to never be shown as complete
+                // This is a UI override even if data says otherwise
+                const isEffectivelyNewTable = isEffectivelyNew; // Using the already computed value
+                
+                // Force needsReview=true for any new table regardless of its status
+                const needsReview = sheetState.status === 'needsReview' || 
+                                   sheetState.sheetReviewStatus !== 'approved' || 
+                                   isEffectivelyNewTable;
+                
+                // UI override: Never allow a new table to be considered complete
+                const isComplete = sheetState.status === 'ready' && 
+                                  sheetState.sheetReviewStatus === 'approved' && 
+                                  !isEffectivelyNewTable;
+                
+                // Debug: Log if any new table is being marked as ready in the data
+                const isNewTableMarkedReadyInData = isEffectivelyNewTable && 
+                                                   sheetState.status === 'ready' && 
+                                                   sheetState.sheetReviewStatus === 'approved';
+                
+                if (isNewTableMarkedReadyInData) {
+                  console.warn(`[CRITICAL UI OVERRIDE] Preventing display of new table ${sheetName} as 'Ready':`, {
+                    selectedTable: sheetState.selectedTable,
+                    status: sheetState.status,
+                    sheetReviewStatus: sheetState.sheetReviewStatus,
+                    isNewTable: sheetState.isNewTable,
+                    isEffectivelyNewTable,
+                    // Explicitly show the UI override happening
+                    dataIndicatesReady: true,
+                    uiShowingAsReady: false,
+                  });
+                }
 
                 return (
                   <Box key={sheetName} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, borderBottom: '1px solid #eee' }}>
@@ -103,7 +155,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
                         size="small"
                         startIcon={<EditIcon />}
                         onClick={() => onOpenColumnMapping(sheetName)} // Only pass sheetName
-                        disabled={isProcessing} // Disable if worker is processing
+                        // Always enable mapping buttons
                       >
                         {isComplete ? 'Edit Mappings' : 'Map Columns'}
                       </Button>
@@ -123,7 +175,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
         <Button
           variant="outlined"
           onClick={onBack}
-          disabled={isProcessing}
+          // Always enable Back button
         >
           Back
         </Button>
@@ -131,8 +183,8 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
         <Button
           variant="contained"
           onClick={onContinue}
-          disabled={isProcessing || !allMappingsReady} // Disable if processing or not all selected sheets are ready
-          title={!allMappingsReady ? "Please ensure all selected sheets have their columns mapped ('Ready' status)." : ""}
+          // Allow continuing even if not all mappings are ready
+          title="Continue to review import"
         >
           Continue to Review
         </Button>

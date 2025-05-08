@@ -1,5 +1,123 @@
 # PortfolioLens Change Log
 
+## 2025-05-08: Fixed Column Default Action for New Tables (Second Attempt)
+
+### Fixed
+- Resolved persistent issue where columns for new tables weren't defaulting to "Create New Field":
+  - Added more aggressive forcing of 'create' action for all columns in new tables
+  - Fixed the mapping generation to properly set SQL-friendly names for new columns
+  - Created proper column proposals during initial mapping processing
+  - Fixed conflicts between different parts of the codebase that were resetting column mappings
+  - Added additional checks to ensure new tables correctly identify columns for creation
+  - Fixed default values for all column mapping properties to ensure consistency
+
+### Technical Details
+- Completely redesigned the column mapping processing effect to detect and handle new tables properly
+- Forced 'create' action for new tables regardless of what was received from the worker
+- Added proper proposal generation with SQL-friendly names directly in the component
+- Created a stronger column defaults processing pipeline that checks multiple conditions
+- Fixed handling of user modifications to ensure they aren't overwritten
+- Added instrumentation to detect and diagnose column mapping issues in the future
+- Ensured consistent behavior for all types of new tables (with "new:" prefix, "import_" prefix, or other names)
+
+## 2025-05-08: Improved Debug Logging
+
+### Changed
+- Added targeted debugging logs to help isolate the batch import column mapping issue
+- Improved context in critical debug messages to make debugging more effective
+- Added sample data logging to provide insights without excessive verbosity
+- Replaced blanket logging with strategic debug points
+
+### Technical Details
+- Added debugging for BatchImporter's isCreatingTableForModal determination
+- Added column mapping state tracking at key points in the process
+- Implemented smart sampling to log representative data without overwhelming the console
+- Added detailed state tracking during worker processing
+
+## 2025-05-08: Fixed Default Column Action for New Tables (First Attempt)
+
+### Fixed
+- Fixed critical issue with new table creation where columns defaulted to "Skipped Column" instead of "Create New Field":
+  - Corrected the `isCreatingTable` flag detection in BatchImporter to properly identify all new tables regardless of naming prefix
+  - Enhanced the flag passing between BatchImporter and ColumnMappingModal components to ensure consistency
+  - Improved the default column action for new tables to consistently use 'create' instead of 'skip'
+  - Added more robust logging to help diagnose similar issues in the future
+  - Set high confidence scores for auto-created columns in new tables
+  - Made "create" the default action for all columns in new tables with SQL-friendly names
+  - Unified the code path for handling new tables in the worker to ensure consistent behavior
+
+### Technical Details
+- Fixed the `isCreatingTableForModal` determination in BatchImporter.tsx to handle all cases:
+  - Tables with 'new:' prefix
+  - Tables with sheetState.isNewTable flag set to true
+  - Tables that don't exist in the schema cache (regardless of prefix)
+- Updated the openColumnMapping function to properly set isNewTable flag for any table not found in the schema
+- Enhanced the ColumnMappingModal component to force 'create' action for all columns in new tables
+- Completely refactored the worker code to use a single unified approach for all new table cases:
+  - Consistent format for all column mappings in new tables
+  - Always setting `action: 'create'` and high confidence levels
+  - Always including SQL-friendly column names and proper proposals
+  - Eliminating inconsistencies between different table selection paths
+- Updated the UI message to clarify that "New tables require review before import (columns default to 'Create New Field')"
+- Added improved debug logging throughout to track table type detection and column defaults
+
+## 2025-05-07: Enhanced New Table Creation in Batch Import
+
+### Fixed
+- Improved workflow for creating new tables during batch import:
+  - Automatically set default column mappings for new tables to 'create' action instead of 'skip'
+  - Pre-populate new column names with SQL-friendly versions of Excel headers
+  - Generate default table name from sheet name for new tables
+  - Ensure new tables always require review (never auto-approved)
+  - Added status message in the mapping modal to indicate that new tables require review
+- These changes make it easier to create new tables from imported data with minimal user intervention
+
+### Technical Details
+- Modified worker logic to pre-populate newColumnProposal for all columns in new tables
+- Set mappedColumn field to SQL-friendly version of Excel header for better default values
+- Updated the batchImportStore to handle 'create-new-table' option with a sensible default name
+- Fixed handling of status for new tables to always require review
+- Prevented automatic status changes from 'ready' to 'needsReview' for auto-approved sheets
+- Added descriptive message in UI to inform users that new table mappings require review
+
+### User Experience Improvements
+- Users no longer need to individually click through each column when creating a new table
+- Default column names are now more SQL-friendly (lowercase, underscores for spaces)
+- Clearer indication that new table mappings require review before proceeding
+- Preserved auto-approval for high-confidence matches to existing tables
+
+## 2025-05-07: Fixed Batch Importer Column Mapping Modal Issues
+
+### Fixed
+- Fixed issues with the column mapping modal in batch import:
+  - Resolved error when clicking Save button (ReferenceError: updateSheetProcessingState is not defined)
+  - Fixed issue where opening a mapping modal changed table status from "ready" to "needs review"
+  - Prevented previously approved sheets from losing their status when mapping is viewed
+  - Maintained auto-approval status for high confidence matches
+- The changes allow users to review mapping details without affecting auto-approved status
+
+### Technical Details
+- Fixed function reference in BatchImporter.tsx to properly use storeActions.updateSheetProcessingState
+- Modified the condition for changing sheet status when opening the mapping modal
+- Only change status to 'needsReview' for pending sheets, not for already approved ones
+- Prevented the modal from resetting sheetReviewStatus to 'pending' for approved sheets
+
+## 2025-05-07: Fixed Auto-Approval for High Confidence Matches
+
+### Fixed
+- Fixed issue where sheets with high confidence matches were still showing "Needs review" status:
+  - Removed explicit override forcing all sheets to have 'needsReview' status
+  - Properly respect the 'approved' status from the sheet review determination
+  - Re-implemented the high confidence auto-approval logic in determineSheetReviewStatus
+  - Ensured status is set to 'ready' when sheetReviewStatus is 'approved'
+- Users will now see sheets with high confidence matches (>=95%) automatically approved and ready for import
+
+### Technical Details
+- Removed the `alwaysNeedsReview` flag in batchImportStore.ts that was forcing all sheets to 'needsReview'
+- Ensured updatedSheet.status is set to 'ready' when sheetReviewStatus is 'approved'
+- Re-added high confidence percentage calculation in determineSheetReviewStatus
+- Maintained 95% threshold for auto-approval to balance automation with accuracy
+
 ## 2025-05-05: Auto-Approve Sheets with High Confidence Matches
 
 ### Fixed

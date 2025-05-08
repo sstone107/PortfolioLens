@@ -187,22 +187,49 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           }
       }
       
-      // Forcefully set status to 'ready' whenever a table is selected to fix the persistent "needs review" issue
-      const shouldBeReady = sheet.selectedTable || autoSelectedTable;
-      
-      const updatedSheet: SheetProcessingState = {
-          ...sheet,
-          tableSuggestions,
-          columnMappings: reviewedColumnMappings, 
-          tableConfidenceScore: autoSelectedScore, 
-          selectedTable: sheet.selectedTable ?? autoSelectedTable, 
-          isNewTable: sheet.selectedTable ? sheet.isNewTable : isNewTableSelected, 
-          sheetSchemaProposals: sheetSchemaProposals, 
-          // Force sheet to approved status if it has a selected table
-          sheetReviewStatus: shouldBeReady ? 'approved' : sheetReviewStatus,
-          // Force status to ready if it has a selected table
-          status: shouldBeReady ? 'ready' : 'needsReview',
-      };
+      // Determine if we should auto-approve
+      const hasSelectedTable = sheet.selectedTable || autoSelectedTable;
+            // Determine isNewTable based on multiple indicators to be thorough
+       // Log individual conditions for debugging
+       console.log(`[DEBUG STORE] updateSheetSuggestions for sheet: ${sheetName}, evaluating new table status...`);
+       console.log(`[DEBUG STORE] Current sheet.selectedTable = '${sheet.selectedTable}', sheet.isNewTable = ${sheet.isNewTable}`);
+       console.log(`[DEBUG STORE] isNewTableSelected = ${isNewTableSelected}, autoSelectedTable = '${autoSelectedTable}'`);
+       
+       // FIXED: Only consider a sheet new if it's explicitly marked as new or has 'new:' prefix
+       // Don't assume it's new just because selectedTable is null
+       const condition1 = sheet.isNewTable === true;
+       const condition2 = !!(sheet.selectedTable && sheet.selectedTable.startsWith('new:'));
+       const condition3 = !!(autoSelectedTable && autoSelectedTable.startsWith('new:'));
+       
+       console.log(`[DEBUG STORE] New table conditions: [explicit isNewTable: ${condition1}], [selectedTable 'new:' prefix: ${condition2}], [autoSelectedTable 'new:' prefix: ${condition3}]`);
+       
+       const effectiveIsNewTable: boolean = !!(condition1 || condition2 || condition3);
+       console.log(`[DEBUG STORE] Final effectiveIsNewTable determination: ${effectiveIsNewTable}`);
+
+       const updatedSheet: SheetProcessingState = {
+           ...sheet,
+           tableSuggestions,
+           columnMappings: reviewedColumnMappings, 
+           tableConfidenceScore: autoSelectedScore, 
+           selectedTable: sheet.selectedTable ?? autoSelectedTable, 
+           isNewTable: effectiveIsNewTable, 
+           sheetSchemaProposals: sheetSchemaProposals, 
+           // Set sheetReviewStatus based on the determination function
+           sheetReviewStatus: sheetReviewStatus,
+           // Set status to 'needsReview' for new tables regardless of their approval status
+           // Only mark as 'ready' if it's both approved AND not a new table
+           status: ((sheetStatus) => {
+               const shouldBeReady = sheetReviewStatus === 'approved' && !effectiveIsNewTable;
+               const finalStatus = shouldBeReady ? 'ready' : 'needsReview';
+               console.log(`[DEBUG STORE] Status determination for ${sheetName}:`);
+               console.log(`[DEBUG STORE]   - sheetReviewStatus: ${sheetReviewStatus}`);
+               console.log(`[DEBUG STORE]   - effectiveIsNewTable: ${effectiveIsNewTable}`);
+               console.log(`[DEBUG STORE]   - shouldBeReady: ${shouldBeReady}`);
+               console.log(`[DEBUG STORE]   - Current sheet.status: ${sheet.status}`);
+               console.log(`[DEBUG STORE]   - SETTING NEW STATUS TO: ${finalStatus}`);
+               return finalStatus;
+           })(),
+       };
       
       const updatedSheets = { ...state.sheets, [sheetName]: updatedSheet };
 
@@ -219,12 +246,58 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
   updateSheetProcessingState: (sheetName, updates) => set((state) => {
     const sheet = state.sheets[sheetName];
     if (!sheet) return {};
-
+    
+    // CRITICAL DEBUGGING: Log updateSheetProcessingState calls when status is changing
+    if (updates.status !== undefined) {
+      console.log(`
+      ⚠️⚠️⚠️ updateSheetProcessingState CHANGING STATUS ⚠️⚠️⚠️
+      Sheet: ${sheetName}
+      Current status: ${sheet.status}
+      New status: ${updates.status}
+      isNewTable: ${!!sheet.isNewTable}
+      selectedTable: ${sheet.selectedTable || 'null'}
+      `); 
+    }
+    
+    // PROTECTION: Check if trying to set a new table to 'ready'
+    if (updates.status === 'ready') {
+      // Multiple checks to identify a new table
+      const isNewTableByFlag = !!sheet.isNewTable;
+      const isNewTableByPrefix = !!(sheet.selectedTable && 
+                                  (sheet.selectedTable.startsWith('new:') || 
+                                   sheet.selectedTable.startsWith('import_')));
+      const isEffectivelyNew = isNewTableByFlag || isNewTableByPrefix;
+      
+      if (isEffectivelyNew) {
+        console.log(`
+        🛑🛑🛑 CRITICAL PROTECTION: Blocking 'ready' status for new table 🛑🛑🛑
+        Sheet: ${sheetName}
+        Caller: ${new Error().stack}
+        `);
+        
+        // Override status update to 'needsReview' for new tables
+        updates = {
+          ...updates,
+          status: 'needsReview' as SheetCommitStatus
+        };
+      }
+    }
+    
+    // Apply updates with potential override
     const updatedSheet = { ...sheet, ...updates };
 
     // If columnMappings were part of the update, re-determine sheetReviewStatus
     if (updates.columnMappings) {
       updatedSheet.sheetReviewStatus = determineSheetReviewStatus(updatedSheet.columnMappings);
+      
+      // FINAL PROTECTION: After updating review status, if it's a new table, ensure status is not 'ready'
+      if (updatedSheet.isNewTable && updatedSheet.status === 'ready') {
+        console.log(`
+        ⛔⛔⛔ LAST LINE OF DEFENSE: Forcing new table to 'needsReview' ⛔⛔⛔
+        Sheet: ${sheetName}
+        `);
+        updatedSheet.status = 'needsReview';
+      }
     }
 
     return {
@@ -262,26 +335,99 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
       const sheet = state.sheets[sheetName];
       if (!sheet) return {};
 
+      // If tableName is null, just clear the selected table without triggering analysis
+      if (tableName === null) {
+          return {
+              sheets: {
+                  ...state.sheets,
+                  [sheetName]: {
+                      ...sheet,
+                      selectedTable: null,
+                      isNewTable: false,
+                      tableConfidenceScore: undefined,
+                      columnMappings: {}, // Reset column mappings
+                      sheetSchemaProposals: [],
+                      status: 'pending',
+                      sheetReviewStatus: 'pending',
+                  },
+              },
+          };
+      }
+      
+      // If "Create New Table" option was selected, generate a default name from sheet name
+      if (tableName === 'create-new-table') {
+          // Generate a SQL-friendly name from sheet name
+          const sanitizedSheetName = sheetName.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+          tableName = `new:${sanitizedSheetName}`;
+          isNew = true;
+      }
+
       // Find the confidence score for the selected table if it exists in suggestions
       const selectedSuggestion = sheet.tableSuggestions.find(s => s.tableName === tableName);
       const newConfidenceScore = selectedSuggestion ? selectedSuggestion.confidenceScore : undefined;
 
       // When table changes, mappings need recalculation/review.
       // Reset column mappings and statuses. Worker should regenerate suggestions.
-      const resetColumnMappings = Object.keys(sheet.columnMappings).reduce((acc, header) => {
+      const resetColumnMappings = Object.keys(sheet.columnMappings || {}).reduce((acc, header) => {
+          // Initialize with default values for a new column mapping
           acc[header] = {
-              ...sheet.columnMappings[header],
+              header: header,
+              sampleValue: sheet.sampleData?.[0]?.[header] || '',
               mappedColumn: null,
               suggestedColumns: [],
+              inferredDataType: 'string', // Default to string
+              action: 'create', // Default to creating new columns
+              status: 'pending',
+              reviewStatus: 'pending',
               confidenceScore: undefined,
               confidenceLevel: undefined,
-              action: 'skip', 
-              newColumnProposal: undefined,
-              status: 'pending', 
-              reviewStatus: sheet.columnMappings[header]?.reviewStatus !== 'pending' ? sheet.columnMappings[header]?.reviewStatus : 'pending',
+              // Create a default proposal based on the header name
+              newColumnProposal: {
+                  type: 'new_column',
+                  details: {
+                      columnName: header.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_'),
+                      sqlType: 'TEXT',
+                      isNullable: true,
+                      sourceSheet: sheetName,
+                      sourceHeader: header
+                  }
+              }
           };
           return acc;
       }, {} as { [header: string]: BatchColumnMapping });
+
+      // For new tables, populate the sheetSchemaProposals with a default table proposal
+      let sheetSchemaProposals = sheet.sheetSchemaProposals || [];
+      if (isNew) {
+          // Create a table name without the "new:" prefix if it exists
+          const newTableName = tableName.startsWith('new:') ? tableName.substring(4) : tableName;
+          
+          // Create a new table proposal
+          const newProposal: NewTableProposal = {
+              type: 'new_table',
+              details: {
+                  name: newTableName,
+                  sourceSheet: sheetName,
+                  columns: sheet.headers.map(header => ({
+                      columnName: header.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_'),
+                      sqlType: 'TEXT',
+                      isNullable: true,
+                      sourceHeader: header
+                  }))
+              }
+          };
+          
+          // Replace any existing new table proposal or add this one
+          const existingIndex = sheetSchemaProposals.findIndex(
+            p => p.type === 'new_table' && p.details.sourceSheet === sheetName
+          );
+
+          if (existingIndex !== -1) {
+              sheetSchemaProposals[existingIndex] = newProposal;
+          } else {
+              sheetSchemaProposals = [...sheetSchemaProposals, newProposal];
+          }
+      }
 
       return {
           sheets: {
@@ -292,15 +438,15 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                   isNewTable: isNew, 
                   tableConfidenceScore: newConfidenceScore, 
                   columnMappings: resetColumnMappings,
-                  sheetSchemaProposals: [], 
-                  status: 'analyzing', 
+                  sheetSchemaProposals: sheetSchemaProposals,
+                  // Set to needsReview instead of analyzing to avoid blocking UI
+                  status: 'needsReview', 
                   sheetReviewStatus: 'pending', 
               },
           },
-          globalStatus: 'analyzing', 
+          // Don't set global status to analyzing, keep current status
+          // globalStatus: 'analyzing',
       };
-      // NOTE: The worker needs to listen for this state change and re-run analysis
-      // for the specific sheet based on the newly selected table.
   }),
 
   batchUpdateSheetMappings: (sheetName, headers, action) => set((state) => {
@@ -514,32 +660,63 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
   }),
 
   approveAllHighConfidenceSheets: () => set((state) => {
-      const updatedSheets = { ...state.sheets };
+    const updatedSheets = { ...state.sheets };
+    let actualChangesMade = false;
+
+    for (const sheetName in updatedSheets) {
+      const currentSheet = updatedSheets[sheetName]; // This is the sheet we might replace
+
+      // Use type guard to ensure proper type checking
+      const reviewStatus = currentSheet.sheetReviewStatus as 'pending' | 'approved' | 'rejected' | 'partiallyApproved' | 'needsReview';
       
-      // Process each sheet
-      Object.entries(updatedSheets).forEach(([sheetName, sheet]) => {
-          // Only auto-approve sheets with high confidence
-          if (sheet.tableConfidenceScore && sheet.tableConfidenceScore >= 0.8) {
-              // Approve all pending/modified columns within the sheet
-              const approvedColumnMappings = Object.entries(sheet.columnMappings).reduce((acc, [header, mapping]) => {
-                  acc[header] = {
-                      ...mapping,
-                      reviewStatus: (mapping.reviewStatus === 'pending' || mapping.reviewStatus === 'modified') ? 'approved' : mapping.reviewStatus,
-                  };
-                  return acc;
-              }, {} as { [header: string]: BatchColumnMapping });
-              
-              // Update the sheet
-              updatedSheets[sheetName] = {
-                  ...sheet,
-                  columnMappings: approvedColumnMappings,
-                  sheetReviewStatus: 'approved',
-                  status: 'ready', 
-              };
+      if (reviewStatus === 'pending' && currentSheet.selectedTable) {
+        const isHighConfidenceMatch = 
+          !currentSheet.isNewTable && 
+          currentSheet.tableConfidenceScore && 
+          currentSheet.tableConfidenceScore >= 0.8;
+
+        if (isHighConfidenceMatch) {
+          let newColumnMappingsData = { ...currentSheet.columnMappings };
+          let madeColumnChanges = false;
+
+          for (const header in newColumnMappingsData) {
+            const column = newColumnMappingsData[header];
+            if (column.reviewStatus === 'pending' || column.reviewStatus === 'modified') {
+              newColumnMappingsData[header] = { ...column, reviewStatus: 'approved' };
+              madeColumnChanges = true;
+            }
           }
-      });
-      
+
+          // If column statuses were changed, or if sheet status itself needs update
+          // Cast to specific union types to avoid TypeScript comparison errors
+          const sheetReviewStatus = currentSheet.sheetReviewStatus as 'pending' | 'approved' | 'rejected' | 'partiallyApproved' | 'needsReview';
+          const sheetStatus = currentSheet.status as 'pending' | 'ready' | 'processing' | 'analyzing' | 'needsReview' | 'committing' | 'committed' | 'error';
+          
+          if (madeColumnChanges || sheetReviewStatus !== 'approved' || sheetStatus !== 'ready') {
+            // Check if this is a new table using the same isNewTable check as before
+            const isEffectivelyNewTable = currentSheet.selectedTable && (
+              currentSheet.selectedTable.startsWith('new:') ||
+              currentSheet.selectedTable.startsWith('import_') ||
+              !!currentSheet.isNewTable
+            );
+            
+            updatedSheets[sheetName] = {
+              ...currentSheet,
+              columnMappings: newColumnMappingsData,
+              sheetReviewStatus: 'approved',
+              // If it's a new table, keep it as 'pending' so it needs review
+              status: isEffectivelyNewTable ? 'pending' : 'ready',
+            };
+            actualChangesMade = true;
+          }
+        }
+      }
+    }
+
+    if (actualChangesMade) {
       return { sheets: updatedSheets };
+    }
+    return {}; // No actual sheet objects were replaced or changed, so no state update
   }),
 
   approveAllColumnsInSheet: (sheetName) => set((state) => {
@@ -551,6 +728,13 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
           return acc;
       }, {} as { [header: string]: BatchColumnMapping });
       
+      // Check if this is a new table
+      const isNewTable = 
+          (sheet.selectedTable && 
+           (sheet.selectedTable.startsWith('new:') || 
+            sheet.selectedTable.startsWith('import_'))) || 
+          !!sheet.isNewTable;
+
       return {
           sheets: {
               ...state.sheets,
@@ -558,7 +742,8 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
                   ...sheet,
                   columnMappings: approvedColumnMappings,
                   sheetReviewStatus: 'approved',
-                  status: 'ready', 
+                  // Only mark as ready if it's not a new table
+                  status: isNewTable ? 'pending' : 'ready',
               },
           },
       };
@@ -687,31 +872,101 @@ export const useBatchImportStore = create<BatchImportState & BatchImportActions>
   setCommitComplete: () => set({ globalStatus: 'complete', commitProgress: null }),
 
   setSheetCommitStatus: (sheetName, status, error) => set((state) => { 
+      // ================ CRITICAL DEBUGGING ================
+      console.log(`
+      ============================================================
+      🔥🔥🔥 SETTING SHEET STATUS: ${sheetName} => ${status} 🔥🔥🔥
+      ============================================================
+      `);
+      
+      // Get stack trace to find who's calling this function
+      const stackTrace = new Error().stack || '';
+      console.log(`CALLER STACK:`, stackTrace);
+      
+      // Standard state checks
       if (!state) {
-        console.error("[DEBUG Store] setSheetCommitStatus: 'state' is undefined. This should not happen.");
-        return {}; // Return empty partial state on critical error
+        console.error(`State is undefined - critical error`);  
+        return {}; 
       }
       if (!state.sheets) {
-        console.error(`[DEBUG Store] setSheetCommitStatus: 'state.sheets' is undefined. SheetName: ${sheetName}`);
-        return {}; // Return empty partial state
+        console.error(`State.sheets is undefined for: ${sheetName}`);
+        return {}; 
       }
 
       const sheetToUpdate = state.sheets[sheetName]; 
       if (!sheetToUpdate) {
-        console.warn(`[DEBUG Store] setSheetCommitStatus: Sheet ${sheetName} not found in state.sheets.`);
-        return {}; // Return empty partial state if sheet not found
+        console.warn(`Sheet not found: ${sheetName}`);
+        return {}; 
       } 
       
-      // Create a new sheets object with the updated sheet
-      const newSheets = {
+      // SUPER VISIBLE DEBUG INFO - exact state of the sheet
+      console.log(`
+      ================== SHEET STATE DUMP ==================
+      Sheet: ${sheetName}
+      Current Status: ${sheetToUpdate.status}
+      IsNewTable Flag: ${!!sheetToUpdate.isNewTable}
+      Selected Table: ${sheetToUpdate.selectedTable || 'null'}
+      Review Status: ${sheetToUpdate.sheetReviewStatus}
+      ======================================================
+      `);
+      
+      // Type-safe status conversion
+      const typedStatus: SheetCommitStatus = status as SheetCommitStatus;
+      
+      // Multiple ways to detect if a table is new
+      const hasNewTableFlag = !!sheetToUpdate.isNewTable;
+      const hasNewPrefix = !!(sheetToUpdate.selectedTable && 
+                            sheetToUpdate.selectedTable.startsWith('new:'));
+      const hasImportPrefix = !!(sheetToUpdate.selectedTable && 
+                              sheetToUpdate.selectedTable.startsWith('import_'));
+      const isEffectivelyNew = hasNewTableFlag || hasNewPrefix || hasImportPrefix;
+      
+      // Super visible debug info about table detection
+      console.log(`
+      =========== TABLE TYPE DETECTION ===========
+      HasNewTableFlag: ${hasNewTableFlag}
+      HasNewPrefix: ${hasNewPrefix}
+      HasImportPrefix: ${hasImportPrefix}
+      IS EFFECTIVELY NEW: ${isEffectivelyNew}
+      ===========================================
+      `);
+      
+      // CRITICAL FIX: If table is new and trying to set to 'ready', OVERRIDE
+      if (typedStatus === 'ready' && isEffectivelyNew) {
+        console.log(`
+        🚨🚨🚨 CRITICAL OVERRIDE 🚨🚨🚨
+        Prevented new table from being marked 'ready': ${sheetName}
+        This is a new table that must not be marked as 'ready'
+        FORCING STATUS: needsReview
+        🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+        `);
+        
+        // Create updated sheets with the override status
+        const overrideSheets = {
+          ...state.sheets,
+          [sheetName]: {
+            ...sheetToUpdate,
+            status: 'needsReview' as SheetCommitStatus,
+            // Also flag it explicitly as a new table
+            isNewTable: true,
+            error: error,
+          },
+        };
+        return { sheets: overrideSheets };
+      }
+      
+      // Normal flow for non-new tables or other statuses
+      const updatedSheets = {
         ...state.sheets,
         [sheetName]: {
           ...sheetToUpdate,
-          status: status,
+          status: typedStatus,
           error: error,
         },
       };
-      return { sheets: newSheets }; // Return the updated part of the state
+      
+      console.log(`STATUS UPDATED: ${sheetName} => ${typedStatus} (isNew: ${isEffectivelyNew})`);
+      return { sheets: updatedSheets };
   }),
 
   setError: (errorMessage) => set({ error: errorMessage, globalStatus: 'error' }),
@@ -749,6 +1004,20 @@ const determineSheetReviewStatus = (columnMappings: { [header: string]: BatchCol
     // If some are approved and none are rejected or pending, it's still partially approved (e.g. some skipped)
     if (columnStatuses.some(s => s === 'approved') && !columnStatuses.some(s => s === 'pending' || s === 'rejected')) {
         return 'partiallyApproved';
+    }
+    
+    // Count high confidence columns
+    const totalColumns = Object.values(columnMappings).length;
+    const highConfidenceCount = Object.values(columnMappings).filter(m =>
+        m.confidenceLevel === 'High' && m.action === 'map'
+    ).length;
+    
+    // Calculate percentage of high confidence columns
+    const highConfidencePercentage = totalColumns > 0 ? (highConfidenceCount / totalColumns) * 100 : 0;
+    
+    // Auto-approve if at least 95% of columns have high confidence
+    if (highConfidencePercentage >= 95) {
+        return 'approved';
     }
     
     // If any column is pending review, the sheet is pending review

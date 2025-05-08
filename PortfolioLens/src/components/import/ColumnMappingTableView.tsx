@@ -61,6 +61,7 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
   onMappingUpdate, // Use new handler
   // columnSuggestions, // REMOVED
 }) => {
+  // Debug logging removed
   // Available data types for manual selection
   const availableDataTypes: ColumnType[] = ['string', 'number', 'boolean', 'date'];
   return (
@@ -161,6 +162,7 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                               });
                           }
                       }}
+                      disabled={false} // Always enable the select
                       displayEmpty
                       sx={{
                         maxWidth: '300px',
@@ -266,6 +268,7 @@ export const ColumnMappingTableView: React.FC<ColumnMappingTableViewProps> = ({
                         
                         onMappingUpdate(excelCol, updateObj);
                       }}
+                      disabled={false} // Always enable the select
                       size="small"
                       sx={{
                         minWidth: 100,

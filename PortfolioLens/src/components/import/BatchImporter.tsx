@@ -298,14 +298,28 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
       return;
     }
     const tableNameOrIdentifier = sheetState.selectedTable;
-    const isCreating = tableNameOrIdentifier.startsWith('new:');
-    const actualTableName = isCreating ? tableNameOrIdentifier.substring(4) : tableNameOrIdentifier;
+    
+    const isCreating = tableNameOrIdentifier.startsWith('new:') || 
+                       sheetState.isNewTable === true || 
+                       (tableNameOrIdentifier.startsWith('import_') && !tableInfoMap[tableNameOrIdentifier]);
+                       
+    if (!tableInfoMap[tableNameOrIdentifier] && !sheetState.isNewTable) {
+      console.log(`[DEBUG BatchImporter] Setting isNewTable flag for ${sheetName} with table ${tableNameOrIdentifier} (table not found in schema)`);
+      storeActions.updateSheetProcessingState(sheetName, {
+        isNewTable: true
+      });
+    }
+    
+    const actualTableName = isCreating && tableNameOrIdentifier.startsWith('new:') ? 
+                           tableNameOrIdentifier.substring(4) : 
+                           tableNameOrIdentifier;
 
     if (isLoadingTables) {
         setSnackbarMessage(`Schema information is still loading. Please wait.`);
         setSnackbarOpen(true);
         return;
     }
+    
     if (!isCreating && !tableInfoMap[actualTableName]) {
         console.warn(`[DEBUG BatchImporter] Table info for ${actualTableName} not found in map after loading. Modal might lack details or fail.`);
         storeActions.setError(`Failed to load schema details for table '${actualTableName}'. It may not exist or there was an issue fetching its information.`);
@@ -314,15 +328,17 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
         return; 
     }
 
+    if (sheetState.status === 'pending') {
+      storeActions.updateSheetProcessingState(sheetName, {
+        status: 'needsReview'
+      });
+    }
+
     setCurrentMappingSheet(sheetName);
     setCurrentMappingTable(tableNameOrIdentifier);
-    console.log(`[DEBUG BatchImporter] Setting showColumnMappingModal = true for ${sheetName} targeting table/identifier ${tableNameOrIdentifier}`);
+    console.log(`[DEBUG BatchImporter] Setting showColumnMappingModal = true for ${sheetName} targeting table/identifier ${tableNameOrIdentifier} (isCreating: ${isCreating})`);
     setShowColumnMappingModal(true);
   }, [sheets, storeActions, tableInfoMap, isLoadingTables]);
-
-  // Note: handleModalSave has been removed and its functionality moved to the 
-  // onSave handler of ColumnMappingModal component, which now directly uses 
-  // updateSheetProcessingState with properly structured data.
 
   const handleSheetSelectionToggle = useCallback((sheetName: string) => {
     if (localSkippedSheets[sheetName]) return;
@@ -395,10 +411,10 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
       const columnMappingsForDb: Record<string, ColumnMapping> = {};
       for (const headerKey in batchMappings) {
           const bm = batchMappings[headerKey];
-          if ((bm.action === 'map' && bm.mappedColumn) || (bm.action === 'create' && bm.newColumnProposal?.columnName)) {
+          if ((bm.action === 'map' && bm.mappedColumn) || (bm.action === 'create' && bm.newColumnProposal?.details.columnName)) {
               columnMappingsForDb[headerKey] = {
                   excelColumn: bm.header, 
-                  dbColumn: bm.action === 'create' ? bm.newColumnProposal!.columnName : bm.mappedColumn!, 
+                  dbColumn: bm.action === 'create' ? bm.newColumnProposal!.details.columnName : bm.mappedColumn!, 
                   type: bm.inferredDataType ?? 'string', 
                   isNew: bm.action === 'create',
               };
@@ -498,7 +514,15 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
           storeActions.setError(`Please map tables for: ${unmapped.map(([name]) => name).join(', ')}`);
           canProceed = false;
         }
+        
+        // Clear columnMappings for any unselected sheets to avoid showing them on next screen
+        Object.entries(sheets).forEach(([sheetName, sheet]) => {
+          if (!localSelectedSheets[sheetName] || localSkippedSheets[sheetName]) {
+            storeActions.setSelectedTable(sheetName, null);
+          }
+        });
         break;
+        
       case 2: 
         canProceed = checkColumnMappings(); 
         break;
@@ -745,9 +769,19 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
 
   const currentSheetNameForModal = currentMappingSheet;
   const currentSheetStateForModal = currentSheetNameForModal ? sheets[currentSheetNameForModal] || null : null;
-  const isCreatingTableForModal = currentSheetNameForModal 
-    ? (currentMappingTable === 'create-new-table' || !!currentMappingTable?.startsWith('new:')) 
-    : false;
+  const isCreatingTableForModal: boolean = !!(currentSheetNameForModal 
+    ? (currentMappingTable === 'create-new-table' || 
+       !!currentMappingTable?.startsWith('new:') || 
+       currentSheetStateForModal?.isNewTable === true ||
+       sheets[currentSheetNameForModal]?.isNewTable === true ||
+       (currentMappingTable && !tableInfoMap[currentMappingTable] && !currentMappingTable.startsWith('import_')) || // Explicitly treat non-schema, non-'import_' tables as new
+       (currentMappingTable?.startsWith('import_') && !tableInfoMap[currentMappingTable])) // Treat 'import_' prefixed tables not in schema as new
+    : false);
+
+  // Debugging logs for modal state variables
+  useEffect(() => {
+    // Debug logging removed
+  }, [currentSheetNameForModal, currentSheetStateForModal, isCreatingTableForModal]);
 
   let tableInfoForModal: TableInfo | null = null;
   if (currentSheetNameForModal) {
@@ -852,7 +886,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
                  sheets={sheets}
                  localSelectedSheets={localSelectedSheets}
                  localSkippedSheets={localSkippedSheets}
-                 isProcessing={globalStatus === 'analyzing'}
+                 isProcessing={false} // Force this to false to allow interaction
                  onOpenColumnMapping={openColumnMapping}
                  onContinue={handleProceedToNextStep}
                  onBack={goToPreviousStep}
@@ -927,46 +961,92 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({ onImportComplete }
               setShowColumnMappingModal(false);
               setCurrentMappingSheet('');
             }}
-            onSave={(updatedMappings, newTableName) => {
+            onSave={(updatedMappings: Record<string, BatchColumnMapping>, newTableName: string | undefined) => {
               if (currentSheetNameForModal) {
-                // Use the store's generic update function to update mappings and handle new table name
-                const updatedData: Partial<SheetProcessingState> = {
-                  columnMappings: updatedMappings
-                };
+                const sheetState = sheets[currentSheetNameForModal]; // Get current sheet state for comparison
                 
-                // If creating a new table and a name was provided, update the table name
-                if (isCreatingTableForModal && newTableName) {
+                const allMappingsComplete = Object.values(updatedMappings).every(mapping => 
+                  mapping.action === 'skip' || 
+                  (mapping.action === 'map' && mapping.mappedColumn) || 
+                  (mapping.action === 'create' && mapping.newColumnProposal)
+                );
+                
+                const needsActualReview = Object.values(updatedMappings).some(mapping =>
+                  mapping.action !== 'skip' && mapping.reviewStatus !== 'approved'
+                );
+
+                const isSheetFullyApproved = allMappingsComplete && !needsActualReview;
+                
+                const determinedSheetReviewStatus: SheetReviewStatus = isSheetFullyApproved ? 'approved' : (needsActualReview ? 'needsReview' : 'pending');
+
+                // For new tables, we NEVER want to mark them as 'ready' even if all mappings are approved
+                // They should always require review
+                
+                // CRITICAL FIX: Only consider a table "new" if it's explicitly marked as such:
+                // 1. Being actively created in this modal session
+                // 2. Has an explicit "new:" prefix in the selected table name
+                // Nothing else should be considered "new"
+                const isNewTable = isCreatingTableForModal || 
+                  (sheetState?.selectedTable && sheetState.selectedTable.startsWith('new:'));
+                
+                const updatedData: Partial<SheetProcessingState> = {
+                  columnMappings: updatedMappings,
+                  // Only mark as 'ready' if fully approved AND not a new table
+                  status: (isSheetFullyApproved && !isNewTable) ? 'ready' : 'needsReview',
+                  // For new tables, if everything is mapped/approved, still set sheetReviewStatus to 'needsReview'
+                  // to ensure it gets proper review
+                  sheetReviewStatus: (isNewTable && isSheetFullyApproved) ? 'needsReview' : determinedSheetReviewStatus
+                };
+
+                // If creating a new table and a name was provided by the modal (e.g., user edited it)
+                if (isCreatingTableForModal && newTableName && newTableName.trim() !== '') {
                   const sanitizedName = newTableName.trim().replace(/\s+/g, '_').replace(/_+/g, '_').substring(0, 50);
-                  
-                  // Update selectedTable to use the new name
                   updatedData.selectedTable = `new:${sanitizedName}`;
+                  updatedData.isNewTable = true; 
+                } else if (sheetState?.selectedTable) {
+                  // Preserve existing selectedTable if not changed by modal
+                  updatedData.selectedTable = sheetState.selectedTable;
                   
-                  // Update schema proposals if they exist
-                  if (currentSheetStateForModal?.sheetSchemaProposals) {
-                    updatedData.sheetSchemaProposals = currentSheetStateForModal.sheetSchemaProposals.map(proposal => {
-                      if (proposal.type === 'new_table') {
-                        return {
-                          ...proposal,
-                          details: {
-                            ...proposal.details,
-                            name: sanitizedName
-                          }
-                        };
-                      }
-                      return proposal;
-                    });
+                  // CRITICAL FIX: Explicitly set isNewTable based strictly on prefix
+                  if (sheetState.selectedTable.startsWith('new:')) {
+                    updatedData.isNewTable = true;
+                  } else {
+                    // Explicitly set non-new tables to false
+                    updatedData.isNewTable = false;
                   }
+                } else if (isCreatingTableForModal && !sheetState?.selectedTable && !newTableName) {
+                  // Case: New table, but no name provided from modal and no existing 'new:' name (should not happen if UI enforces name for new tables)
+                  // Create a fallback name or handle as an error
+                  const fallbackName = `new_table_${currentSheetNameForModal.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`.substring(0,50);
+                  updatedData.selectedTable = `new:${fallbackName}`;
+                  updatedData.isNewTable = true;
+                  console.warn(`[DEBUG BatchImporter] New table for ${currentSheetNameForModal} had no name, used fallback: ${updatedData.selectedTable}`);
+                }
+
+                // If it's a brand new table (being created), ensure its status explicitly starts as 'needsReview'
+                // after the first save, prompting for review of generated columns/types.
+                if (isCreatingTableForModal) {
+                    const previousSheetState = sheets[currentSheetNameForModal];
+                    const isFirstSaveForThisNewTableSetup = 
+                        !previousSheetState?.columnMappings || 
+                        Object.keys(previousSheetState.columnMappings).length === 0 ||
+                        (!previousSheetState?.selectedTable?.startsWith('new:') && updatedData.selectedTable?.startsWith('new:'));
+
+                    if (isFirstSaveForThisNewTableSetup) {
+                        console.log(`[DEBUG BatchImporter] First save for new table ${currentSheetNameForModal} (${updatedData.selectedTable}), ensuring 'needsReview' status.`);
+                        updatedData.status = 'needsReview';
+                        // Ensure sheetReviewStatus is also 'needsReview' for this case
+                        updatedData.sheetReviewStatus = 'needsReview'; 
+                    }
                 }
                 
-                // Update the sheet state in the store
-                updateSheetProcessingState(currentSheetNameForModal, updatedData);
-                
-                console.log(`Mappings saved for ${currentSheetNameForModal}`, updatedMappings);
+                storeActions.updateSheetProcessingState(currentSheetNameForModal, updatedData);
+
+                setSnackbarMessage(`Mappings saved for ${currentSheetNameForModal}.`);
+                setSnackbarOpen(true);
               }
-              setShowColumnMappingModal(false);
-              setCurrentMappingSheet('');
+              setShowColumnMappingModal(false); // Close modal regardless of currentSheetNameForModal
             }}
-            // Pass the correct props
             sheetState={currentSheetStateForModal}
             tableInfo={tableInfoForModal}
             isCreatingTable={isCreatingTableForModal}

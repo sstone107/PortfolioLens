@@ -44,6 +44,7 @@ import {
 
 import { VirtualizedColumnMapper } from './VirtualizedColumnMapper';
 import { ColumnMappingTableView } from './ColumnMappingTableView';
+import { toSqlFriendlyName } from './utils/stringUtils';
 
 // Suppress MUI console warnings
 const SuppressMuiWarnings = () => {
@@ -92,12 +93,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   tableInfo,
   isCreatingTable,
 }) => {
-  console.log('[DEBUG ColumnMappingModal] Props received:', {
-    open,
-    sheetState,
-    tableInfo,
-    isCreatingTable
-  });
+  // Debug logging removed
 
   // Helper function to map column type to SQL type
   const mapColumnTypeToSql = (columnType: ColumnType | null | undefined): string => {
@@ -150,6 +146,12 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     currentSheetState: SheetProcessingState | null,
     existingMappings?: Record<string, BatchColumnMapping> // Optional existing mappings to check first
   ): BatchColumnMapping => {
+    // ALWAYS CHECK if we're creating a new table (for defaulting to 'create' action)
+    // This is critical for ensuring we default to 'create' for new tables
+    const isNewTableMapping = isCreatingTable || currentSheetState?.isNewTable === true;
+    
+    // Debug logging removed as requested to reduce console noise
+    
     if (!currentSheetState) {
       // Fallback if sheetState is null - should ideally not happen if called correctly
       return {
@@ -158,7 +160,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         mappedColumn: null,
         suggestedColumns: [],
         inferredDataType: null,
-        action: 'map',
+        action: isNewTableMapping ? 'create' : 'map', // Default based on table type
         status: 'pending',
         reviewStatus: 'pending',
         newColumnProposal: undefined,
@@ -175,35 +177,91 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
 
     const sampleVal = currentSheetState?.sampleData?.[0]?.[header] ?? '';
 
+    // For new tables, ALWAYS generate a proper SQL-friendly column name using shared utility
+    // Import toSqlFriendlyName is already in the imports
+    const normalizedHeader = toSqlFriendlyName(header.toLowerCase());
+    
+    // For new tables, ALWAYS create a default new column proposal
+    const newProposal = {
+      type: 'new_column' as const,
+      details: {
+        columnName: normalizedHeader,
+        sqlType: 'TEXT', // Default SQL type, can be changed by user
+        isNullable: true,
+        sourceSheet: currentSheetState.sheetName,
+        sourceHeader: header
+      }
+    };
+
     if (base) {
+      let finalAction = base.action;
+      let finalNewColumnProposal = base.newColumnProposal;
+      let finalMappedColumn = base.mappedColumn;
+      let finalConfidenceScore = base.confidenceScore;
+      let finalConfidenceLevel = base.confidenceLevel;
+      let finalStatus = base.status; // Preserve status unless overridden
+
+      if (isNewTableMapping) {
+        // For new tables, default to 'create' if prior action was 'skip', a mere suggestion, or missing.
+        // This ensures new tables robustly suggest creating new fields.
+        if (base.action === 'skip' || 
+            (base.action === 'map' && (!base.mappedColumn || base.status === 'suggested')) || 
+            !base.action
+           ) {
+          finalAction = 'create';
+          finalNewColumnProposal = newProposal; 
+          finalMappedColumn = normalizedHeader; 
+          finalConfidenceScore = 1.0;
+          finalConfidenceLevel = 'High';
+          finalStatus = 'pending'; // Reset status for the new default suggestion
+        } else if (base.action === 'create') {
+          // If action is already 'create', ensure it has a valid proposal and mappedColumn reflects it.
+          finalNewColumnProposal = base.newColumnProposal || newProposal;
+          finalMappedColumn = finalNewColumnProposal.details.columnName;
+          // Keep existing confidence if it's a user-confirmed create, otherwise boost for new suggestion.
+          if (!base.newColumnProposal) { // If we added the newProposal
+            finalConfidenceScore = 1.0;
+            finalConfidenceLevel = 'High';
+            finalStatus = 'pending';
+          }
+        }
+        // If base.action was a confirmed 'map' (e.g., user mapped to existing field) or a confirmed 'create',
+        // that specific user choice should be respected even for new tables (though mapping to existing on new table is rare).
+      }
+      
       return {
         header: base.header || header,
         sampleValue: base.sampleValue ?? sampleVal,
-        mappedColumn: base.mappedColumn,
+        mappedColumn: finalMappedColumn,
         suggestedColumns: base.suggestedColumns || [],
-        inferredDataType: base.inferredDataType,
-        action: base.action || 'map',
-        status: base.status || 'pending',
+        inferredDataType: base.inferredDataType || 'string',
+        action: finalAction,
+        status: finalStatus, 
         reviewStatus: base.reviewStatus || 'pending',
-        newColumnProposal: base.newColumnProposal,
-        confidenceScore: base.confidenceScore,
-        confidenceLevel: base.confidenceLevel,
+        newColumnProposal: finalNewColumnProposal,
+        confidenceScore: finalConfidenceScore,
+        confidenceLevel: finalConfidenceLevel,
         errorMessage: base.errorMessage,
       };
     }
 
+    // Fallback: No existing mapping found in sheetState or passed existingMappings
+    // Set appropriate action based on whether this is a new table
+    // For new tables, ALWAYS use 'create'
+    const defaultAction = isNewTableMapping ? 'create' : 'map';
+    
     return {
       header: header,
       sampleValue: sampleVal,
-      mappedColumn: null,
+      mappedColumn: defaultAction === 'create' ? normalizedHeader : null,
       suggestedColumns: [],
-      inferredDataType: null,
-      action: 'map',
+      inferredDataType: 'string', // Default, can be refined
+      action: defaultAction,
       status: 'pending',
       reviewStatus: 'pending',
-      newColumnProposal: undefined,
-      confidenceScore: undefined,
-      confidenceLevel: undefined,
+      newColumnProposal: defaultAction === 'create' ? newProposal : undefined,
+      confidenceScore: defaultAction === 'create' ? 1.0 : undefined,
+      confidenceLevel: defaultAction === 'create' ? 'High' : undefined,
       errorMessage: undefined,
     };
   };
@@ -221,10 +279,15 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   // Initialize editableTableName when the modal opens
   useEffect(() => {
     if (open && isCreatingTable && sheetState?.selectedTable) {
-      // Extract the table name from the selectedTable value by removing 'new:' prefix
-      const currentTableName = sheetState.selectedTable.startsWith('new:') 
-        ? sheetState.selectedTable.substring(4) 
-        : '';
+      let currentTableName = '';
+      
+      if (sheetState.selectedTable.startsWith('new:')) {
+        // Case 1: Extract table name from the selectedTable value by removing 'new:' prefix
+        currentTableName = sheetState.selectedTable.substring(4);
+      } else if (sheetState.isNewTable || isCreatingTable) {
+        // Case 2: Handle tables with import_ prefix or other formats that are marked as new
+        currentTableName = sheetState.selectedTable;
+      }
       
       setEditableTableName(currentTableName);
     }
@@ -232,8 +295,19 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
 
   const actualTableNameFromSheetState = useMemo(() => {
     if (!sheetState?.selectedTable) return 'Unknown Table';
-    return isCreatingTable ? sheetState.selectedTable.substring(4) : sheetState.selectedTable;
-  }, [sheetState?.selectedTable, isCreatingTable]);
+    
+    // If it's explicitly marked as creating a new table with the 'new:' prefix
+    if (isCreatingTable && sheetState.selectedTable.startsWith('new:')) {
+      return sheetState.selectedTable.substring(4);
+    }
+    // If it's marked as creating a new table (isNewTable flag) but doesn't have the 'new:' prefix
+    // This handles the case of "import_" prefixed tables that are new but don't use the 'new:' convention
+    else if (isCreatingTable || sheetState.isNewTable) {
+      return sheetState.selectedTable;
+    }
+    // Default case - existing table
+    return sheetState.selectedTable;
+  }, [sheetState?.selectedTable, isCreatingTable, sheetState?.isNewTable]);
 
   const memoizedExcelHeaders = useMemo(() => {
     // CASE 1: Use headers from sheet state if available
@@ -279,12 +353,14 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
       });
     }
     return mappings;
-  }, [sheetState]);
+  }, [sheetState, isCreatingTable]);
 
   useEffect(() => {
     if (sheetState) {
       const currentHeaders = sheetState.headers;
       const newProcessedMappings: Record<string, BatchColumnMapping> = {};
+
+      // Process mappings
 
       currentHeaders.forEach(header => {
         const local = mappings[header];
@@ -293,21 +369,63 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         // Start with a base, prioritizing local, then initial, then fresh default
         const baseForConstruction = local || initial || getOrCreateMappingForHeader(header, sheetState);
 
-        newProcessedMappings[header] = {
-          header: header, // Always use the current header from iteration
-          sampleValue: baseForConstruction.sampleValue ?? sheetState?.sampleData?.[0]?.[header] ?? '',
-          mappedColumn: baseForConstruction.mappedColumn,
-          suggestedColumns: baseForConstruction.suggestedColumns || [],
-          inferredDataType: baseForConstruction.inferredDataType,
-          action: baseForConstruction.action || 'map',
-          status: baseForConstruction.status || 'pending',
-          reviewStatus: baseForConstruction.reviewStatus || 'pending',
-          newColumnProposal: baseForConstruction.newColumnProposal,
-          confidenceScore: baseForConstruction.confidenceScore,
-          confidenceLevel: baseForConstruction.confidenceLevel,
-          errorMessage: baseForConstruction.errorMessage,
-        };
+        // For new tables, FORCE 'create' action and include proposals unless user explicitly changed it
+        const forceCreateForNewTable = (isCreatingTable || sheetState.isNewTable) && 
+                                      (!baseForConstruction.action || 
+                                       (baseForConstruction.action === 'map' && baseForConstruction.status === 'suggested'));
+        
+        if (forceCreateForNewTable) {
+          // Explicitly set create action for new tables
+          
+          // Create a SQL-friendly column name
+          const sqlFriendlyName = header.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+          
+          // Create a proper proposal
+          const newProposal = {
+            type: 'new_column' as const,
+            details: {
+              columnName: sqlFriendlyName,
+              sqlType: mapColumnTypeToSql(baseForConstruction.inferredDataType || 'string'),
+              isNullable: true,
+              sourceSheet: sheetState.sheetName,
+              sourceHeader: header
+            }
+          };
+          
+          newProcessedMappings[header] = {
+            header: header,
+            sampleValue: baseForConstruction.sampleValue ?? sheetState?.sampleData?.[0]?.[header] ?? '',
+            mappedColumn: sqlFriendlyName, // Use SQL-friendly name for new columns
+            suggestedColumns: baseForConstruction.suggestedColumns || [],
+            inferredDataType: baseForConstruction.inferredDataType || 'string',
+            action: 'create', // Force to create
+            status: 'suggested',
+            reviewStatus: 'pending',
+            newColumnProposal: newProposal,
+            confidenceScore: 1.0, // High confidence
+            confidenceLevel: 'High', // High confidence
+            errorMessage: baseForConstruction.errorMessage,
+          };
+        } else {
+          // Normal case - use what we have
+          newProcessedMappings[header] = {
+            header: header, // Always use the current header from iteration
+            sampleValue: baseForConstruction.sampleValue ?? sheetState?.sampleData?.[0]?.[header] ?? '',
+            mappedColumn: baseForConstruction.mappedColumn,
+            suggestedColumns: baseForConstruction.suggestedColumns || [],
+            inferredDataType: baseForConstruction.inferredDataType,
+            action: baseForConstruction.action || 'map',
+            status: baseForConstruction.status || 'pending',
+            reviewStatus: baseForConstruction.reviewStatus || 'pending',
+            newColumnProposal: baseForConstruction.newColumnProposal,
+            confidenceScore: baseForConstruction.confidenceScore,
+            confidenceLevel: baseForConstruction.confidenceLevel,
+            errorMessage: baseForConstruction.errorMessage,
+          };
+        }
       });
+
+      // Sample checking removed
 
       // Prune mappings for headers that no longer exist
       Object.keys(mappings).forEach(header => {
@@ -329,19 +447,47 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         setMappings(finalMappingsToSet);
       }
     }
-  }, [sheetState, initialMappings, mappings]);
+  }, [sheetState, initialMappings, mappings, isCreatingTable, mapColumnTypeToSql]);
 
   const handleMappingUpdate = (excelCol: string, changes: Partial<BatchColumnMapping>) => {
-    console.log('[DEBUG ColumnMappingModal] handleMappingUpdate:', { excelCol, changes });
+    // Debug logging removed
 
     if ((changes.action === 'create' && !changes.newColumnProposal) ||
         (changes.action === 'create' && (changes as any).openDialog)) {
+      // Handle the dialog opening case
       setCurrentExcelColumn(excelCol);
       const suggestedName = excelCol.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
       setNewColumnName(suggestedName);
       setNewColumnType(mappings[excelCol]?.inferredDataType || 'string');
       setNewColumnDialogOpen(true);
-      handleMappingUpdate(excelCol, { action: 'create' });
+      
+      // Create the proposal with good defaults for new tables
+      const newProposal = {
+        type: 'new_column' as const,
+        details: {
+          columnName: suggestedName,
+          sqlType: mapColumnTypeToSql(mappings[excelCol]?.inferredDataType || 'string'),
+          isNullable: true,
+          sourceSheet: sheetState?.sheetName,
+          sourceHeader: excelCol
+        }
+      };
+      
+      // Set good defaults immediately, not just an action
+      setMappings(prev => ({
+        ...prev,
+        [excelCol]: {
+          ...prev[excelCol],
+          action: 'create',
+          mappedColumn: suggestedName,
+          newColumnProposal: newProposal,
+          status: 'userModified',
+          reviewStatus: 'pending',
+          confidenceScore: 1.0,
+          confidenceLevel: 'High'
+        }
+      }));
+      return; // Important - already updated state above
     }
 
     setMappings(prev => {
@@ -517,8 +663,21 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           reviewStatus: finalMappings[key].reviewStatus === 'approved' ? 'modified' : finalMappings[key].reviewStatus // Mark as modified if was approved
         };
       }
+      
+      // Ensure all mappings have a reviewStatus (default to 'approved' if user saved)
+      if (!finalMappings[key].reviewStatus) {
+        finalMappings[key].reviewStatus = 'approved';
+      }
     });
 
+    // Set all mappings to 'approved' status since the user has explicitly saved them
+    const allApproved = Object.keys(finalMappings).every(key => 
+      finalMappings[key].action === 'skip' || 
+      (finalMappings[key].action === 'map' && finalMappings[key].mappedColumn) ||
+      (finalMappings[key].action === 'create' && finalMappings[key].newColumnProposal)
+    );
+
+    // Pass both mappings and approval status
     onSave(finalMappings, isCreatingTable ? editableTableName : undefined);
     onClose();
   };
@@ -623,19 +782,28 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
       </DialogContent>
 
       <DialogActions>
-         {/* Simplified actions */}
-        <Button onClick={onClose} startIcon={<CloseIcon />}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          color="primary"
-          startIcon={<CheckIcon />}
-          disabled={mappedOrCreatedColumns === 0}
-        >
-          Save Mappings
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {isCreatingTable && (
+            <Typography 
+              variant="body2" 
+              color="info.main" 
+              sx={{ mr: 2 }}
+            >
+              New tables require review before import (columns default to "Create New Field")
+            </Typography>
+          )}
+          <Button onClick={onClose} startIcon={<CloseIcon />}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            variant="contained"
+            color="primary"
+            startIcon={<CheckIcon />}
+          >
+            Save Mappings
+          </Button>
+        </Box>
       </DialogActions>
 
       {/* Dialog for Creating New Column */}
@@ -649,7 +817,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         <DialogTitle>Create New Database Field</DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
-            Creating a new field in table '{actualTableNameFromSheetState}' for Excel column: <strong>{currentExcelColumn}</strong>
+            Creating a new field in {isCreatingTable ? 'new' : 'existing'} table '{actualTableNameFromSheetState}' for Excel column: <strong>{currentExcelColumn}</strong>
           </Typography>
           <TextField
             autoFocus
@@ -660,6 +828,7 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
             variant="standard"
             value={newColumnName}
             onChange={(e) => setNewColumnName(e.target.value)}
+            disabled={false} // Always enabled
             helperText="Use lowercase letters, numbers, and underscores."
           />
           <FormControl component="fieldset" margin="normal">
@@ -669,7 +838,9 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               aria-label="data type"
               name="newColumnType"
               value={newColumnType}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewColumnType(e.target.value as ColumnType)} 
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewColumnType(e.target.value as ColumnType)}
+              // Add a key to force re-render and debug mode to verify it's working
+              key={`radio-group-${Date.now()}`}
             >
               <FormControlLabel value="string" control={<Radio />} label="Text" />
               <FormControlLabel value="number" control={<Radio />} label="Number" />
@@ -693,8 +864,19 @@ export const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           {/* Removed duplicate block */}
         </DialogContent> 
         <DialogActions>
-          <Button onClick={() => { setNewColumnDialogOpen(false); setCreateStructureOnly(false); }}>Cancel</Button>
-          <Button onClick={handleCreateNewColumn} variant="contained">Create Field</Button>
+          <Button 
+            onClick={() => { setNewColumnDialogOpen(false); setCreateStructureOnly(false); }}
+            disabled={false} // Always enable cancel
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleCreateNewColumn} 
+            variant="contained"
+            disabled={false} // Always enable create
+          >
+            Create Field
+          </Button>
         </DialogActions>
       </Dialog> 
     </Dialog>

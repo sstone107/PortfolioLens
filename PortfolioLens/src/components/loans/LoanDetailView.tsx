@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Tabs, 
@@ -17,7 +17,9 @@ import {
   History, 
   Article 
 } from '@mui/icons-material';
-import { useShow, useOne } from "@refinedev/core";
+import { useShow, useOne, useList } from "@refinedev/core";
+import { useParams } from "react-router-dom";
+import { borrowerService } from "../../services/borrowerService";
 
 import { LoanSummaryTab } from './tabs/LoanSummaryTab';
 import { BorrowerInfoTab } from './tabs/BorrowerInfoTab';
@@ -70,45 +72,64 @@ export const LoanDetailView: React.FC = () => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
   const [tabValue, setTabValue] = useState(0);
+  const { id } = useParams();
+  
+  // State for borrower data fetched directly
+  const [borrowers, setBorrowers] = useState<any[]>([]);
+  const [isBorrowerLoading, setIsBorrowerLoading] = useState<boolean>(true);
 
   // Get loan data
-  const { queryResult } = useShow();
+  const { queryResult } = useShow({
+    resource: "loans",
+    id: id || "",
+  });
   const { data, isLoading, isError } = queryResult;
   const loan = data?.data;
 
-  // Get borrower data for this loan
-  const { 
-    data: borrowerData,
-    isLoading: isBorrowerLoading 
-  } = useOne({
-    resource: "borrowers",
-    id: "",
-    queryOptions: {
-      enabled: !!loan?.id,
-      filters: [
-        {
-          field: "loan_id",
-          operator: "eq",
-          value: loan?.id,
-        },
-      ],
-    },
-  });
+  // Fetch borrower data directly from our service
+  useEffect(() => {
+    if (loan?.id) {
+      setIsBorrowerLoading(true);
+      borrowerService.getBorrowersByLoanId(loan.id)
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setBorrowers(data);
+          } else {
+            console.error("Error fetching borrowers:", error);
+            setBorrowers([]);
+          }
+          setIsBorrowerLoading(false);
+        })
+        .catch(err => {
+          console.error("Exception fetching borrowers:", err);
+          setBorrowers([]);
+          setIsBorrowerLoading(false);
+        });
+    }
+  }, [loan?.id]);
 
   // Get payment history for this loan
   const { 
     data: paymentData,
     isLoading: isPaymentLoading 
-  } = useOne({
+  } = useList({
     resource: "payments",
-    id: "",
+    filters: [
+      {
+        field: "loan_id",
+        operator: "eq",
+        value: loan?.id,
+      },
+    ],
     queryOptions: {
       enabled: !!loan?.id,
-      filters: [
+      pagination: {
+        pageSize: 50, // Limit to last 50 payments
+      },
+      sort: [
         {
-          field: "loan_id",
-          operator: "eq",
-          value: loan?.id,
+          field: "effective_date",
+          order: "desc", // Most recent payments first
         },
       ],
     },
@@ -206,7 +227,7 @@ export const LoanDetailView: React.FC = () => {
         </TabPanel>
         <TabPanel value={tabValue} index={1}>
           <BorrowerInfoTab 
-            borrowers={borrowerData?.data} 
+            borrowers={borrowers} 
             isLoading={isBorrowerLoading} 
           />
         </TabPanel>
