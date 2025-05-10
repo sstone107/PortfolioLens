@@ -1,185 +1,391 @@
-import React, { useState, useCallback } from 'react';
-import { Box, Button, Typography, Paper, Alert, LinearProgress, Grid, FormControlLabel, Checkbox } from '@mui/material'; 
-import { PlayArrow as PlayArrowIcon, Code as CodeIcon } from '@mui/icons-material'; 
-import { ImportResultsDisplay } from '../ImportResultsDisplay';
-import { WorkbookInfo, ImportSettings, MissingColumnInfo, BatchColumnMapping } from '../types'; 
-import SchemaPreview from '../SchemaPreview';
-import { SchemaGenerator } from '../services/SchemaGenerator';
-import { executeSQL, tableExists, supabaseClient } from '../../../utility/supabaseClient';
-import { MetadataService } from '../services/MetadataService';
-import { SchemaCacheService } from '../services/SchemaCacheService';
-import { DatabaseService } from '../services/DatabaseService';
-import { ImportService } from '../services/ImportService.chunked'; 
+/**
+ * Review and Import Step component
+ * Final step in the import wizard
+ */
+import React, { useState } from 'react';
+import {
+  Box,
+  Typography,
+  Button,
+  Paper,
+  Card,
+  CardContent,
+  CardHeader,
+  Divider,
+  Alert,
+  AlertTitle,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Checkbox,
+  Grid,
+  Stack,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
+  Chip
+} from '@mui/material';
+import TableChartIcon from '@mui/icons-material/TableChart';
+import SaveIcon from '@mui/icons-material/Save';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import WarningIcon from '@mui/icons-material/Warning';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { useBatchImportStore, MappingTemplate } from '../../../store/batchImportStore';
+import { useBatchImport, useMappingTemplates } from '../BatchImporterHooks';
+import { v4 as uuidv4 } from 'uuid';
 
-export interface ReviewImportStepProps {
-  workbookInfo: WorkbookInfo;
-  sheetTableMappings: Record<string, string>;
-  selectedSheets: Record<string, boolean>;
-  importSettings: ImportSettings;
-  isImporting: boolean; 
-  importProgress: number; 
-  importResults: Record<string, any>; 
-  errors: Record<string, string>; 
-  onStartImport: () => Promise<void>; 
-  onBack: () => void;
-  excelData?: Record<string, Record<string, any>[]>;
-  columnMappings?: Record<string, Record<string, BatchColumnMapping>>; 
-  importMode: 'structureAndData' | 'structureOnly';
-  onImportModeChange: (mode: 'structureAndData' | 'structureOnly') => void;
-  subservicerId?: string; 
+interface ReviewImportStepProps {
+  onError: (error: string | null) => void;
 }
 
 /**
- * Review Import Step: Review and Import Data
+ * Step 4: Review and import component
  */
 export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
-  workbookInfo,
-  sheetTableMappings,
-  selectedSheets,
-  importSettings,
-  isImporting: isLoading, 
-  importProgress,
-  importResults: saveResult, 
-  errors: saveErrors, 
-  onStartImport, 
-  onBack,
-  excelData = {},
-  columnMappings = {},
-  importMode,
-  onImportModeChange,
-  subservicerId,
+  onError
 }) => {
-  const [generatingSchema, setGeneratingSchema] = useState(false);
-  const [procedureParams, setProcedureParams] = useState<{ tableName: string, columnsJson: string }[]>([]);
-  const [showSchemaPreview, setShowSchemaPreview] = useState(false);
-  const [schemaCreated, setSchemaCreated] = useState(false);
-
-  // Instantiate services
-  const dbService = new DatabaseService();
-  const schemaCacheService = new SchemaCacheService(dbService);
-  const metadataService = new MetadataService(schemaCacheService);
-  const importService = new ImportService(metadataService);
-
-  const generateSchemaSQL = useCallback(async () => { 
-    setGeneratingSchema(true);
-    // ... (rest of existing generateSchemaSQL logic - ensure it doesn't conflict with new changes or remove if not needed)
-    // This function might still be useful for a separate "Preview Schema Changes" button if desired
-    // For now, its direct invocation path might be removed if the primary action is saving template.
-    console.log('generateSchemaSQL called - review if still needed in this flow');
-    setGeneratingSchema(false);
-  }, [selectedSheets, sheetTableMappings, excelData, columnMappings, metadataService]);
-
-  const handleGenerateSchemaClick = () => {
-    // This function might now be less relevant if the main goal is to save the template.
-    // Consider if this schema generation/preview is still part of the "Save Template" review step.
-    // For now, let's assume it might be a secondary action or removed.
-    // generateSchemaSQL().then((sql) => {
-    //   if (sql && sql.length > 0) {
-    //     setProcedureParams(sql);
-    //     setShowSchemaPreview(true);
-    //   }
-    // });
-    console.log('handleGenerateSchemaClick called - review its role');
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [confirmationChecked, setConfirmationChecked] = useState(false);
+  
+  // Access batch import store
+  const {
+    fileName,
+    sheets,
+    headerRow,
+    tablePrefix,
+    importResults,
+    progress,
+    setImportResults,
+    resetImportResults
+  } = useBatchImportStore();
+  
+  // Import functionality
+  const { executeImport, loading, error } = useBatchImport();
+  const { saveTemplate, loading: templateSaving } = useMappingTemplates();
+  
+  // Filter sheets that aren't skipped
+  const importableSheets = sheets.filter(sheet => !sheet.skip);
+  
+  // Count how many sheets need review
+  const needsReviewCount = importableSheets.filter(sheet => sheet.needsReview).length;
+  
+  // Count tables that will be created
+  const tablesToCreate = importableSheets.map(sheet => sheet.mappedName);
+  
+  // Count total columns
+  const totalColumns = importableSheets.reduce((sum, sheet) => {
+    const nonSkippedColumns = sheet.columns.filter(col => !col.skip).length;
+    return sum + nonSkippedColumns;
+  }, 0);
+  
+  // Handle import execution
+  const handleExecuteImport = async () => {
+    // Reset any previous results
+    resetImportResults();
+    
+    // Execute the import
+    const success = await executeImport();
+    
+    if (!success && error) {
+      onError(error);
+    } else {
+      onError(null);
+    }
   };
-
-  const handleExecuteSchema = async () => {
-    // ... (existing handleExecuteSchema logic - likely not called if primary action is saving template)
-    console.log('handleExecuteSchema called - review its role');
+  
+  // Handle save template dialog open
+  const handleSaveTemplateOpen = () => {
+    setTemplateName(fileName.split('.')[0] || 'Import Template');
+    setTemplateDescription(`Template for ${fileName}`);
+    setSaveTemplateOpen(true);
   };
-
+  
+  // Handle save template dialog close
+  const handleSaveTemplateClose = () => {
+    setSaveTemplateOpen(false);
+  };
+  
+  // Handle save template
+  const handleSaveTemplate = async () => {
+    try {
+      // Create template object
+      const template: Partial<MappingTemplate> = {
+        id: uuidv4(),
+        name: templateName,
+        description: templateDescription,
+        headerRow,
+        tablePrefix: tablePrefix || undefined,
+        sheetMappings: sheets.map(sheet => ({
+          id: sheet.id,
+          originalName: sheet.originalName,
+          mappedName: sheet.mappedName,
+          headerRow: sheet.headerRow,
+          skip: sheet.skip,
+          columns: sheet.columns
+        })),
+        createdBy: 'current_user', // This would be the actual user ID
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        version: 1,
+        reviewOnly: false
+      };
+      
+      // Save template
+      await saveTemplate(template);
+      
+      // Close dialog
+      handleSaveTemplateClose();
+    } catch (err) {
+      // Handle error
+      onError(err instanceof Error ? err.message : 'Failed to save template');
+    }
+  };
+  
+  // Check if we can proceed with import
+  const canImport = importableSheets.length > 0 && needsReviewCount === 0 && confirmationChecked;
+  
+  // Handle confirmation checkbox change
+  const handleConfirmationChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setConfirmationChecked(event.target.checked);
+  };
+  
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        Review Import
-      </Typography>
-      <Typography variant="body1" paragraph>
-        You're about to import data from file: <strong>{workbookInfo.fileName}</strong>
-      </Typography>
-
-      <Paper elevation={2} sx={{ p: 2, mt: 2, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Import Settings</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={importMode === 'structureAndData'}
-                  onChange={(e) => onImportModeChange(e.target.checked ? 'structureAndData' : 'structureOnly')}
-                  disabled={isLoading}
-                />
-              }
-              label="Import data (uncheck to create table structure only)"
-            />
+    <Box>
+      {/* Summary card */}
+      <Card sx={{ mb: 3 }}>
+        <CardHeader 
+          title="Import Summary"
+          subheader="Review and confirm the import configuration"
+        />
+        <Divider />
+        <CardContent>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle1" gutterBottom fontWeight="medium">
+                Source File
+              </Typography>
+              
+              <Typography variant="body1" gutterBottom>
+                <strong>Filename:</strong> {fileName}
+              </Typography>
+              
+              <Typography variant="body1" gutterBottom>
+                <strong>Header Row:</strong> {headerRow}
+              </Typography>
+              
+              {tablePrefix && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>Table Prefix:</strong> {tablePrefix}
+                </Typography>
+              )}
+              
+              <Typography variant="body1">
+                <strong>Sheets:</strong> {importableSheets.length} (of {sheets.length} total)
+              </Typography>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle1" gutterBottom fontWeight="medium">
+                Import Details
+              </Typography>
+              
+              <Typography variant="body1" gutterBottom>
+                <strong>Tables to Create:</strong> {tablesToCreate.length}
+              </Typography>
+              
+              <Typography variant="body1" gutterBottom>
+                <strong>Total Fields:</strong> {totalColumns}
+              </Typography>
+              
+              {needsReviewCount > 0 && (
+                <Alert severity="warning" icon={<WarningIcon />} sx={{ mt: 2 }}>
+                  <AlertTitle>Attention Required</AlertTitle>
+                  {needsReviewCount} sheet(s) need review before import. Please go back to the previous steps.
+                </Alert>
+              )}
+            </Grid>
           </Grid>
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={importSettings.createMissingColumns}
-                  disabled={true} // This is controlled by parent
+        </CardContent>
+      </Card>
+      
+      {/* Tables to be created */}
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Tables to be Created
+        </Typography>
+        
+        <List dense>
+          {importableSheets.map((sheet) => (
+            <ListItem key={sheet.id}>
+              <ListItemIcon>
+                <TableChartIcon color="primary" />
+              </ListItemIcon>
+              <ListItemText 
+                primary={sheet.mappedName} 
+                secondary={`Source: ${sheet.originalName} • ${sheet.columns.filter(c => !c.skip).length} fields`}
+              />
+              
+              {sheet.needsReview ? (
+                <Chip 
+                  label="Needs Review" 
+                  color="warning"
+                  size="small"
+                  icon={<WarningIcon />}
                 />
-              }
-              label="Create missing columns automatically"
-            />
-          </Grid>
-        </Grid>
+              ) : (
+                <Chip 
+                  label="Ready" 
+                  color="success"
+                  size="small"
+                  icon={<CheckCircleIcon />}
+                />
+              )}
+            </ListItem>
+          ))}
+        </List>
+        
+        {importableSheets.length === 0 && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            No tables will be created. Please go back and configure at least one sheet to import.
+          </Alert>
+        )}
       </Paper>
-
-      {/* Existing schema preview section */}
-      {importMode === 'structureOnly' && (
-        <Box sx={{ mb: 2 }}>
-          <Button 
-            variant="outlined" 
-            startIcon={<CodeIcon />} 
-            onClick={handleGenerateSchemaClick} 
-            disabled={generatingSchema || isLoading}
-          >
-            {generatingSchema ? 'Generating Schema...' : 'Preview Schema Changes (Optional)'}
-          </Button>
-        </Box>
-      )}
-
-      {/* Commenting out SchemaPreview to fix lint error 2844562e-ed6c-420d-82e6-e9f671f807d6 */}
-      {/* {showSchemaPreview && procedureParams.length > 0 && (
-        <SchemaPreview 
-          sqlStatements={procedureParams} 
-          onExecute={handleExecuteSchema} 
-          onClose={() => setShowSchemaPreview(false)} 
-          schemaCreated={schemaCreated}
-          setSchemaCreated={setSchemaCreated} 
-        />
-      )} */}
-
-      {/* Display import progress and results */}
-      {isLoading && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="body2" gutterBottom>
-            Importing data... {importProgress}%
+      
+      {/* Import confirmation */}
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Confirmation
+        </Typography>
+        
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <AlertTitle>Please Confirm</AlertTitle>
+          This action will create new tables and fields in your database. This cannot be undone.
+          Make sure your data is properly mapped before proceeding.
+        </Alert>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Checkbox 
+            checked={confirmationChecked}
+            onChange={handleConfirmationChange}
+            color="primary"
+          />
+          <Typography>
+            I understand the consequences and confirm that I want to proceed with this import
           </Typography>
-          <LinearProgress variant="determinate" value={importProgress} sx={{ mt: 1, mb: 1 }} />
         </Box>
+      </Paper>
+      
+      {/* Import results (if available) */}
+      {importResults.success && (
+        <Paper sx={{ p: 2, mb: 3, bgcolor: 'success.light' }}>
+          <Typography variant="h6" gutterBottom color="success.contrastText">
+            Import Completed Successfully
+          </Typography>
+          
+          <List dense>
+            <ListItem>
+              <ListItemIcon>
+                <CheckCircleIcon color="success" />
+              </ListItemIcon>
+              <ListItemText 
+                primary={`Tables Created: ${importResults.createdTables.length}`}
+                primaryTypographyProps={{ color: 'success.contrastText' }}
+              />
+            </ListItem>
+            
+            <ListItem>
+              <ListItemIcon>
+                <CheckCircleIcon color="success" />
+              </ListItemIcon>
+              <ListItemText 
+                primary={`Rows Imported: ${importResults.importedRows} of ${importResults.totalRows}`} 
+                primaryTypographyProps={{ color: 'success.contrastText' }}
+              />
+            </ListItem>
+          </List>
+          
+          {importResults.failedSheets.length > 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <AlertTitle>Partial Success</AlertTitle>
+              Some sheets could not be imported:
+              <ul>
+                {importResults.failedSheets.map((sheet, index) => (
+                  <li key={index}>{sheet}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+        </Paper>
       )}
-
-      {Object.keys(saveResult).length > 0 && (
-        <ImportResultsDisplay 
-          results={saveResult} 
-          errors={saveErrors} 
-        />
-      )}
-
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <Button variant="outlined" onClick={onBack} disabled={isLoading}>
-          Back
-        </Button>
-        <Button 
-          variant="contained" 
-          startIcon={<PlayArrowIcon />} 
-          onClick={onStartImport} 
-          disabled={isLoading} 
+      
+      {/* Action buttons */}
+      <Stack direction="row" spacing={2} justifyContent="space-between">
+        <Button
+          variant="outlined"
+          startIcon={<SaveIcon />}
+          onClick={handleSaveTemplateOpen}
+          disabled={needsReviewCount > 0 || templateSaving}
         >
-          {isLoading ? 'Importing...' : 'Start Import'}
+          Save as Template
         </Button>
-      </Box>
+        
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={loading ? <CircularProgress size={20} /> : <PlayArrowIcon />}
+          onClick={handleExecuteImport}
+          disabled={!canImport || loading || progress.stage === 'importing'}
+        >
+          {loading ? 'Importing...' : 'Execute Import'}
+        </Button>
+      </Stack>
+      
+      {/* Save Template Dialog */}
+      <Dialog open={saveTemplateOpen} onClose={handleSaveTemplateClose}>
+        <DialogTitle>Save Import Template</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Template Name"
+            fullWidth
+            value={templateName}
+            onChange={(e) => setTemplateName(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          
+          <TextField
+            margin="dense"
+            label="Description"
+            fullWidth
+            multiline
+            rows={3}
+            value={templateDescription}
+            onChange={(e) => setTemplateDescription(e.target.value)}
+          />
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={handleSaveTemplateClose}>Cancel</Button>
+          <Button 
+            onClick={handleSaveTemplate} 
+            variant="contained"
+            disabled={!templateName || templateSaving}
+            startIcon={templateSaving ? <CircularProgress size={20} /> : <SaveIcon />}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
+
+export default ReviewImportStep;

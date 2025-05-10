@@ -1,110 +1,113 @@
-# Chunked Import System
+# Smart Excel Import & Schema Mapping Tool
 
-This module provides an improved approach to batch importing Excel data to database tables when dealing with large mappings or multiple sheets. It addresses the issue of mapping keys being truncated during RPC calls by storing mapping data in a staging table.
+This module provides a comprehensive solution for importing Excel and CSV data into the Supabase database with intelligent schema mapping. It's designed to reduce user friction by automatically analyzing and mapping data, then presenting an intuitive UI for review and confirmation.
 
-## Problem Solved
+## Features
 
-The original batch import system had the following limitations:
+- **Multi-step Import Wizard**
+  - Upload → Auto-Mapping → Table Mapping → Column Mapping → Review & Save
+  - Pre-mapped data for minimal user intervention
+  - Zustand for state management
+  - Web Workers for large-file processing
 
-1. **RPC Parameter Size Limitations**: Large mapping data could be truncated during transmission between frontend and backend.
-2. **Foreign Key Constraint Issues**: Issues with references to auth.users table.
-3. **SQL String Escaping Problems**: Issues with special characters in field names, especially those with spaces.
+- **Intelligent Sheet-to-Table Mapping**
+  - Automatic table name normalization
+  - Confidence-based matching
+  - Header row selection
+  - Table prefix support
+  - PostgreSQL reserved word handling
 
-## How It Works
+- **Advanced Column-to-Field Mapping**
+  - Data type inference from sample data and headers
+  - Grouped field types for better organization
+  - Confidence score display
+  - Skip/Include field controls
 
-The new approach works by:
+- **Mapping Template Management**
+  - Save and reuse mapping configurations
+  - Export/Import templates as JSON
+  - Duplicate/Edit existing templates
+  - Auto-matching for recognized file patterns
 
-1. Creating a staging table (`import_job_mappings`) to store mapping configurations
-2. Processing one sheet at a time rather than all at once
-3. Passing only minimal data through RPC calls
-4. Using a chunked processing approach for better error isolation
+- **Validation and Error Handling**
+  - Pre-import validation checks
+  - Detailed error reporting
+  - Partial import recovery options
 
-## Usage
+- **Audit Logging**
+  - Comprehensive activity tracking
+  - User attribution
+  - Success/failure metrics
 
-To use the chunked import system:
+## Architecture
 
-```typescript
-// Import the chunked DatabaseService (instead of the original)
-import { DatabaseService } from '../services/DatabaseService.chunked';
+The import system is built with a modular architecture:
 
-// Create an instance of the service
-const databaseService = new DatabaseService();
+### Main Components
+- `BatchImporter`: Main container component orchestrating the import workflow
+- `FileUploader`: Handles file selection and initial processing
+- `SampleDataTable`: Displays preview data from sheets
+- Web workers for background processing
 
-// Use it just like the original
-const results = await databaseService.processBatchImport(jobs, excelData, true);
-```
+### Wizard Steps
+1. `FileUploadStep`: File selection and global settings
+2. `TableMappingStep`: Map sheets to database tables
+3. `ColumnMappingStep`: Map columns to database fields
+4. `ReviewImportStep`: Final validation and execution
 
-## Implementation Details
+### Store & Data Flow
+- Zustand store (`batchImportStore.ts`) maintains import state
+- Data processing happens in the background using web workers
+- UI updates reactively as processing completes
 
-### Database Components
+### Database Structure
+- `mapping_templates`: Stores reusable mapping configurations
+- `import_activities`: Tracks import operations
+- `audit_logs`: Records detailed user actions for compliance
 
-1. **Staging Table**:
-   - `import_job_mappings` stores mapping data linked to import jobs
-   - Foreign key references ensure consistency with the import_jobs table
+## Usage Examples
 
-2. **New RPC Function**:
-   - `process_individual_job` processes one job at a time
-   - Retrieves mapping data from the staging table
-   - Provides detailed logging for troubleshooting
+### Basic Import
+1. Navigate to /import/batch
+2. Upload Excel/CSV file
+3. Review auto-mapped tables and columns
+4. Execute import
 
-3. **Cleanup Function**:
-   - `cleanup_import_job_mappings` removes old mapping data (configurable retention period)
+### Template Creation
+1. Complete an import
+2. On the review screen, click "Save as Template"
+3. Provide a name and description
 
-### Frontend Components
+### Template Application
+1. Upload a new file
+2. Select an existing template from the dropdown
+3. Review and adjust mappings as needed
 
-1. **Chunked ImportService**:
-   - Stores mapping data in the staging table
-   - Processes jobs one at a time
-   - Handles schema cache refreshing
+## Development
 
-2. **Enhanced DatabaseService**:
-   - Drop-in replacement for the original service
-   - Same API, but uses the chunked approach internally
+### State Management
+The application uses Zustand for state management. The store is defined in `batchImportStore.ts` and contains:
+- File metadata
+- Sheet mappings
+- Progress tracking
+- Import results
 
-## Benefits
+### Adding New Features
+To extend the import functionality:
+1. Update the appropriate store interfaces
+2. Modify the component that handles the feature
+3. Update relevant steps in the wizard
 
-- **Handles Large Mappings**: No more truncation issues with complex mappings
-- **Improved Error Isolation**: Each sheet is processed independently
-- **Better Performance**: Reduced memory consumption by processing in chunks
-- **Enhanced Logging**: More detailed diagnostics when issues occur
+## Performance Considerations
 
-## Migration
+- Large files are processed in web workers
+- Chunked processing for datasets with many rows
+- Partial imports and retry capabilities
+- Optimized UI rendering with virtualization
 
-A migration script is provided to set up the required database components:
+## Security Considerations
 
-```bash
-node scripts/apply-chunked-import-migration.js
-```
-
-Alternatively, you can:
-
-1. Run the SQL in `src/db/migrations/017_import_job_mappings_staging.sql` directly in your Supabase SQL Editor
-2. Update your imports to use the new service: 
-   ```typescript
-   import { DatabaseService } from "../services/DatabaseService.chunked";
-   ```
-
-## Debugging
-
-The chunked import system includes detailed logging that tracks:
-
-- Mapping size in bytes for each job
-- Which jobs contain potentially problematic fields
-- Progress of each job as it's processed
-
-If issues occur, check the browser console for logs with the prefix `[ImportService]`.
-
-## Technical Details
-
-### Size Limitations
-
-The original RPC system was limited by:
-
-1. PostgREST parameter limits (~1-2MB)
-2. HTTP header size limits in some environments
-3. PostgreSQL JSON processing capacity
-
-The new approach:
-- Uses database storage instead of HTTP parameters
-- Breaks processing into smaller, more manageable operations
-- Maintains transaction safety using database-side logic
+- Row-level security policies for all tables
+- User permissions checked before operations
+- Audit logging for compliance
+- Data validation before database insertion

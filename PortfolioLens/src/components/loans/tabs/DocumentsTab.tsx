@@ -52,8 +52,12 @@ import { useList, useCreate, useDelete, useGetIdentity } from "@refinedev/core";
 import { Document as PdfDoc, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
-// Use local PDF.js worker file (placed in public/vendor directory)
-pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.js';
+
+// Configure the PDF.js worker.
+// Vite will serve files from the 'public' directory at the root path.
+// So, '/pdf.worker.mjs' will correctly point to 'public/pdf.worker.mjs'.
+pdfjs.GlobalWorkerOptions.workerSrc = `/pdf.worker.mjs`;
+console.log('[DEBUG DocumentsTab] pdfjs.GlobalWorkerOptions.workerSrc set to:', pdfjs.GlobalWorkerOptions.workerSrc);
 
 // Renamed prop from 'document' to 'doc' to avoid shadowing global document
 const DocumentViewerDialog: React.FC<{
@@ -62,6 +66,13 @@ const DocumentViewerDialog: React.FC<{
   doc: Document | null;
 }> = ({ open, onClose, doc }) => {
   const [numPages, setNumPages] = React.useState<number>(1);
+
+  console.log('[DEBUG DocumentViewerDialog] Rendering. Open:', open);
+  if (doc) {
+    console.log('[DEBUG DocumentViewerDialog] doc object:', JSON.stringify(doc, null, 2));
+    console.log('[DEBUG DocumentViewerDialog] doc.file_path:', doc.file_path);
+    console.log('[DEBUG DocumentViewerDialog] doc.mime_type:', doc.mime_type);
+  }
 
   // Download handler
   const handleDownload = () => {
@@ -111,10 +122,17 @@ const DocumentViewerDialog: React.FC<{
         {doc?.mime_type?.includes('pdf') ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', p: 4 }}>
             <PdfDoc
-              file={doc.file_path}
-              onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+              file={doc.file_path} // Ensure this is a string URL or { url: string }
+              onLoadSuccess={({ numPages }) => {
+                console.log('[DEBUG DocumentViewerDialog] PDF Load Success. Num pages:', numPages);
+                setNumPages(numPages);
+              }}
               loading={<Typography>Loading PDF...</Typography>}
-              error={<Typography color="error">Could not load PDF preview.</Typography>}
+              error={
+                <Typography color="error">
+                  Could not load PDF preview. Please check console for details.
+                </Typography>
+              }
             >
               {Array.from(new Array(numPages), (el, index) => (
                 <Page key={`page_${index + 1}`} pageNumber={index + 1} width={600} />

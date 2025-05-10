@@ -1,41 +1,30 @@
 /**
- * Import System Components
- * 
- * This file exports all components related to the import system.
+ * Import Module Index
+ * Exports the main components for the import functionality
  */
 
 // Main components
-export { BatchImporter } from './BatchImporter';
-export { FileUploader } from './FileUploader';
-export { ColumnMappingModal } from './ColumnMappingModal';
-export { VirtualizedColumnMapper } from './VirtualizedColumnMapper';
-export { ImportResultsDisplay } from './ImportResultsDisplay';
-export { MissingColumnPreview } from './MissingColumnPreview';
-export { default as SchemaPreview } from './SchemaPreview';
-export { SheetMappingOverview } from './SheetMappingOverview';
-export { ColumnMappingDetailView } from './ColumnMappingDetailView';
+export { default as BatchImporter } from './BatchImporter';
+export { default as FileUploader } from './FileUploader';
+export { default as SampleDataTable } from './SampleDataTable';
 
-// Utility components
-export { FileReader } from './FileReader';
-
-// Types
-export * from './types';
-
-// Utilities
-export { generateColumnMappings, getSuggestedMappings } from './BatchImporterUtils';
-export { generateMappingsFromMatches, improveMappingsWithSampleData } from './ColumnMappingUtils';
-
-// Analysis Engine
-export {
-  analyzeContentPatterns,
-  suggestEnhancedColumnMappings,
-  createBatchColumnMappingsFromSuggestions,
-  suggestTableMappings,
-  createInitialSheetProcessingStates
-} from './AnalysisEngine';
+// Steps
+export * from './steps';
 
 // Services
-export { DatabaseService } from './services/DatabaseService';
-export { MetadataService } from './services/MetadataService';
-export { MappingService } from './services/MappingService';
-export { ImportService } from './services/ImportService';
+export { recordMetadataService } from './services/RecordMetadataService';
+
+// Utils
+export { 
+  exportTemplate, 
+  importTemplate, 
+  saveTemplate, 
+  loadTemplates 
+} from './mappingLogic';
+
+// Types
+export type { 
+  SheetMapping, 
+  ColumnMapping, 
+  MappingTemplate 
+} from '../../store/batchImportStore';

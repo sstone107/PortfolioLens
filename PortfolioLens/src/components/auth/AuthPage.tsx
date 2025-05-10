@@ -2,11 +2,7 @@ import React from "react";
 import {
   Box,
   Button,
-  Card,
-  CardContent,
-  Container,
   Divider,
-  Stack,
   Typography,
 } from "@mui/material";
 import { AuthPage as RefineAuthPage } from "@refinedev/mui";
@@ -50,24 +46,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     }
   }
 
-  const renderSocialButtons = () => {
-    if (type === "forgotPassword") return null;
-
+  // This function renders the content above the standard form
+  const renderProviderButtons = () => {
     return (
       <>
-        <Stack spacing={2} sx={{ mt: 2 }}>
-          <Button
-            fullWidth
-            variant="outlined"
-            color="primary"
-            size="large"
-            startIcon={<GoogleIcon />}
-            onClick={() => handleProviderLogin("google")}
-          >
-            Continue with Google
-          </Button>
-        </Stack>
-        <Divider sx={{ my: 3 }}>
+        <Button
+          fullWidth
+          variant="outlined"
+          color="primary"
+          size="large"
+          startIcon={<GoogleIcon />}
+          onClick={() => handleProviderLogin("google")}
+          sx={{ mb: 2 }}
+        >
+          Continue with Google
+        </Button>
+
+        <Divider sx={{ my: 2, width: "100%" }}>
           <Typography color="textSecondary" variant="body2">
             OR
           </Typography>
@@ -76,58 +71,59 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     );
   };
 
+  // This function renders content below the standard form
+  const renderFooter = () => {
+    if (type !== "login") return null;
+    
+    return (
+      <Box mt={2} width="100%">
+        <Button
+          fullWidth
+          variant="outlined"
+          color="secondary"
+          size="large"
+          onClick={() => {
+            window.location.href = "/magic-link";
+          }}
+        >
+          Sign in with Magic Link
+        </Button>
+      </Box>
+    );
+  };
+
   return (
-    <Container
-      component="main"
-      maxWidth="xs"
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        height: "100vh",
+    <RefineAuthPage
+      type={type}
+      title={cardTitle}
+      wrapperProps={{
+        sx: {
+          paddingTop: 2,
+          paddingBottom: 2,
+        }
       }}
-    >
-      <Card elevation={4}>
-        <CardContent>
+      contentProps={{
+        sx: {
+          paddingX: 0
+        }
+      }}
+      formProps={formProps}
+      renderContent={(content: React.ReactNode) => {
+        return (
           <Box
             sx={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
+              width: "100%"
             }}
           >
-            <Typography component="h1" variant="h5" mb={2}>
-              {cardTitle}
-            </Typography>
-            {renderSocialButtons()}
-            <RefineAuthPage
-              type={type}
-              formProps={formProps}
-              wrapperProps={{
-                style: {
-                  width: "100%",
-                },
-              }}
-            />
-            
-            {type === "login" && (
-              <Box sx={{ mt: 2, textAlign: "center" }}>
-                <Typography variant="body2" color="textSecondary">
-                  Or sign in with a{" "}
-                  <Button
-                    component="a"
-                    href="/magic-link"
-                    variant="text"
-                    sx={{ p: 0, fontWeight: "bold", verticalAlign: "baseline" }}
-                  >
-                    magic link
-                  </Button>
-                </Typography>
-              </Box>
-            )}
+            {renderProviderButtons()}
+            {content}
+            {renderFooter()}
           </Box>
-        </CardContent>
-      </Card>
-    </Container>
+        );
+      }}
+    />
   );
 };

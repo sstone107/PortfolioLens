@@ -44,7 +44,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useNotification, useInvalidate, useNavigation, BaseRecord } from '@refinedev/core';
 import { LoanPortfolioMappingService } from '../../services/loanPortfolioMappingService';
 import { LoanMappingResult, LoanMappingImportOptions, UnmappedLoan, InconsistentLoanMapping } from '../../types/loanPortfolioMapping';
-import { FileReader } from '../../components/import/FileReader';
+import { FileReader } from '../../utility/FileReader';
 import { useAutocomplete } from '@refinedev/mui';
 
 interface TabPanelProps {

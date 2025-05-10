@@ -160,6 +160,7 @@
 ### Technical Details
 - Added an early return condition in `calculateCombinedScore` for `nameSimilarity >= 0.99`.
 - Added `Math.min(combinedScore, 1.0)` to prevent scores exceeding 1.0 due to weighting adjustments in other cases.
+
 ## 2025-05-05: Adjusted Type Compatibility Logic for High Confidence Matches
 
 ### Fixed
@@ -169,6 +170,7 @@
 ### Technical Details
 - Modified `isTypeCompatible` to include checks based on `nameSimilarityScore` before falling back to stricter type comparisons.
 - Ensured specialized inferred types ('amount', 'rate', 'id') are considered compatible with 'number' or 'string' database types when name similarity is high.
+
 ## 2025-05-05: Improved Column Mapping for Case and Spacing Variations
 
 ### Fixed
@@ -516,3 +518,8 @@
 - Added specific error handling for schema cache errors in `ImportService.ts`
 - Added a pause mechanism in `run-migrations.js` to ensure users see the schema cache warning
 - Improved error messages to include clear instructions for resolving schema cache issues
+
+## [Unreleased] - YYYY-MM-DD
+
+### Fixed
+- Ensured that `inferredDataType` for column mappings defaults to `null` instead of `'string'` throughout the import process. This was primarily addressed by correcting the `BatchColumnMapping` object creation in `batchImport.worker.ts` to always include `inferredDataType: null` (if no type is inferred, which is the current behavior for initial mapping). Also fixed a typo `normalizeForMatching` to `normalizeForComparison` in the same file.

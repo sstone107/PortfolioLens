@@ -71,8 +71,8 @@ export const BlogPostList = () => {
         headerName: "Category",
         minWidth: 160,
         display: "flex",
-        valueGetter: (_, row) => {
-          const value = row?.categories;
+        valueGetter: (params) => {
+          const value = params.row?.categories;
           return value;
         },
         renderCell: function render({ value }) {

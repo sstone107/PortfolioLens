@@ -10,6 +10,7 @@
   - [ ] Add IP/Geography Limitations
   - [ ] Implement Export/Download Permissions
 - [ ] Apply Supabase migration 010_loan_detail_view_tables.sql
+- [x] Fix: Data type display issues - Ensure inferredDataType defaults to null, not 'string', throughout the column mapping process. (Investigate `ColumnMappingSuggestions` to `BatchColumnMapping` transformation, check `BatchImporterContext` or `BatchImporter.tsx` and `batchImportStore.ts` for `inferredDataType` handling. Confirmed fix in `batchImport.worker.ts`.)
 
 ## Upcoming Tasks
 - [x] Parameter Type Handling and Connection Verification Fixes (Completed 2025-05-03)

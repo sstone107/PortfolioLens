@@ -1,656 +1,431 @@
-import { ColumnType } from './types';
-
 /**
- * Infers the data type of a column based on field name and sample values
- * Handles common data formats including text-formatted numbers and dates
- * 
- * @param sampleValues - Sample values from the column
- * @param fieldName - Field name to use for inference when sample data is insufficient
- * @returns The inferred column type
+ * Data type inference utilities for Excel imports
+ * Provides functions for detecting data types from column headers and sample data
  */
-export function inferDataType(sampleValues: any[], fieldName?: string): ColumnType {
-  // Always filter out null/empty values first to ensure we only look at actual data
-  const nonNullValues = sampleValues ? 
-    sampleValues.filter(val => val !== null && val !== undefined && val !== '') : 
-    [];
-  
-  // Log non-null sample values (up to 5) for debugging
-  if (nonNullValues && nonNullValues.length > 0) {
-    const sampleToLog = nonNullValues.slice(0, 5).map(v =>
-      typeof v === 'string' ? `"${v}"` :
-      String(v)
-    ).join(' | ');
-  }
 
-  // Check if we have enough sample data to make a good determination (at least 5 non-null samples)
-  // Will be used later to determine whether to prioritize data patterns over field name
-  
-  // PRIORITY 1: Handle empty fields with field name
-  if (nonNullValues.length === 0) {
-    // For fields with no sample data, we must be more thorough in field name inference
-    // This is critical to ensure emptdy data sets are still mappable
-    if (fieldName) {
-      console.log(`[INFO] No sample data for field: "${fieldName}", inferring type from name`);
-      // First try specific rules, then fallback to generic inference
-      // Perform more aggressive pattern matching for field names when no data exists
-      
-      // Use "lowerName" for all regexes to avoid repetition and improve consistency
-      const lowerName = fieldName.toLowerCase();
-      
-      // SPECIFIC ID FIELDS: Always strings regardless of content
-      if (
-        // Loan identifiers are always strings
-        /\b(loan[\s_-]?id|servicer[\s_-]?loan[\s_-]?id|investor[\s_-]?loan[\s_-]?id|valon[\s_-]?loan[\s_-]?id)\b/i.test(lowerName) ||
-        // MERS ID is always a string
-        /\b(mers[\s_-]?id|mers[\s_-]?number|mers[\s_-]?min)\b/i.test(lowerName) ||
-        // Case numbers are strings
-        /\b(case[\s_-]?number|fha[\s_-]?(case|number)|va[\s_-]?(case|number))\b/i.test(lowerName) ||
-        // Payment history codes are strings
-        /\b(pay[\s_-]?history|payment[\s_-]?history|delinquency[\s_-]?history)\b/i.test(lowerName) ||
-        // Pool numbers are strings
-        /\b(pool[\s_-]?number|pool[\s_-]?id)\b/i.test(lowerName) ||
-        // Any field with "ID" should generally be a string
-        /\b(id$|_id$|id_|identifier)\b/i.test(lowerName) ||
-        // Phone, SSN, etc. are all strings
-        /\b(phone|ssn|ein|tax|zip|postal|code|address|city|state|county)\b/i.test(lowerName)
-      ) {
-        console.log(`[INFO] Empty field "${fieldName}" detected as STRING based on name pattern`);
-        return 'string';
-      }
-      
-      // DATE FIELDS: Fields likely to contain dates
-      if (
-        /\b(date|dt|time|created|modified|updated|birth|dob|discharge|dismissal|filed|bankruptcy|maturity)\b/i.test(lowerName) &&
-        !/\b(rating|ratio|update|mandate)\b/i.test(lowerName)
-      ) {
-        console.log(`[INFO] Empty field "${fieldName}" detected as DATE based on name pattern`);
-        return 'date';
-      }
-      
-      // NUMBER FIELDS: Fields likely to contain numeric values
-      if (
-        // Core financial metrics
-        /\b(upb|dti|debt[\s_-]?to[\s_-]?income|p&i|principal[\s_-]?and[\s_-]?interest|rate|margin|apr|apy)\b/i.test(lowerName) ||
-        // Time units as numbers
-        /\b(month$|months$|time[\s_-]?unit)\b/i.test(lowerName) ||
-        // Common numeric fields
-        /\b(count|number|num|qty|amount|amt|balance|bal|price|fee|cost|percent|pct|ratio|score|fico|units|ltv)\b/i.test(lowerName) ||
-        // Financial terms
-        /\b(payment|principal|interest|term|credit|lien|limit|total|sum|avg|median|min|max)\b/i.test(lowerName)
-      ) {
-        console.log(`[INFO] Empty field "${fieldName}" detected as NUMBER based on name pattern`);
-        return 'number';
-      }
-      
-      // BOOLEAN FIELDS: Fields likely to contain true/false values
-      if (
-        /\b(flag|indicator|is[\s_-]|has[\s_-]|required|enabled|active|escrowed)\b/i.test(lowerName) ||
-        /_flag$|_ind$|_indicator$|_yn$|_tf$/i.test(lowerName)
-      ) {
-        console.log(`[INFO] Empty field "${fieldName}" detected as BOOLEAN based on name pattern`);
-        return 'boolean';
-      }
-    }
-    
-    // Fallback to the existing generic inference function
-    const nameBasedType = inferTypeFromFieldName(fieldName);
-    console.log(`[INFO] Empty field "${fieldName}" using generic name inference: ${nameBasedType}`);
-    return nameBasedType;
-  }
-  
-  // PRIORITY 1.5: Specific field names that ALWAYS override data content regardless of sample size
-  // These critical rules apply regardless of the actual data, even when we have samples
-  if (fieldName) {
-    const lowerName = fieldName.toLowerCase();
-    
-    // SPECIFIC ID FIELDS - Always strings regardless of content
-    if (
-      // Loan identifiers are always strings
-      /\b(loan[\s_-]?id|servicer[\s_-]?loan[\s_-]?id|investor[\s_-]?loan[\s_-]?id|valon[\s_-]?loan[\s_-]?id)\b/i.test(lowerName) ||
-      // MERS ID is always a string
-      /\b(mers[\s_-]?id|mers[\s_-]?number|mers[\s_-]?min)\b/i.test(lowerName) ||
-      // Case numbers are strings
-      /\b(case[\s_-]?number|fha[\s_-]?(case|number)|va[\s_-]?(case|number))\b/i.test(lowerName) ||
-      // Payment history codes are strings
-      /\b(pay[\s_-]?history|payment[\s_-]?history|delinquency[\s_-]?history)\b/i.test(lowerName) ||
-      // Pool numbers are strings
-      /\b(pool[\s_-]?number|pool[\s_-]?id)\b/i.test(lowerName)
-    ) {
-      return 'string';
-    }
-    
-    // SPECIFIC NUMERIC FIELDS - Always numbers regardless of data
-    if (
-      // Core financial metrics
-      /\b(upb|dti|debt[\s_-]?to[\s_-]?income|p&i|principal[\s_-]?and[\s_-]?interest|rate|margin|apr|apy)\b/i.test(lowerName) ||
-      // Time units as numbers
-      /\b(month$|months$|time[\s_-]?unit)\b/i.test(lowerName)
-    ) {
-      return 'number';
-    }
-  }
+import { normalizeString } from './utils/stringUtils';
 
-  // Define sufficient samples threshold (at least 5 non-null values)
-  const hasSufficientSamples = nonNullValues.length >= 5;
-  
-  if (hasSufficientSamples) {
-    // WITH SUFFICIENT SAMPLES: Prioritize data patterns over field names
-    
-    // PRIORITY 2: Check for special string formats first (ZIP, phone, etc.)
-    if (hasSpecialStringFormat(nonNullValues)) {
-      return 'string';
-    }
-    
-    // PRIORITY 3: Check for boolean values
-    if (allValuesAreBoolean(nonNullValues)) {
-      return 'boolean';
-    }
-    
-    // PRIORITY 4: Check for date values
-    if (allValuesAreDates(nonNullValues)) {
-      return 'date';
-    }
-    
-    // PRIORITY 5: Check for numeric values (including currency, percentages)
-    if (allValuesAreNumeric(nonNullValues)) {
-      return 'number';
-    }
-    
-    // PRIORITY 6: Check for predominantly numeric values
-    let numericCount = 0;
-    for (const val of nonNullValues) {
-      // Count values that are likely numeric
-      if (typeof val === 'number') {
-        numericCount++;
-      } else if (typeof val === 'string') {
-        const cleaned = val.trim().replace(/[$,\s%()]/g, '');
-        if (cleaned && !isNaN(Number(cleaned))) {
-          numericCount++;
-        }
-      }
-    }
-    
-    // If over 75% of values appear to be numeric, treat as number
-    const numericRatio = numericCount / nonNullValues.length;
-    if (numericRatio >= 0.75) {
-      return 'number';
-    }
-    
-    // Only use field name as a last resort with sufficient samples
-    if (fieldName) {
-      // Special case for score/FICO fields
-      if (/\b(score|fico|rating)\b/i.test(fieldName)) {
-        return 'number';
-      }
-      
-      // Special case for ZIP codes
-      if (/\b(zip|postal|zipcode)\b/i.test(fieldName)) {
-        return 'string';
-      }
-    }
-  } else {
-    // WITH INSUFFICIENT SAMPLES: Use field name hints with data patterns
-    
-    // PRIORITY 2: Check for special string formats
-    if (hasSpecialStringFormat(nonNullValues)) {
-      return 'string';
-    }
-    
-    // PRIORITY 3: Check for boolean values (TRUE/FALSE, Yes/No, etc.)
-    if (allValuesAreBoolean(nonNullValues)) {
-      return 'boolean';
-    }
-    
-    // PRIORITY 4: Use field name for hints with low sample count
-    if (fieldName) {
-      // ZIP code field name detection
-      if (/\b(zip|postal|zipcode)\b/i.test(fieldName)) {
-        return 'string';
-      }
-      
-      // Score/FICO field detection - these are numbers, not dates
-      if (/\b(score|fico|rating)\b/i.test(fieldName)) {
-        return 'number';
-      }
-      
-      // Boolean fields - need clear boolean name indicators
-      if (/\b(flag|indicator|is[\s_-]active|has[\s_-]permission)\b/i.test(fieldName)) {
-        // Extra check: make sure 0/1 values are not treated as boolean
-        const hasZeroOne = nonNullValues.some(val => val === 0 || val === 1 || val === '0' || val === '1');
-        const hasTrueFalse = nonNullValues.some(val => 
-          val === true || val === false || 
-          (typeof val === 'string' && (val.toLowerCase() === 'true' || val.toLowerCase() === 'false'))
-        );
-        
-        // Only return boolean if we have true/false values, not just 0/1
-        if (hasTrueFalse || !hasZeroOne) {
-          return 'boolean';
-        }
-      }
-    }
-    
-    // PRIORITY 5: Check for date values
-    if (allValuesAreDates(nonNullValues)) {
-      return 'date';
-    }
-    
-    // PRIORITY 6: Check for numeric values (including currency, percentages)
-    if (allValuesAreNumeric(nonNullValues)) {
-      return 'number';
-    }
-    
-    // PRIORITY 7: Fall back to field name
-    const nameBasedType = inferTypeFromFieldName(fieldName);
-    if (nameBasedType !== 'string') {
-      return nameBasedType;
-    }
-  }
+// Available Supabase data types
+export type SupabaseDataType = 
+  | 'text' 
+  | 'numeric' 
+  | 'integer' 
+  | 'boolean' 
+  | 'date' 
+  | 'timestamp' 
+  | 'uuid';
 
-  // PRIORITY 8: Default to string for anything else
- return 'string';
+// Type inference result
+export interface TypeInferenceResult {
+  type: SupabaseDataType;
+  confidence: number;
+  pattern?: string;
+}
+
+// Fallback column types by category
+interface TypeCategories {
+  [key: string]: {
+    category: SupabaseDataType;
+    terms: string[];
+    weight: number;
+  }
 }
 
 /**
- * Helper function to infer type from field name only
+ * Dictionary for header-based type inference fallbacks
+ * Maps common column name patterns to Supabase data types
  */
-function inferTypeFromFieldName(fieldName?: string): ColumnType {
-  if (!fieldName) {
-    return 'string';
-  }
+export const TYPE_CATEGORIES: TypeCategories = {
+  // Text type patterns
+  textIdentifiers: {
+    category: 'text',
+    terms: ['id', 'code', 'key', 'abbr', 'abbreviation', 'reference', 'ref'],
+    weight: 80
+  },
+  textDescriptions: {
+    category: 'text',
+    terms: ['name', 'description', 'desc', 'title', 'label', 'comment', 'note', 'notes', 'reason', 'type'],
+    weight: 85
+  },
+  textStatus: {
+    category: 'text',
+    terms: ['status', 'state', 'category', 'classification', 'class', 'group'],
+    weight: 85  
+  },
+  textAddresses: {
+    category: 'text',
+    terms: ['address', 'street', 'city', 'state', 'country', 'zip', 'postal', 'code'],
+    weight: 90
+  },
   
-  // Convert to lowercase for case-insensitive matching
-  const lowerName = fieldName.toLowerCase();
-
-  // Fields that should always be strings regardless of content
-  if (
-    // Loan identifiers should always be strings
-    /\b(loan[\s_-]?id|servicer[\s_-]?loan[\s_-]?id|investor[\s_-]?loan[\s_-]?id|valon[\s_-]?loan[\s_-]?id)\b/i.test(lowerName) ||
-    // MERS ID should always be a string
-    /\b(mers[\s_-]?id|mers[\s_-]?number|mers[\s_-]?min)\b/i.test(lowerName) ||
-    // Case numbers should be strings
-    /\b(case[\s_-]?number|fha[\s_-]?(case|number)|va[\s_-]?(case|number))\b/i.test(lowerName) ||
-    // Payment history codes are strings
-    /\b(pay[\s_-]?history|payment[\s_-]?history|delinquency[\s_-]?history)\b/i.test(lowerName) ||
-    // Pool numbers are strings
-    /\b(pool[\s_-]?number|pool[\s_-]?id)\b/i.test(lowerName) ||
-    // Any field with "ID" in the name should generally be a string
-    /\b(id$|_id$|id_|identifier)\b/i.test(lowerName)
-  ) {
-    return 'string';
-  }
-
-  // Date field detection - expanded to include more date-related terms
-  if (/\b(date|dt|day|month|year|time|created|modified|updated|birth|dob|discharge|dismissal|filed|bankruptcy|mfr|maturity)\b/i.test(lowerName)) {
-    // Exclude terms that contain "date" but aren't actually dates
-    if (!/\b(rating|ratio|update|mandate)\b/i.test(lowerName)) {
-      return 'date';
-    }
-  }
+  // Numeric type patterns
+  numericAmounts: {
+    category: 'numeric',
+    terms: ['amount', 'total', 'sum', 'balance', 'payment', 'price', 'cost', 'fee', 'rate', 'percent', 'percentage'],
+    weight: 90
+  },
+  numericRatios: {
+    category: 'numeric',
+    terms: ['ratio', 'ltv', 'dti', 'cltv', 'margin', 'spread', 'multiplier'],
+    weight: 85
+  },
+  numericMetrics: {
+    category: 'numeric',
+    terms: ['score', 'rating', 'grade', 'value', 'measure', 'weight', 'length', 'size', 'height', 'width', 'depth'],
+    weight: 80
+  },
   
-  // Fields that should always be numbers regardless of content
-  if (
-    // Specific financial fields that should always be numbers
-    /\b(upb|dti|debt[\s_-]?to[\s_-]?income|p&i|principal[\s_-]?and[\s_-]?interest|rate|margin)\b/i.test(lowerName) ||
-    // Time periods as numbers
-    /\b(month$|months$|time[\s_-]?unit|duration[\s_-]?months)\b/i.test(lowerName)
-  ) {
-    return 'number';
-  }
+  // Integer type patterns
+  integerCounts: {
+    category: 'integer',
+    terms: ['count', 'number', 'num', 'quantity', 'qty', 'frequency', 'occurrences', 'times', 'iterations'],
+    weight: 85
+  },
+  integerSequence: {
+    category: 'integer',
+    terms: ['sequence', 'seq', 'order', 'rank', 'position', 'index', 'priority'],
+    weight: 80
+  },
+  integerAge: {
+    category: 'integer',
+    terms: ['age', 'days', 'months', 'years', 'dpd', 'term', 'duration'],
+    weight: 90
+  },
   
-  // Enhanced number field detection with more financial and loan-specific terms
-  if (
-    // Common numeric field terms
-    /\b(count|number|num|qty|amount|amt|balance|bal|price|fee|cost|percent|pct|ratio|score|fico|units|ltv)\b/i.test(lowerName) ||
-    // Financial and loan-specific numeric fields that aren't IDs
-    /\b(principal|interest|payment|pmt|term|age|credit|lien|limit|total|sum|avg|median|min|max)\b/i.test(lowerName) ||
-    // Time periods that should be numeric (not dates)
-    /\b(period|term|frequency|duration|interval|years|days|hours)\b/i.test(lowerName) ||
-    // Common numeric suffixes
-    /_pct$|_amt$|_num$|_count$|_score$|_rate$|_ratio$|_balance$|_payment$/i.test(lowerName) ||
-    // APR and interest terms
-    /\b(apr|apy|interest|rate|yield)\b/i.test(lowerName)
-  ) {
-    // Exclude date-specific "days" like "day of month" and ID fields
-    if (!/\b(day of month|day of week|id$|_id$)\b/i.test(lowerName)) {
-      return 'number';
-    }
-  }
+  // Boolean type patterns
+  booleanFlags: {
+    category: 'boolean',
+    terms: ['is_', 'has_', 'can_', 'flag', 'enabled', 'active', 'valid', 'eligible', 'required', 'verified', 'approved'],
+    weight: 90
+  },
   
-  // Boolean field detection - Limit strictly to true/false fields
-  // Don't treat 0/1 as boolean by default
-  if (
-    // Explicit boolean indicators
-    /\b(flag|indicator|is[\s_-]|has[\s_-]|required|enabled|active|escrowed)\b/i.test(lowerName) ||
-    // Common boolean field suffixes
-    /_flag$|_ind$|_indicator$|_yn$|_tf$/i.test(lowerName)
-  ) {
-    return 'boolean';
-  }
-
-  // Default to string for anything else
-  return 'string';
-}
+  // Date type patterns
+  dateFields: {
+    category: 'date',
+    terms: ['date', 'day', 'due_date', 'start_date', 'end_date', 'effective_date', 'maturity_date', 'close_date', 'sign_date'],
+    weight: 95
+  },
+  dateLoan: {
+    category: 'date',
+    terms: ['origination_date', 'closing_date', 'maturity', 'funding_date', 'first_payment_date', 'last_payment_date', 'next_payment_date'],
+    weight: 95
+  },
+  
+  // Timestamp type patterns
+  timestampFields: {
+    category: 'timestamp',
+    terms: ['created_at', 'updated_at', 'timestamp', 'datetime', 'time', 'modified_at', 'deleted_at', 'logged_at'],
+    weight: 95
+  },
+  
+  // UUID type patterns
+  uuidFields: {
+    category: 'uuid',
+    terms: ['uuid', 'guid', 'id', 'sid', 'entity_id', 'unique_id'],
+    weight: 70
+  },
+};
 
 /**
- * Check if values have special string formats that should not be treated as other types
+ * Detect if a string value is likely a boolean
  */
-function hasSpecialStringFormat(values: any[]): boolean {
-  // Filter out null/empty values
-  const validValues = values.filter(val => val !== null && val !== undefined && val !== '');
-  if (validValues.length === 0) return false;
-  
-  // Check the first few valid values (up to 10)
-  const sampleSize = Math.min(validValues.length, 10);
-  const samples = validValues.slice(0, sampleSize);
-  
-  for (const val of samples) {
-    if (typeof val !== 'string') continue;
-    
-    const trimmed = val.trim();
-    if (trimmed === '') continue;
-    
-    // Check for ZIP codes
-    if (/^\d{5}(-\d{4})?$/.test(trimmed)) {
-      return true;
-    }
-    
-    // Check for phone numbers
-    if (/^(\+\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$/.test(trimmed)) {
-      return true;
-    }
-    
-    // Check for IDs with leading zeros
-    if (/^0\d+$/.test(trimmed)) {
-      return true;
-    }
-    
-    // Check for SSN format
-    if (/^\d{3}-\d{2}-\d{4}$/.test(trimmed)) {
-      return true;
-    }
-  }
-  
-  return false;
-}
+export const isLikelyBoolean = (value: string): boolean => {
+  const normalized = value.toLowerCase().trim();
+  return ['true', 'false', 'yes', 'no', 'y', 'n', '0', '1', 't', 'f'].includes(normalized);
+};
 
 /**
- * Check if all values are boolean or boolean-like
+ * Detect if a string value is likely a date
  */
-function allValuesAreBoolean(values: any[]): boolean {
-  // Filter out null/empty values first
-  const validValues = values.filter(val => val !== null && val !== undefined && val !== '');
-  if (validValues.length === 0) return false;
+export const isLikelyDate = (value: string): boolean => {
+  // Basic date pattern check - will catch most standard formats
+  const datePattern = /^\d{1,4}[-./]\d{1,2}[-./]\d{1,4}$/;
   
-  // Expanded list of boolean values
-  const booleanValues = ['true', 'false', 'yes', 'no', 'y', 'n', 't', 'f', 'on', 'off'];
+  if (datePattern.test(value)) return true;
   
-  // Count how many values match boolean patterns
-  let booleanCount = 0;
-  const totalValues = validValues.length;
-  
-  for (const val of validValues) {
-    let isBoolean = false;
-    
-    if (typeof val === 'boolean') {
-      isBoolean = true;
-    } else if (typeof val === 'string') {
-      const normalizedVal = val.toLowerCase().trim();
-      if (normalizedVal === '') continue;
-      
-      // Check for standard boolean values
-      if (booleanValues.includes(normalizedVal)) {
-        isBoolean = true;
-      }
-      // Check for uppercase TRUE/FALSE which are common in Excel exports
-      else if (normalizedVal === 'true' || normalizedVal === 'false') {
-        isBoolean = true;
-      }
-      // Check for pipe-separated boolean values (e.g., "TRUE | FALSE | TRUE")
-      else if (/^(true|false)(\s*\|\s*(true|false))+$/i.test(normalizedVal)) {
-        isBoolean = true;
-      }
-    } /* else if (typeof val === 'number' && (val === 1 || val === 0)) {
-      // Removed: Don't treat 0/1 as boolean by default, causes issues with numeric fields.
-      // isBoolean = true;
-    } */
-    
-    if (isBoolean) {
-      booleanCount++;
-    }
-  }
-  
-  // Calculate what percentage of values are boolean
-  const booleanRatio = booleanCount / totalValues;
-  
-  // Require at least 90% of values to be boolean-like, allowing for some outliers
-  return booleanRatio >= 0.9;
-}
+  // Try parsing as date and check if valid
+  const parsedDate = new Date(value);
+  return !isNaN(parsedDate.getTime());
+};
 
 /**
- * Check if all values are dates or date-like strings
+ * Detect if a string value is likely a timestamp (date + time)
  */
-function allValuesAreDates(values: any[]): boolean {
-  // Filter out null/empty values
-  const validValues = values.filter(val => val !== null && val !== undefined && val !== '');
-  if (validValues.length === 0) return false;
+export const isLikelyTimestamp = (value: string): boolean => {
+  // Date + time component check
+  const timestampPattern = /^\d{1,4}[-./]\d{1,2}[-./]\d{1,4}[T ]\d{1,2}:\d{1,2}/;
   
-  // First check if any values look like scores, ratings, or FICO scores
-  const possibleScores = validValues.filter(val => {
-    if (typeof val === 'string') {
-      const trimmed = val.trim();
-      if (trimmed === '') return false;
-      
-      // Match 3-digit numbers (common scores)
-      if (/^\d{3}$/.test(trimmed)) {
-        return true;
+  if (timestampPattern.test(value)) return true;
+  
+  // ISO timestamp check
+  const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+  
+  return isoPattern.test(value);
+};
+
+/**
+ * Detect if a string value is likely a UUID
+ */
+export const isLikelyUuid = (value: string): boolean => {
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidPattern.test(value);
+};
+
+/**
+ * Detect if a string value is likely an integer
+ */
+export const isLikelyInteger = (value: string): boolean => {
+  // Strip commas for thousands separators
+  const normalized = value.replace(/,/g, '');
+  const intPattern = /^-?\d+$/;
+  return intPattern.test(normalized);
+};
+
+/**
+ * Detect if a string value is likely a numeric (decimal) value
+ */
+export const isLikelyNumeric = (value: string): boolean => {
+  // Handle both US and European number formats
+  const usFormat = value.replace(/,/g, '');
+  const euroFormat = value.replace(/\./g, '').replace(',', '.');
+  
+  const numericPattern = /^-?\d*\.?\d+$/;
+  
+  return numericPattern.test(usFormat) || numericPattern.test(euroFormat);
+};
+
+/**
+ * Infer the data type from a column header name using fallback mapping
+ */
+export const inferTypeFromColumnHeader = (columnName: string): TypeInferenceResult[] => {
+  if (!columnName) {
+    return [{ type: 'text', confidence: 100 }];
+  }
+  
+  const normalized = normalizeString(columnName);
+  
+  // Map to hold all potential matches with confidence scores
+  const matches: { type: SupabaseDataType; confidence: number }[] = [];
+  
+  // Check column name against each category
+  Object.values(TYPE_CATEGORIES).forEach(category => {
+    let highestMatch = 0;
+    
+    // Check if any category term matches the column name
+    category.terms.forEach(term => {
+      // Exact match
+      if (normalized === term) {
+        highestMatch = 100;
       }
-      // Match 3-digit numbers with pipe separator (e.g., "764 | 806 | 802 | 818")
-      if (/\d{3}(\s*\|\s*\d{3})+/.test(trimmed)) {
-        return true;
+      // Contains term as a word
+      else if (new RegExp(`\\b${term}\\b`).test(normalized)) {
+        highestMatch = Math.max(highestMatch, category.weight + 10);
       }
-      // Match numbers in typical FICO score range (300-850)
-      const num = parseInt(trimmed, 10);
-      if (!isNaN(num) && num >= 300 && num <= 850) {
-        return true;
+      // Contains term as a substring
+      else if (normalized.includes(term)) {
+        highestMatch = Math.max(highestMatch, category.weight);
       }
+      // Starts with term
+      else if (normalized.startsWith(term)) {
+        highestMatch = Math.max(highestMatch, category.weight + 5);
+      }
+      // Ends with term
+      else if (normalized.endsWith(term)) {
+        highestMatch = Math.max(highestMatch, category.weight + 3);
+      }
+    });
+    
+    // If there was a match, add it to results
+    if (highestMatch > 0) {
+      matches.push({
+        type: category.category,
+        confidence: highestMatch
+      });
     }
-    return false;
   });
   
-  if (possibleScores.length > 0) {
-    return false;
-  }
-  
-  // Check for ZIP codes in the values
-  const possibleZipCodes = validValues.filter(val =>
-    typeof val === 'string' && /^\d{5}(-\d{4})?$/.test(val.trim())
-  );
-  
-  if (possibleZipCodes.length > 0) {
-    return false;
-  }
-  
-  // Count how many values match date patterns
-  let dateCount = 0;
-  const totalValues = validValues.length;
-  
-  for (const val of validValues) {
-    let isDate = false;
-    
-    // Skip null/undefined/empty values 
-    if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) {
-      continue;
-    }
-    
-    // Check if it's a Date object
-    if (val instanceof Date && !isNaN(val.getTime())) {
-      isDate = true;
-    // Check for potential Excel date serial numbers (numbers roughly between 1 and 100000 are common)
-    // 2958465 corresponds to 9999-12-31 in Excel's 1900 date system
-    } else if (typeof val === 'number' && val > 0 && val < 2958466) {
-      // Check if it's likely a score/rating instead
-      if (val >= 300 && val <= 850 && Number.isInteger(val)) {
-        isDate = false;
-      } else {
-        isDate = true; // Treat as date for now, numeric check will refine later if needed
+  // UUID fields need special handling - only suggest for ID fields
+  if (normalized.endsWith('_id') && matches.some(m => m.type === 'uuid')) {
+    // Boost UUID confidence for fields ending with _id
+    matches.forEach(match => {
+      if (match.type === 'uuid') {
+        match.confidence = Math.min(90, match.confidence + 15);
       }
-    } else if (typeof val === 'string') {
-      const trimmed = val.trim();
-      
-      // Skip checking numeric-only strings that could be confused with dates UNLESS they are YYYYMMDD
-      if (/^\d+$/.test(trimmed)) {
-        // Only accept 8-digit numbers as potential YYYYMMDD dates
-        if (trimmed.length === 8) {
-          // Try to parse as YYYYMMDD format
-          const year = parseInt(trimmed.substring(0, 4));
-          const month = parseInt(trimmed.substring(4, 6)) - 1; // 0-based month
-          const day = parseInt(trimmed.substring(6, 8));
-          
-          // Basic sanity check for year range
-          if (year >= 1900 && year <= 2100) {
-            const parsedDate = new Date(Date.UTC(year, month, day)); // Use UTC to avoid timezone issues
-            if (!isNaN(parsedDate.getTime()) &&
-                parsedDate.getUTCFullYear() === year &&
-                parsedDate.getUTCMonth() === month &&
-                parsedDate.getUTCDate() === day) {
-              isDate = true;
-            } else {
-              isDate = false;
-            }
-          } else {
-            isDate = false;
-          }
-        } else {
-          isDate = false;
-        }
-      } else {
-        // Check for common date formats (YYYY-MM-DD, MM/DD/YYYY, MM-DD-YYYY)
-        // Allow 1 or 2 digits for month/day, 2 or 4 for year in MM/DD/YYYY
-        const isCommonFormat =
-          /^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed) || // YYYY-MM-DD
-          /^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(trimmed); // MM/DD/YYYY or MM-DD-YYYY
-
-        if (isCommonFormat) {
-          // Further validate it's actually a valid date using Date.parse
-          // Date.parse is generally more robust than `new Date(string)` for format variations
-          if (!isNaN(Date.parse(trimmed))) {
-            // Additional check: ensure it doesn't look like a version number like '1.0.0'
-            if (!/^\d+\.\d+\.\d+$/.test(trimmed)) {
-              isDate = true;
-            } else {
-              isDate = false;
-            }
-          } else {
-            isDate = false;
-          }
-        } else {
-          // Could add more specific format checks here if needed (e.g., "Jan 1, 2023")
-          isDate = false;
-        }
-      }
-    }
-    
-    if (isDate) {
-      dateCount++;
-    }
+    });
   }
   
-  // If at least 90% of non-null values are dates, consider it a date column
-  const dateRatio = dateCount / totalValues;
-  return dateRatio >= 0.9;
-}
+  // Add text as a fallback with low confidence if no matches
+  if (matches.length === 0) {
+    matches.push({ type: 'text', confidence: 60 });
+  }
+  
+  // Sort by confidence descending
+  return matches.sort((a, b) => b.confidence - a.confidence);
+};
 
 /**
- * Check if all values are numeric or numeric-like strings
+ * Infer data type from a sample of values
+ * @param samples Array of sample values
+ * @returns The inferred data type with confidence score
  */
-function allValuesAreNumeric(values: any[]): boolean {
-  // If we have no values, we can't determine if they are numeric
-  if (!values || values.length === 0) return false;
+export const inferTypeFromSamples = (samples: unknown[]): TypeInferenceResult => {
+  // Filter out nulls, undefined and empty strings
+  const validSamples = samples.filter(s => s !== null && s !== undefined && s !== '');
   
-  // Skip null/empty values when checking
-  const nonNullValues = values.filter(val => val !== null && val !== undefined && val !== '');
-  if (nonNullValues.length === 0) return false;
-  
-  // First check if any values look like ZIP codes
-  const possibleZipCodes = nonNullValues.filter(val =>
-    typeof val === 'string' && /^\d{5}(-\d{4})?$/.test(val.trim())
-  );
-  
-  if (possibleZipCodes.length > 0) {
-    return false;
+  if (validSamples.length === 0) {
+    return { type: 'text', confidence: 100 };
   }
-
-  // Count how many values match numeric patterns
+  
+  // Count types
+  let uuidCount = 0;
+  let dateCount = 0;
+  let timestampCount = 0;
+  let booleanCount = 0;
+  let integerCount = 0;
   let numericCount = 0;
-  const totalValues = nonNullValues.length;
+  let textCount = 0;
   
-  for (const val of nonNullValues) {
-    let isNumeric = false;
+  // Check each sample
+  validSamples.forEach(sample => {
+    const str = String(sample).trim();
     
-    if (typeof val === 'number' && isFinite(val)) { 
-      // Actual numeric values are automatically considered numeric
-      // Explicitly reject numbers that fall into the likely Excel date range, unless they are small integers
-      if (val > 0 && val < 2958466 && !Number.isInteger(val)) {
-        // Potential Excel date serial number
-        isNumeric = false;
-      } else {
-        isNumeric = true;
-      }
-    } else if (typeof val === 'string') {
-      const trimmed = val.trim();
-      
-      // Skip empty strings
-      if (trimmed === '') continue;
-      
-      // Handle percentage values
-      if (trimmed.endsWith('%')) {
-        const numPart = trimmed.slice(0, -1).trim();
-        if (!isNaN(Number(numPart))) {
-          isNumeric = true;
-        }
-      } else if (trimmed.includes('|')) {
-        // Handle pipe-separated values (common in Excel exports)
-        const parts = trimmed.split('|').map(p => p.trim());
-        const allPartsNumeric = parts.every(part => {
-          // Clean each part and check if it's numeric
-          const cleanedPart = part.replace(/[$,€£\s%]/g, '');
-          // Ensure it's not empty and is a number
-          return cleanedPart.length > 0 && !isNaN(Number(cleanedPart));
-        });
-        
-        if (allPartsNumeric) {
-          isNumeric = true;
-        }
-      } else {
-        // Handle currency and number formats with symbols and separators
-        // Allow leading/trailing spaces, currency symbols, commas, parentheses (for negative)
-        let cleanedVal = trimmed;
-        
-        // Handle parentheses for negative numbers like (123.45)
-        if (cleanedVal.startsWith('(') && cleanedVal.endsWith(')')) {
-          cleanedVal = '-' + cleanedVal.substring(1, cleanedVal.length - 1);
-        }
-        
-        // Replace commas, currency symbols, etc.
-        cleanedVal = cleanedVal.replace(/^[$\s£€]+|[,\s%]+|[$\s£€%]+$/g, '');
-        
-        // Check if the cleaned value is a valid number and not empty
-        if (cleanedVal.length > 0 && !isNaN(Number(cleanedVal))) {
-          isNumeric = true;
-        }
-      }
-    }
-    
-    if (isNumeric) {
+    if (isLikelyUuid(str)) {
+      uuidCount++;
+    } else if (isLikelyTimestamp(str)) {
+      timestampCount++;
+    } else if (isLikelyDate(str)) {
+      dateCount++;
+    } else if (isLikelyBoolean(str)) {
+      booleanCount++;
+    } else if (isLikelyInteger(str)) {
+      integerCount++;
+    } else if (isLikelyNumeric(str)) {
       numericCount++;
+    } else {
+      textCount++;
+    }
+  });
+  
+  const total = validSamples.length;
+  
+  // Calculate percentages
+  const typePercentages: Record<SupabaseDataType, number> = {
+    uuid: (uuidCount / total) * 100,
+    timestamp: (timestampCount / total) * 100,
+    date: (dateCount / total) * 100,
+    boolean: (booleanCount / total) * 100,
+    integer: (integerCount / total) * 100,
+    numeric: (numericCount / total) * 100,
+    text: (textCount / total) * 100
+  };
+  
+  // Determine dominant type
+  let dominantType: SupabaseDataType = 'text';
+  let highestPercentage = 0;
+  
+  Object.entries(typePercentages).forEach(([type, percentage]) => {
+    if (percentage > highestPercentage) {
+      highestPercentage = percentage;
+      dominantType = type as SupabaseDataType;
+    }
+  });
+  
+  // If more than 20% are text, but numeric/integer is still dominant,
+  // check if there are leading zeros that would be lost
+  if ((dominantType === 'numeric' || dominantType === 'integer') && 
+      typePercentages.text > 20) {
+    const hasLeadingZeros = validSamples.some(sample => {
+      const str = String(sample);
+      return str.startsWith('0') && str.length > 1 && !str.startsWith('0.');
+    });
+    
+    if (hasLeadingZeros) {
+      // If there are leading zeros, prefer text
+      return { 
+        type: 'text', 
+        confidence: 85,
+        pattern: 'Leading zeros detected'
+      };
     }
   }
   
-  // Calculate what percentage of values are numeric
-  const numericRatio = numericCount / totalValues;
+  // Special cases
+  if (dominantType === 'uuid' && highestPercentage < 95) {
+    // UUID must be nearly 100% to be confident
+    return { type: 'text', confidence: 80 };
+  }
   
-  // If at least 90% of values are numeric, consider the column numeric
-  // This allows for some outliers or errors in the data while still correctly
-  // identifying predominantly numeric columns
-  return numericRatio >= 0.9;
-}
+  if (dominantType === 'boolean' && validSamples.length < 5) {
+    // Need more samples for boolean confidence
+    return { type: 'text', confidence: 75 };
+  }
+  
+  // Adjust confidence based on percentage
+  let confidence = Math.round(highestPercentage);
+  
+  // If confidence is low, default to text
+  if (confidence < 70 && dominantType !== 'text') {
+    return { type: 'text', confidence: 75 };
+  }
+  
+  return { type: dominantType, confidence };
+};
+
+/**
+ * Combined inference using both header name and sample data
+ * @param headerName Column header name
+ * @param samples Array of sample values
+ * @returns The most likely type with confidence score
+ */
+export const inferColumnType = (
+  headerName: string, 
+  samples: unknown[] = []
+): TypeInferenceResult => {
+  // Get header-based inference
+  const headerInference = inferTypeFromColumnHeader(headerName);
+  
+  if (samples.length === 0) {
+    // No samples, rely on header-based inference
+    return headerInference[0];
+  }
+  
+  // Get sample-based inference
+  const sampleInference = inferTypeFromSamples(samples);
+  
+  // If header inference strongly suggests a type, use it
+  const strongHeaderInference = headerInference.find(h => h.confidence > 90);
+  if (strongHeaderInference) {
+    return strongHeaderInference;
+  }
+  
+  // If sample inference is very confident, use it
+  if (sampleInference.confidence > 85) {
+    return sampleInference;
+  }
+  
+  // Combine the inferences - check if header and sample agree
+  const headerSuggestion = headerInference[0];
+  
+  if (headerSuggestion.type === sampleInference.type) {
+    // Both agree, boost confidence
+    return {
+      type: headerSuggestion.type,
+      confidence: Math.min(95, Math.max(headerSuggestion.confidence, sampleInference.confidence) + 5)
+    };
+  }
+  
+  // Special case: if header suggests numeric/integer but samples show text with leading zeros
+  if ((headerSuggestion.type === 'numeric' || headerSuggestion.type === 'integer') && 
+      sampleInference.type === 'text' && 
+      sampleInference.pattern === 'Leading zeros detected') {
+    return sampleInference;
+  }
+  
+  // They disagree - prefer sample inference if it's strong enough
+  if (sampleInference.confidence > 75) {
+    return sampleInference;
+  }
+  
+  // Otherwise fall back to header inference
+  return headerSuggestion;
+};

@@ -19,8 +19,10 @@ import { LoanSearchProvider } from "./contexts/loanSearchContext";
 import { ModuleGuard } from "./components/common/ModuleGuard";
 import { ImpersonationIndicator } from "./components/layout/ImpersonationIndicator";
 import { ModuleType } from "./types/adminTypes";
-import { ExcelImportPage } from "./pages/import/index";
-import { BatchImportPage } from "./pages/import/batch";
+// Import-related components
+import ImportHomePage from './pages/import/index';
+import BatchImportPage from './pages/import/batch';
+import TemplateManagerPage from './pages/import/templates';
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { UserImpersonation } from "./pages/admin/UserImpersonation";
 import { ModuleVisibility } from "./pages/admin/ModuleVisibility";
@@ -31,6 +33,8 @@ import { DocCustodianCreate, DocCustodianEdit, DocCustodianShow } from "./pages/
 import { SellerCreate, SellerEdit, SellerShow } from "./pages/partners/sellers";
 import { PriorServicerCreate, PriorServicerEdit, PriorServicerShow } from "./pages/partners/prior-servicers";
 import { LoanDetailView } from "./components/loans";
+import { HomePage } from "./pages/home/HomePage";
+import { TitleManager } from "./components/common/TitleManager";
 
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -48,6 +52,8 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import SearchIcon from "@mui/icons-material/Search";
 import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
+import HomeIcon from "@mui/icons-material/Home";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
 import CssBaseline from "@mui/material/CssBaseline";
 import GlobalStyles from "@mui/material/GlobalStyles";
 import routerBindings, {
@@ -109,10 +115,10 @@ function App() {
                 routerProvider={routerBindings}
                 notificationProvider={useNotificationProvider}
                 options={{
+                  // Use the text property as expected by Refine
                   title: {
-                    // Use a styled span with larger text around the app name
-                    text: <span style={{ fontSize: '1.2rem', fontWeight: 500 }}>PortfolioLens</span>,
-                    icon: <ZoomInIcon style={{ color: "#1a8754", fontSize: 48 }} />
+                    text: "PortfolioLens",
+                    icon: <ZoomInIcon style={{ color: "#1a8754", fontSize: 36 }} />
                   },
                   syncWithLocation: true,
                   warnWhenUnsavedChanges: true,
@@ -120,6 +126,17 @@ function App() {
                   projectId: "nzMoFh-ulbLWj-RR4F3Z",
                 }}
                 resources={[
+                  // Home Dashboard
+                  {
+                    name: "home",
+                    list: "/home",
+                    meta: {
+                      label: "Home",
+                      icon: <HomeIcon />,
+                    },
+                  },
+                  
+                  // Core Business Resources - Portfolios & Loans
                   {
                     name: "portfolios",
                     list: "/portfolios",
@@ -131,6 +148,47 @@ function App() {
                       icon: <PieChartIcon />,
                     },
                   },
+                  {
+                    name: "loans",
+                    list: "/loans",
+                    create: "/loans/create",
+                    edit: "/loans/edit/:id",
+                    show: "/loans/show/:id",
+                    meta: {
+                      canDelete: true,
+                      icon: <DescriptionIcon />,
+                    },
+                  },
+                  {
+                    name: "loan-detail",
+                    list: "/loans/detail/:id",
+                    show: "/loans/detail/:id",
+                    meta: {
+                      label: "Loan Details",
+                      icon: <AssignmentIndIcon />,
+                      parent: "loans",
+                    },
+                  },
+                  {
+                    name: "loan-portfolio-mapping",
+                    list: "/loans/portfolio-mapping",
+                    meta: {
+                      label: "Loan-Portfolio Mapping",
+                      icon: <MapIcon />,
+                      parent: "loans",
+                    },
+                  },
+                  {
+                    name: "loan-search",
+                    list: "/loans/search",
+                    meta: {
+                      label: "Advanced Search",
+                      icon: <SearchIcon />,
+                      parent: "loans",
+                    },
+                  },
+                  
+                  // Partner Resources - Business Relationships
                   {
                     name: "partners",
                     list: "/partners",
@@ -179,53 +237,6 @@ function App() {
                     },
                   },
                   {
-                    name: "loans",
-                    list: "/loans",
-                    create: "/loans/create",
-                    edit: "/loans/edit/:id",
-                    show: "/loans/show/:id",
-                    meta: {
-                      canDelete: true,
-                      icon: <DescriptionIcon />,
-                    },
-                  },
-                  {
-                    name: "loan-detail",
-                    list: "/loans/detail/:id",
-                    show: "/loans/detail/:id",
-                    meta: {
-                      label: "Loan Details",
-                      icon: <AssignmentIndIcon />,
-                      parent: "loans",
-                    },
-                  },
-                  {
-                    name: "loan-portfolio-mapping",
-                    list: "/loans/portfolio-mapping",
-                    meta: {
-                      label: "Loan-Portfolio Mapping",
-                      icon: <MapIcon />,
-                      parent: "loans",
-                    },
-                  },
-                  {
-                    name: "loan-search",
-                    list: "/loans/search",
-                    meta: {
-                      label: "Advanced Search",
-                      icon: <SearchIcon />,
-                      parent: "loans",
-                    },
-                  },
-                  {
-                    name: "batch-import",
-                    list: "/batch-import",
-                    meta: {
-                      label: "Template Mapping",
-                      icon: <TravelExploreIcon />,
-                    },
-                  },
-                  {
                     name: "servicers",
                     list: "/servicers",
                     create: "/servicers/create",
@@ -247,15 +258,29 @@ function App() {
                       icon: <TrendingUpIcon />,
                     },
                   },
+                  
+                  // Import Resource
+                  {
+                    name: "import",
+                    list: "/import",
+                    meta: {
+                      label: "Data Import",
+                      icon: <FileUploadIcon />,
+                    },
+                  },
                   {
                     name: "uploads",
                     list: "/uploads",
                     create: "/uploads/create",
                     show: "/uploads/show/:id",
                     meta: {
+                      label: "File Uploads",
                       canDelete: true,
+                      icon: <FileUploadIcon />,
                     },
                   },
+                  
+                  // Admin Section
                   {
                     name: "admin",
                     list: "/admin",
@@ -267,6 +292,7 @@ function App() {
                 ]}
 
               >
+                <TitleManager />
                 <Routes>
                   <Route
                     element={
@@ -286,7 +312,10 @@ function App() {
                     }
                   >
                     <Route path="/">
-                      <Route index element={<NavigateToResource resource="portfolios" />} />
+                      <Route index element={<NavigateToResource resource="home" />} />
+                      
+                      {/* Home Dashboard */}
+                      <Route path="home" element={<HomePage />} />
                       
                       <Route path="portfolios" element={
                           <ModuleGuard module={ModuleType.LOANS} redirectTo="/unauthorized">
@@ -361,8 +390,15 @@ function App() {
                       </Route>
 
                       {/* Excel Import Module */}
-                      <Route path="import" element={<ExcelImportPage />} />
-                      <Route path="batch-import" element={<BatchImportPage />} />
+                  <Route path="import" element={
+                      <ModuleGuard module={ModuleType.ADMIN} redirectTo="/unauthorized">
+                        <Outlet />
+                      </ModuleGuard>
+                    }>
+                    <Route index element={<ImportHomePage />} />
+                    <Route path="batch" element={<BatchImportPage />} />
+                    <Route path="templates" element={<TemplateManagerPage />} />
+                  </Route>
                       
                       {/* Admin Module */}
                       <Route path="admin" element={
@@ -410,8 +446,8 @@ function App() {
                           type="login"
                           formProps={{
                             defaultValues: {
-                              email: "info@refine.dev",
-                              password: "refine-supabase",
+                              email: "user@greenwaymortgage.com",
+                              password: "password",
                             },
                           }}
                         />

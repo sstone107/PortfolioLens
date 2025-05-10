@@ -1,294 +1,286 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { 
-  Box, 
-  Button, 
-  Typography, 
-  CircularProgress, 
-  Paper, 
-  Chip,
-  LinearProgress,
-  Stack,
-  Tooltip
-} from '@mui/material';
-import { 
-  CloudUpload as CloudUploadIcon,
-  InsertDriveFile as FileIcon,
-  Description as CsvIcon,
-  TableChart as ExcelIcon
-} from '@mui/icons-material';
-import { FileReader } from './FileReader';
-import { WorkbookInfo, FileType } from './types';
+/**
+ * File uploader component for Excel/CSV imports
+ */
+import React, { useState, useRef, useCallback } from 'react';
+import { Box, Button, Typography, Paper, LinearProgress, Alert, Stack } from '@mui/material';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
+import ErrorIcon from '@mui/icons-material/Error';
+import { readFile } from './FileReader';
+import { useBatchImportStore } from '../../store/batchImportStore';
 
 interface FileUploaderProps {
-  onFileLoaded: (workbookInfo: WorkbookInfo, file: File) => void;
-  isLoading?: boolean;
+  onFileProcessed?: () => void;
+  allowedFileTypes?: string[];
+  maxFileSizeMB?: number;
 }
 
 /**
- * Component for uploading and analyzing Excel and CSV files
+ * Drag and drop file uploader with progress indication
  */
-export const FileUploader: React.FC<FileUploaderProps> = ({
-  onFileLoaded,
-  isLoading = false
+export const FileUploader: React.FC<FileUploaderProps> = ({ 
+  onFileProcessed, 
+  allowedFileTypes = ['.xlsx', '.xls', '.csv'],
+  maxFileSizeMB = 10
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [processingProgress, setProcessingProgress] = useState(0);
-  const [processingStage, setProcessingStage] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Simulate progress for better UX during file processing
-  useEffect(() => {
-    if (isLoading) {
-      const interval = setInterval(() => {
-        setProcessingProgress(prev => {
-          // Cap at 90% until actual completion
-          const newProgress = prev + (90 - prev) * 0.1;
-          return Math.min(newProgress, 90);
-        });
-        
-        // Update processing stage messages
-        if (processingProgress < 30) {
-          setProcessingStage('Reading file contents...');
-        } else if (processingProgress < 60) {
-          setProcessingStage('Analyzing data structure...');
-        } else {
-          setProcessingStage('Preparing data preview...');
-        }
-      }, 300);
-      
-      return () => {
-        clearInterval(interval);
-        // Reset to 0 when loading is complete
-        setProcessingProgress(0);
-      };
-    }
-  }, [isLoading, processingProgress]);
-
-  // Get file type icon based on extension
-  const getFileTypeIcon = (fileType: FileType) => {
-    switch (fileType) {
-      case 'xlsx':
-      case 'xls':
-        return <ExcelIcon />;
-      case 'csv':
-      case 'tsv':
-        return <CsvIcon />;
-      default:
-        return <FileIcon />;
-    }
+  const [dragActive, setDragActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Use batch import store
+  const { 
+    fileName, 
+    fileType, 
+    fileSize,
+    headerRow,
+    tablePrefix,
+    setFile, 
+    setSheets,
+    setProgress
+  } = useBatchImportStore();
+  
+  // Format bytes to human-readable size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
-
-  // Get file type label
-  const getFileTypeLabel = (fileType: FileType): string => {
-    switch (fileType) {
-      case 'xlsx':
-        return 'Excel (XLSX)';
-      case 'xls':
-        return 'Excel (XLS)';
-      case 'csv':
-        return 'CSV';
-      case 'tsv':
-        return 'TSV';
-      default:
-        return 'Unknown';
+  
+  // Handle file selection
+  const handleFile = useCallback(async (file: File) => {
+    // Reset error state
+    setError(null);
+    
+    // Validate file type
+    const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!allowedFileTypes.includes(fileExt)) {
+      setError(`Invalid file type. Please upload one of: ${allowedFileTypes.join(', ')}`);
+      return;
     }
-  };
-
-  // Handle file upload
-  const handleFileUpload = useCallback(async (file: File) => {
-    if (!file) return;
     
-    // Check file type
-    const validExtensions = ['.xlsx', '.xls', '.csv', '.tsv', '.txt'];
-    const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
-    
-    if (!hasValidExtension) {
-      setError(`Unsupported file format. Please upload a valid file (${validExtensions.join(', ')})`);
+    // Validate file size
+    const maxSizeBytes = maxFileSizeMB * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      setError(`File too large. Maximum size is ${maxFileSizeMB} MB`);
       return;
     }
     
     try {
-      setError(null);
-      setProcessingProgress(10); // Start progress indication
+      setIsLoading(true);
       
-      // Read file and extract info
-      const workbookInfo = await FileReader.readFile(file);
+      // Update progress state
+      setProgress({
+        stage: 'reading',
+        message: `Reading file: ${file.name}`,
+        percent: 10
+      });
       
-      // Complete the progress
-      setProcessingProgress(100);
+      // Read the file
+      const result = await readFile(file, {
+        headerRow,
+        tablePrefixOptions: {
+          usePrefix: !!tablePrefix,
+          prefix: tablePrefix
+        }
+      });
       
-      // Pass both the workbook info and the original file object to parent
-      onFileLoaded(workbookInfo, file);
+      // Update store with file info
+      setFile(result.fileName, result.fileType, result.fileSize);
+      
+      // Update sheets data
+      setSheets(result.sheets);
+
+      // Update progress
+      setProgress({
+        stage: 'analyzing',
+        message: 'File processed successfully, running auto-mapping...',
+        percent: 75
+      });
+
+      // Keep the analyzing stage active for a longer period to hide the UI transitions
+      // This gives more time for the TableMappingStep loading screen to fully take over
+      setTimeout(() => {
+        // This would typically be handled by a dedicated function like handleAutoMap()
+        // but we're simulating it here to auto-run sheet matching before user interaction
+        console.log("Auto-initializing table mapping...");
+
+        // Keep analysis stage running longer to prevent UI flashes
+        setProgress({
+          stage: 'analyzing',  // Keep in analyzing stage to maintain full-screen loading
+          message: 'Optimizing table mappings and preparing suggestions...',
+          percent: 85
+        });
+
+        // Only complete processing after a longer delay
+        setTimeout(() => {
+          setProgress({
+            stage: 'complete',
+            message: 'File processed and mapped successfully',
+            percent: 100
+          });
+        }, 2000); // Additional 2 second delay before showing UI
+      }, 500);
+      
+      // Trigger callback
+      if (onFileProcessed) {
+        onFileProcessed();
+      }
     } catch (err) {
-      console.error('Error reading file:', err);
-      setError(`Failed to read file: ${err instanceof Error ? err.message : String(err)}`);
-      setProcessingProgress(0);
-    }
-  }, [onFileLoaded]);
-
-  // Handle file input change
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileUpload(file);
-    }
-  }, [handleFileUpload]);
-
-  // Handle drag events
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      handleFileUpload(file);
-    }
-  }, [handleFileUpload]);
-
-  // Handle click on upload area
-  const handleUploadClick = useCallback(() => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  }, []);
-
-  return (
-    <Paper
-      elevation={3}
-      sx={{
-        p: 3,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '250px',
-        border: '2px dashed',
-        borderColor: isDragging ? 'primary.main' : 'divider',
-        borderRadius: 2,
-        backgroundColor: isDragging ? 'action.hover' : 'background.paper',
-        cursor: isLoading ? 'default' : 'pointer',
-        transition: 'all 0.2s ease-in-out',
-        position: 'relative',
-        overflow: 'hidden'
-      }}
-      onDragEnter={!isLoading ? handleDragEnter : undefined}
-      onDragLeave={!isLoading ? handleDragLeave : undefined}
-      onDragOver={!isLoading ? handleDragOver : undefined}
-      onDrop={!isLoading ? handleDrop : undefined}
-      onClick={!isLoading ? handleUploadClick : undefined}
-    >
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".xlsx,.xls,.csv,.tsv,.txt"
-        style={{ display: 'none' }}
-        disabled={isLoading}
-      />
+      setError(err instanceof Error ? err.message : 'Failed to process file');
       
-      {isLoading ? (
-        <Box sx={{ width: '100%', textAlign: 'center' }}>
-          <CircularProgress size={40} />
-          <Typography variant="body1" sx={{ mt: 2, mb: 1 }}>
-            {processingStage}
+      // Update progress to failed state
+      setProgress({
+        stage: 'failed',
+        message: err instanceof Error ? err.message : 'Failed to process file',
+        percent: 0
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [headerRow, tablePrefix, allowedFileTypes, maxFileSizeMB, onFileProcessed, setFile, setSheets, setProgress]);
+  
+  // Handle click upload
+  const handleClickUpload = () => {
+    fileInputRef.current?.click();
+  };
+  
+  // Handle file input change
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleFile(files[0]);
+    }
+  };
+  
+  // Handle drag events
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+  
+  // Handle drop event
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
+  
+  return (
+    <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+      <Box sx={{ width: '100%' }}>
+        {/* File upload area */}
+        <Box
+          onDragEnter={handleDrag}
+          onDragOver={handleDrag}
+          onDragLeave={handleDrag}
+          onDrop={handleDrop}
+          sx={{
+            border: '2px dashed',
+            borderColor: dragActive ? 'primary.main' : 'grey.400',
+            borderRadius: 2,
+            p: 4,
+            textAlign: 'center',
+            cursor: 'pointer',
+            backgroundColor: dragActive ? 'rgba(25, 118, 210, 0.04)' : 'transparent',
+            transition: 'all 0.2s',
+            '&:hover': {
+              borderColor: 'primary.main',
+              backgroundColor: 'rgba(25, 118, 210, 0.04)'
+            }
+          }}
+          onClick={handleClickUpload}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={allowedFileTypes.join(',')}
+            style={{ display: 'none' }}
+            onChange={handleChange}
+          />
+          
+          <UploadFileIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
+          
+          <Typography variant="h6" component="div" gutterBottom>
+            Drag & drop your file here
           </Typography>
-          <Box sx={{ width: '80%', mx: 'auto', mt: 2 }}>
-            <LinearProgress 
-              variant="determinate" 
-              value={processingProgress} 
-              sx={{ height: 8, borderRadius: 4 }}
-            />
-          </Box>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            or click to browse
+          </Typography>
+          
+          <Button variant="contained" disableElevation>
+            Browse Files
+          </Button>
+          
+          <Typography variant="caption" display="block" sx={{ mt: 2 }}>
+            Supported formats: {allowedFileTypes.join(', ')} (Max: {maxFileSizeMB}MB)
+          </Typography>
         </Box>
-      ) : (
-        <>
-          <CloudUploadIcon color="primary" sx={{ fontSize: 48, mb: 1 }} />
-          <Typography variant="h6" color="textPrimary">
-            Drag & Drop File
-          </Typography>
-          
-          <Stack direction="row" spacing={1} sx={{ mt: 2, mb: 2 }}>
-            <Tooltip title="Excel Workbook">
-              <Chip 
-                icon={<ExcelIcon />} 
-                label="XLSX/XLS" 
-                size="small" 
-                color="primary" 
-                variant="outlined" 
-              />
-            </Tooltip>
-            <Tooltip title="Comma Separated Values">
-              <Chip 
-                icon={<CsvIcon />} 
-                label="CSV" 
-                size="small" 
-                color="primary" 
-                variant="outlined" 
-              />
-            </Tooltip>
-            <Tooltip title="Tab Separated Values">
-              <Chip 
-                icon={<CsvIcon />} 
-                label="TSV" 
-                size="small" 
-                color="primary" 
-                variant="outlined" 
-              />
-            </Tooltip>
-          </Stack>
-          
-          <Button 
-            variant="contained" 
-            size="medium" 
-            startIcon={<CloudUploadIcon />}
-            sx={{ mt: 1 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleUploadClick();
+        
+        {/* Loading indicator */}
+        {isLoading && (
+          <Box sx={{ mt: 2 }}>
+            <LinearProgress variant="indeterminate" />
+            <Typography variant="caption" sx={{ mt: 0.5, display: 'block' }}>
+              Reading file, please wait...
+            </Typography>
+          </Box>
+        )}
+        
+        {/* Error message */}
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }} icon={<ErrorIcon />}>
+            {error}
+          </Alert>
+        )}
+        
+        {/* File info when uploaded */}
+        {fileName && !isLoading && (
+          <Stack 
+            direction="row" 
+            spacing={2} 
+            alignItems="center" 
+            sx={{ 
+              mt: 2, 
+              p: 2, 
+              borderRadius: 1, 
+              backgroundColor: 'success.light', 
+              color: 'success.contrastText' 
             }}
           >
-            Select File
-          </Button>
-        </>
-      )}
-      
-      {error && (
-        <Box 
-          sx={{ 
-            position: 'absolute', 
-            bottom: 0, 
-            left: 0, 
-            right: 0, 
-            bgcolor: 'error.light', 
-            color: 'error.contrastText',
-            p: 1,
-            textAlign: 'center'
-          }}
-        >
-          <Typography variant="body2">
-            {error}
-          </Typography>
-        </Box>
-      )}
+            <InsertDriveFileIcon />
+            <Box sx={{ flexGrow: 1 }}>
+              <Typography variant="subtitle2">{fileName}</Typography>
+              <Typography variant="caption">
+                {formatFileSize(fileSize)} • {fileType.toUpperCase()}
+              </Typography>
+            </Box>
+            <Button 
+              variant="contained" 
+              size="small" 
+              onClick={handleClickUpload}
+              sx={{ bgcolor: 'success.dark' }}
+            >
+              Replace
+            </Button>
+          </Stack>
+        )}
+      </Box>
     </Paper>
   );
 };
+
+export default FileUploader;

@@ -58,14 +58,14 @@ export const PortfolioList: React.FC<IResourceComponentsProps> = () => {
         headerName: "Investor", 
         flex: 1, 
         minWidth: 180,
-        valueGetter: (params: any) => params.row?.investor?.name || '',
+        renderCell: (params) => params.row?.investor?.name || '',
       },
       { 
         field: "servicer", 
         headerName: "Servicer", 
         flex: 1, 
         minWidth: 180,
-        valueGetter: (params: any) => params.row?.servicer?.name || '',
+        renderCell: (params) => params.row?.servicer?.name || '',
       },
       { field: "portfolio_type", headerName: "Type", flex: 1, minWidth: 120 },
       {
