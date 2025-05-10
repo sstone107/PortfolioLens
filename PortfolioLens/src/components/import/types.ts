@@ -29,68 +29,10 @@ export interface DataEnrichmentConfig {
   fallbackValue?: any; // Value to use if enrichment fails
 }
 
-/**
- * Global attributes that apply to all records in a batch
- */
-export interface GlobalAttributes {
-  id: string;
-  name: string;
-  attributes: Record<string, any>;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
-}
-
-/**
- * Sub-servicer tag for applying metadata across import batches
- */
-export interface SubServicerTag {
-  id: string;
-  name: string;
-  description?: string;
-  attributes: Record<string, any>;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/**
- * Audit trail entry for data provenance
- */
-export interface AuditTrailEntry {
-  id: string;
-  importJobId: string;
-  action: 'import' | 'update' | 'transform' | 'enrich';
-  description: string;
-  metadata: Record<string, any>;
-  timestamp: Date;
-  userId: string;
-}
-
-/**
- * Versioned mapping template
- */
-export interface MappingTemplate {
-  id: string;
-  name: string;
-  description?: string;
-  tableName: string;
-  mapping: Record<string, ColumnMapping>;
-  globalAttributes?: Record<string, any>;
-  subServicerTags?: string[];
-  version: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
-}
-
 export interface ImportMapping {
   tableName: string;
   sheet?: string;
   columns: Record<string, ColumnMapping>;
-  globalAttributes?: Record<string, any>;
-  subServicerTags?: string[];
-  templateId?: string; // Reference to a mapping template if used
 }
 
 export interface SheetInfo {
@@ -116,16 +58,12 @@ export interface ImportJob {
   sheetName: string;
   mapping: Record<string, ColumnMapping>; // Columns to MAP data into
   newColumnProposals?: NewColumnProposal[]; // Columns to CREATE
-  globalAttributes?: Record<string, any>;
-  subServicerTags?: string[];
-  templateId?: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   totalRows: number;
   processedRows: number;
   errorMessage?: string;
   createdAt: Date;
   updatedAt: Date;
-  auditTrail?: AuditTrailEntry[];
 }
 
 export interface ImportPreviewRow {
@@ -139,8 +77,6 @@ export interface ImportPreviewRow {
 export interface ImportPreview {
   columnMappings: Record<string, ColumnMapping>;
   previewRows: Record<string, ImportPreviewRow>[];
-  globalAttributes?: Record<string, any>;
-  subServicerTags?: string[];
 }
 
 // Table metadata from database
@@ -190,8 +126,6 @@ export interface ImportSettings {
   createMissingColumns: boolean;
   enableDataEnrichment?: boolean;
   applyGlobalAttributes?: boolean;
-  useSubServicerTags?: boolean;
-  createAuditTrail?: boolean;
 }
 
 // --- Common Enums for Enhanced Import ---
@@ -249,6 +183,7 @@ export interface RankedColumnSuggestion {
   confidenceScore: number; // 0.0 to 1.0 (higher is better)
   isTypeCompatible: boolean; // Whether the DB column type is compatible with inferred source type
   confidenceLevel: ConfidenceLevel; // Confidence level for the column suggestion
+  nameSimilarity: number; // Added to store raw name similarity
 }
 
 /**
@@ -289,6 +224,11 @@ export interface NewColumnProposal {
     sourceHeader?: string;
     createStructureOnly?: boolean; // if true, only schema, no data insert from this col
     is_primary_key?: boolean; // Added from BatchImporter usage
+
+    // CRITICAL ADDITIONS: New fields for better type inference and handling
+    sampleValue?: any; // Sample value from the Excel data to help with type decisions
+    preserveAsText?: boolean; // Flag indicating the column should be stored as TEXT regardless of inferred type
+    containsPipeDelimitedValues?: boolean; // Flag indicating the data has pipe-delimited values
   };
 }
 
@@ -327,6 +267,7 @@ export interface BatchColumnMapping {
   status: 'pending' | 'suggested' | 'userModified' | 'error'; // Current processing status
   reviewStatus: ReviewStatus; // User review status for this specific mapping
   errorMessage?: string;
+  userLocked?: boolean; // Flag to prevent automatic updates to user-selected mappings
 }
 
 /**
@@ -355,12 +296,14 @@ export interface BatchImportState {
   fileInfo: { name: string, size: number, type: string } | null;
   file: File | null; // <-- ADDED file property
   sheets: { [sheetName: string]: SheetProcessingState };
-  overallSchemaProposals?: SchemaProposal[]; // Aggregated schema change proposals from all sheets
-  globalStatus: GlobalStatus; // Updated status - Use the defined type
+  overallSchemaProposals?: SchemaProposal[];
+  globalStatus: GlobalStatus;
   commitProgress: { processedSheets: number, totalSheets: number, currentSheet: string | null } | null;
   error: string | null;
-  schemaCacheStatus: 'idle' | 'loading' | 'ready' | 'error';
-  importSettings: ImportSettings | null; // Added importSettings
+  schemaCacheStatus: 'idle' | 'loading' | 'ready' | 'error'; // Status of the schema cache
+  importSettings: ImportSettings | null;
+  tableInfoMap: { [tableName: string]: TableInfo };
+  databaseTables: TableInfo[];
 }
 
 /**

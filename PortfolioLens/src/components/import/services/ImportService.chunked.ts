@@ -1,6 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { ImportJob, ColumnMapping, MissingColumnInfo, ColumnType, NewColumnProposal } from '../types'; // Added NewColumnProposal
-import { MappingTemplate } from '../mapping-template.types'; // Added this line
+import { ImportJob, ColumnMapping, MissingColumnInfo, ColumnType, NewColumnProposal } from '../types';
 import { supabaseClient } from '../../../utility';
 import { MetadataService } from './MetadataService';
 import { executeSql, applyMigration } from '../../../utility/supabaseMcp';
@@ -352,20 +351,51 @@ export class ImportService {
     }
 
     console.log(`[ImportService] Applying schema changes for ${tableName} using add_columns_batch RPC`);
-    
+
+    // DEBUG: Log the raw proposals to check their types
+    console.log(`[ImportService] Raw schema proposals for ${tableName}:`,
+      JSON.stringify(proposals.map(p => ({
+        column: p.details.columnName,
+        type: p.details.sqlType,
+        sourceHeader: p.details.sourceHeader
+      })), null, 2));
+
     try {
       // Transform the proposals to the format expected by add_columns_batch
-      const transformedColumns = proposals.map(col => ({
-        name: col.details.columnName,
-        type: col.details.sqlType || 'TEXT'
-      }));
-      
+      const transformedColumns = proposals.map(col => {
+        // NOTE: We no longer need to handle pipe-delimited values as there are no actual pipe-delimited values in the data
+        // The pipe character in debug logs is just for displaying sample values and is not part of the data
+        const isPipeDelimited = false; // Previously was checking for pipe characters
+
+        // Override type if needed
+        let finalType = col.details.sqlType || 'TEXT';
+        if (isPipeDelimited) {
+          console.log(`[ImportService] FORCE OVERRIDE: Setting column ${col.details.columnName} to TEXT type (contains pipe-delimited data)`);
+          finalType = 'TEXT';
+        }
+
+        // Add special handling for numeric fields that need to be stored as text
+        if (col.details.preserveAsText && finalType === 'NUMERIC') {
+          console.log(`[ImportService] Column ${col.details.columnName} marked 'preserveAsText' - forcing TEXT type`);
+          finalType = 'TEXT';
+        }
+
+        return {
+          name: col.details.columnName,
+          type: finalType
+        };
+      });
+
+      // DEBUG: Log the transformed columns to verify types before SQL execution
+      console.log(`[ImportService] Transformed columns for ${tableName}:`,
+        JSON.stringify(transformedColumns, null, 2));
+
       // Call the add_columns_batch RPC
       const { data, error } = await supabaseClient.rpc('add_columns_batch', {
         p_table_name: tableName,
         p_columns: transformedColumns
       });
-      
+
       console.log('[ImportService] add_columns_batch RPC result:', data);
       
       // Check for errors
@@ -410,54 +440,6 @@ export class ImportService {
       return {
         success: false,
         message: `Error applying schema changes: ${error instanceof Error ? error.message : String(error)}`
-      };
-    }
-  }
-
-  /**
-   * Saves or updates a mapping template to the database.
-   * @param templateData - The mapping template data to save.
-   * @returns A result object indicating success or failure.
-   */
-  async saveMappingTemplate(
-    templateData: MappingTemplate
-  ): Promise<{ success: boolean; message: string; templateId?: string }> {
-    console.log(`[ImportService] Saving mapping template: ${templateData.templateName} (ID: ${templateData.templateId})`);
-
-    try {
-      const { supabaseClient } = await import('../../../utility/supabaseClient');
-
-      const templateToSave = {
-        ...templateData,
-        updatedAt: new Date().toISOString(),
-        createdAt: templateData.createdAt || new Date().toISOString(), // Set createdAt if not present (i.e., new template)
-      };
-
-      const { data, error } = await supabaseClient
-        .from('mapping_templates') // Assuming this table exists or will be created
-        .upsert(templateToSave, { onConflict: 'templateId' }) // Upsert based on templateId
-        .select('templateId')
-        .single();
-
-      if (error) {
-        console.error(`[ImportService] Error saving mapping template ${templateData.templateId}:`, error);
-        // Handle potential missing table error similar to storeJobMapping if needed in future
-        // For now, a generic error is thrown.
-        throw new Error(`Failed to save mapping template: ${error.message}`);
-      }
-
-      console.log(`[ImportService] Mapping template ${data?.templateId} saved successfully.`);
-      return {
-        success: true,
-        message: 'Mapping template saved successfully.',
-        templateId: data?.templateId,
-      };
-    } catch (error: any) {
-      console.error(`[ImportService] Exception while saving mapping template ${templateData.templateId}:`, error);
-      return {
-        success: false,
-        message: error.message || 'An unexpected error occurred while saving the template.',
-        templateId: templateData.templateId, // Return original ID on failure for context
       };
     }
   }

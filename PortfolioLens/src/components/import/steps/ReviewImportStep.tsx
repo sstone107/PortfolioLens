@@ -1,13 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { Box, Button, Typography, Paper, Alert, LinearProgress, Grid, FormControlLabel, Checkbox, TextField } from '@mui/material'; 
-import { PlayArrow as PlayArrowIcon, Code as CodeIcon, Save as SaveIcon } from '@mui/icons-material'; 
+import { Box, Button, Typography, Paper, Alert, LinearProgress, Grid, FormControlLabel, Checkbox } from '@mui/material'; 
+import { PlayArrow as PlayArrowIcon, Code as CodeIcon } from '@mui/icons-material'; 
 import { ImportResultsDisplay } from '../ImportResultsDisplay';
 import { WorkbookInfo, ImportSettings, MissingColumnInfo, BatchColumnMapping } from '../types'; 
-import { MappingTemplate, MappingAction, ColumnMapping as TemplateColumnMapping, SheetMapping } from '../mapping-template.types'; 
-import { v4 as uuidv4 } from 'uuid'; 
 import SchemaPreview from '../SchemaPreview';
 import { SchemaGenerator } from '../services/SchemaGenerator';
-import { executeSQL, tableExists } from '../../../utility/supabaseClient';
+import { executeSQL, tableExists, supabaseClient } from '../../../utility/supabaseClient';
 import { MetadataService } from '../services/MetadataService';
 import { SchemaCacheService } from '../services/SchemaCacheService';
 import { DatabaseService } from '../services/DatabaseService';
@@ -32,7 +30,7 @@ export interface ReviewImportStepProps {
 }
 
 /**
- * Step 4 of the import process: Review and Save Mapping Template
+ * Review Import Step: Review and Import Data
  */
 export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
   workbookInfo,
@@ -56,98 +54,11 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
   const [showSchemaPreview, setShowSchemaPreview] = useState(false);
   const [schemaCreated, setSchemaCreated] = useState(false);
 
-  // State for template saving
-  const [templateName, setTemplateName] = useState('');
-  const [templateDescription, setTemplateDescription] = useState('');
-  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
-  const [saveTemplateResult, setSaveTemplateResult] = useState<{success: boolean, message: string} | null>(null);
-
   // Instantiate services
   const dbService = new DatabaseService();
   const schemaCacheService = new SchemaCacheService(dbService);
   const metadataService = new MetadataService(schemaCacheService);
   const importService = new ImportService(metadataService);
-
-  const handleSaveTemplate = async () => {
-    if (!templateName.trim()) {
-      setSaveTemplateResult({ success: false, message: 'Template Name is required.' });
-      return;
-    }
-    setIsSavingTemplate(true);
-    setSaveTemplateResult(null);
-
-    const sheetMappingsForTemplate: SheetMapping[] = [];
-
-    for (const [sheetName, isSelected] of Object.entries(selectedSheets)) {
-      if (!isSelected) continue;
-
-      const targetTableName = sheetTableMappings[sheetName];
-      if (!targetTableName) continue;
-
-      const currentSheetMappings = columnMappings[`${sheetName}-${targetTableName}`] || {};
-      const templateColumnMappings: TemplateColumnMapping[] = [];
-
-      const sheetInfo = workbookInfo.sheets.find(s => s.name === sheetName);
-
-      for (const [_header, batchMapping] of Object.entries(currentSheetMappings)) {
-        let action;
-        switch (batchMapping.action) {
-          case 'map': action = MappingAction.MAP_TO_FIELD; break;
-          case 'skip': action = MappingAction.SKIP_FIELD; break;
-          case 'create': action = MappingAction.CREATE_NEW_FIELD; break;
-          default: action = MappingAction.SKIP_FIELD; 
-        }
-
-        const colMap: TemplateColumnMapping = {
-          sourceColumnHeader: batchMapping.header,
-          sourceColumnIndex: sheetInfo?.columns.indexOf(batchMapping.header), 
-          targetDatabaseColumn: batchMapping.mappedColumn || null,
-          mappingAction: action,
-          newFieldSqlName: action === MappingAction.CREATE_NEW_FIELD ? batchMapping.newColumnProposal?.columnName : undefined,
-          newFieldDataType: action === MappingAction.CREATE_NEW_FIELD ? batchMapping.newColumnProposal?.sqlType : undefined,
-          dataTypeHint: batchMapping.inferredDataType || undefined,
-          matchPercentage: batchMapping.confidenceScore,
-        };
-        templateColumnMappings.push(colMap);
-      }
-
-      sheetMappingsForTemplate.push({
-        sourceSheetName: sheetName,
-        targetTableName: targetTableName,
-        headerRowIndex: importSettings.useFirstRowAsHeader ? 0 : 0, 
-        dataStartRowIndex: importSettings.useFirstRowAsHeader ? 1 : 1, 
-        columnMappings: templateColumnMappings,
-      });
-    }
-
-    const templateToSave: MappingTemplate = {
-      templateId: uuidv4(),
-      templateName: templateName.trim(),
-      description: templateDescription.trim() || undefined,
-      subservicerId: subservicerId || undefined,
-      // Fix for lint error fb0140fe-8eec-4e25-8cff-4d008d3d0d5f
-      sourceFileType: (workbookInfo.fileType === 'xls' || workbookInfo.fileType === 'xlsx') ? 'xlsx' : 
-                      (workbookInfo.fileType === 'csv') ? 'csv' :
-                      'xlsx', // Default to 'xlsx' or handle error for unsupported types like 'tsv'
-      originalFileNamePattern: workbookInfo.fileName,
-      version: 1,
-      sheetMappings: sheetMappingsForTemplate,
-      createdAt: '', 
-      updatedAt: '', 
-    };
-
-    try {
-      const result = await importService.saveMappingTemplate(templateToSave);
-      setSaveTemplateResult(result);
-      if (result.success) {
-        // Optionally navigate away or reset form
-        // onStartImport(); 
-      }
-    } catch (error: any) {
-      setSaveTemplateResult({ success: false, message: error.message || 'An unexpected error occurred.' });
-    }
-    setIsSavingTemplate(false);
-  };
 
   const generateSchemaSQL = useCallback(async () => { 
     setGeneratingSchema(true);
@@ -179,50 +90,49 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" gutterBottom>
-        Review and Save Mapping Template
+        Review Import
       </Typography>
       <Typography variant="body1" paragraph>
-        You're about to save a mapping template based on the file: <strong>{workbookInfo.fileName}</strong>.
-        This template can be reused for future imports with similar file structures.
+        You're about to import data from file: <strong>{workbookInfo.fileName}</strong>
       </Typography>
 
       <Paper elevation={2} sx={{ p: 2, mt: 2, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Template Details</Typography>
+        <Typography variant="h6" gutterBottom>Import Settings</Typography>
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Template Name"
-              variant="outlined"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              required
-              error={saveTemplateResult?.success === false && !templateName.trim()}
-              helperText={saveTemplateResult?.success === false && !templateName.trim() ? 'Template Name is required.' : ''}
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={importMode === 'structureAndData'}
+                  onChange={(e) => onImportModeChange(e.target.checked ? 'structureAndData' : 'structureOnly')}
+                  disabled={isLoading}
+                />
+              }
+              label="Import data (uncheck to create table structure only)"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Description (Optional)"
-              variant="outlined"
-              value={templateDescription}
-              onChange={(e) => setTemplateDescription(e.target.value)}
-              multiline
-              rows={1} 
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={importSettings.createMissingColumns}
+                  disabled={true} // This is controlled by parent
+                />
+              }
+              label="Create missing columns automatically"
             />
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Existing schema preview section - can be kept as a review step before saving template */}
+      {/* Existing schema preview section */}
       {importMode === 'structureOnly' && (
         <Box sx={{ mb: 2 }}>
           <Button 
             variant="outlined" 
             startIcon={<CodeIcon />} 
             onClick={handleGenerateSchemaClick} 
-            disabled={generatingSchema || isLoading || isSavingTemplate}
+            disabled={generatingSchema || isLoading}
           >
             {generatingSchema ? 'Generating Schema...' : 'Preview Schema Changes (Optional)'}
           </Button>
@@ -240,25 +150,34 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
         />
       )} */}
 
-      {/* Display save template results */}
-      {saveTemplateResult && (
-        <Alert severity={saveTemplateResult.success ? 'success' : 'error'} sx={{ mt: 2 }}>
-          {saveTemplateResult.message}
-        </Alert>
+      {/* Display import progress and results */}
+      {isLoading && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="body2" gutterBottom>
+            Importing data... {importProgress}%
+          </Typography>
+          <LinearProgress variant="determinate" value={importProgress} sx={{ mt: 1, mb: 1 }} />
+        </Box>
       )}
-      {isSavingTemplate && <LinearProgress sx={{ mt: 2 }} />}
+
+      {Object.keys(saveResult).length > 0 && (
+        <ImportResultsDisplay 
+          results={saveResult} 
+          errors={saveErrors} 
+        />
+      )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <Button variant="outlined" onClick={onBack} disabled={isLoading || isSavingTemplate}>
+        <Button variant="outlined" onClick={onBack} disabled={isLoading}>
           Back
         </Button>
         <Button 
           variant="contained" 
-          startIcon={<SaveIcon />} 
-          onClick={handleSaveTemplate} 
-          disabled={isLoading || isSavingTemplate || !templateName.trim()} 
+          startIcon={<PlayArrowIcon />} 
+          onClick={onStartImport} 
+          disabled={isLoading} 
         >
-          {isSavingTemplate ? 'Saving Template...' : 'Save Mapping Template'}
+          {isLoading ? 'Importing...' : 'Start Import'}
         </Button>
       </Box>
     </Box>
