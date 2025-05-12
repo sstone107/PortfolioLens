@@ -701,23 +701,33 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
           
           <TableBody>
             {sheets.map((sheet) => (
-              <TableRow 
+              <TableRow
                 key={sheet.id}
                 sx={{ // Apply alternating row styling like ColumnMappingStep
                   backgroundColor: sheet.skip ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
-                  '&:nth-of-type(odd)': { 
+                  '&:nth-of-type(odd)': {
                     backgroundColor: sheet.skip ? 'rgba(0, 0, 0, 0.06)' : 'rgba(0, 0, 0, 0.02)'
                   },
                   '&:hover': {
                     backgroundColor: 'action.hover',
-                  }
+                  },
+                  // Add left border for sheets that need review
+                  borderLeft: sheet.needsReview && !sheet.skip ? '4px solid' : 'none',
+                  borderLeftColor: sheet.needsReview && !sheet.skip ? 'warning.light' : 'transparent'
                 }}
               >
                 {/* Sheet Name */}
                 <TableCell>
-                  <Typography fontWeight={sheet.id === selectedSheet?.id ? 'bold' : 'normal'}>
-                    {sheet.originalName}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    {sheet.needsReview && !sheet.skip && (
+                      <Tooltip title="Columns need review">
+                        <WarningIcon color="warning" fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
+                      </Tooltip>
+                    )}
+                    <Typography fontWeight={sheet.id === selectedSheet?.id ? 'bold' : 'normal'}>
+                      {sheet.originalName}
+                    </Typography>
+                  </Box>
                   {sheet.error && (
                     <Typography variant="caption" color="error">
                       Error: {sheet.error}
@@ -931,11 +941,25 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                 
                 {/* Status */}
                 <TableCell>
-                  <Chip
-                    label={getStatusLabel(sheet)}
-                    color={getStatusColor(sheet)}
-                    size="small"
-                  />
+                  {sheet.needsReview ? (
+                    <Tooltip
+                      title={`This sheet has columns that need review`}
+                      placement="top"
+                    >
+                      <Chip
+                        label={getStatusLabel(sheet)}
+                        color="warning"
+                        icon={<WarningIcon fontSize="small" />}
+                        size="small"
+                      />
+                    </Tooltip>
+                  ) : (
+                    <Chip
+                      label={getStatusLabel(sheet)}
+                      color={getStatusColor(sheet)}
+                      size="small"
+                    />
+                  )}
                 </TableCell>
                 
                 {/* Actions */}
