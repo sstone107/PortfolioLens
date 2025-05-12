@@ -266,42 +266,138 @@ export const useTableMatcher = (dbTables: any[]) => {
       isAutoMatch: false // Flag that this is a suggestion, not auto-match
     } : null;
   }, [dbTables]);
-  
+
+  // Helper function to validate if a column exists in the table schema
+  const validateColumnExists = useCallback((tableName: string, columnName: string): boolean => {
+    if (!tableName || !columnName) return false;
+
+    const table = dbTables.find(t => t.name === tableName);
+    if (!table || !table.columns) return false;
+
+    return table.columns.some((col: any) => col.name === columnName);
+  }, [dbTables]);
+
+  // Helper function to get column metadata from schema
+  const getColumnMetadata = useCallback((tableName: string, columnName: string) => {
+    if (!tableName || !columnName) return null;
+
+    const table = dbTables.find(t => t.name === tableName);
+    if (!table || !table.columns) return null;
+
+    return table.columns.find((col: any) => col.name === columnName) || null;
+  }, [dbTables]);
+
   // Find best matching columns for a sheet
   const findMatchingColumns = useCallback((sheet: SheetMapping, tableName: string) => {
     // Find table schema
     const table = dbTables.find(t => t.name === tableName);
     if (!table) return [];
-    
+
+    // Create a map of all existing column names for fast lookups
+    const existingColumnMap = new Map();
+    if (table && table.columns) {
+      table.columns.forEach((col: any) => {
+        existingColumnMap.set(col.name.toLowerCase(), col);
+      });
+    }
+
     const matches = sheet.columns.map(column => {
-      // Find best matching DB column
+      // If column already has a valid mapping, preserve it but ALWAYS use the database field's data type
+      if (column.mappedName && validateColumnExists(tableName, column.mappedName)) {
+        const metadata = getColumnMetadata(tableName, column.mappedName);
+        return {
+          ...column,
+          // IMPORTANT: Always use the database field type for existing fields
+          dataType: metadata?.type || column.dataType,
+          confidence: 100 // We trust explicit mappings
+        };
+      }
+
+      // Before doing a fuzzy match, check if the column name (after basic normalization)
+      // already exists exactly in the database
+      const basicNormalized = column.originalName
+        .toLowerCase()
+        .replace(/\s+/g, '_')    // Replace spaces with underscore
+        .replace(/[^\w_]/g, '_') // Replace non-alphanumeric/underscore with underscore
+        .replace(/_+/g, '_')     // Replace multiple underscores with single
+        .trim()
+        .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+
+      // Check for direct match in existing columns (exact or with underscores)
+      const directMatch = existingColumnMap.get(basicNormalized);
+      if (directMatch) {
+        return {
+          ...column,
+          mappedName: directMatch.name,
+          dataType: directMatch.type,
+          confidence: 100 // It's an exact match
+        };
+      }
+
+      // Find best matching DB column for unmapped columns
+      // First check for exact matches after normalization (ignoring spaces, special chars, underscores)
       const columnMatches = table.columns.map((dbColumn: any) => {
         const similarity = calculateSimilarity(column.originalName, dbColumn.name);
         return {
           columnName: dbColumn.name,
           dataType: dbColumn.type,
-          confidence: similarity
+          confidence: Math.min(100, similarity) // Cap at 100% to avoid values over 100
         };
       });
-      
+
       // Sort by confidence
       columnMatches.sort((a: any, b: any) => b.confidence - a.confidence);
-      
-      // Get best match if confidence is high enough
+
+      // Get best match if confidence is high enough (70% or higher)
       const bestMatch = columnMatches[0]?.confidence >= 70 ? columnMatches[0] : null;
-      
-      return {
-        ...column,
-        mappedName: bestMatch ? bestMatch.columnName : normalizeForDb(column.originalName),
-        dataType: bestMatch ? bestMatch.dataType : column.dataType,
-        confidence: bestMatch ? bestMatch.confidence : 0
-      };
+
+      // If we found a high-confidence match to an existing field, ALWAYS use that field's data type
+      if (bestMatch) {
+        return {
+          ...column,
+          mappedName: bestMatch.columnName,
+          dataType: bestMatch.dataType, // Use database field type for existing fields
+          confidence: bestMatch.confidence
+        };
+      } else {
+        // For new fields - handle numeric prefixes by checking if the field already exists
+        const normalizedName = normalizeForDb(column.originalName);
+
+        // Handle the case with numeric prefixes - check if there's an existing column
+        // with the same name after normalization (but without the col_ prefix)
+        if (/^col_\d/.test(normalizedName)) {
+          // Try without the col_ prefix and see if it exists in the table schema
+          const unprefixedName = normalizedName.substring(4); // Remove 'col_'
+          // Check if this unprefixed name exists in our database
+          if (table.columns.some((col: any) => col.name === unprefixedName)) {
+            return {
+              ...column,
+              mappedName: unprefixedName,
+              dataType: existingColumnMap.get(unprefixedName)?.type || column.dataType,
+              confidence: 90 // High confidence but not a perfect match
+            };
+          }
+        }
+
+        // Default case - create new field
+        return {
+          ...column,
+          mappedName: normalizedName,
+          // Keep existing data type for new fields
+          confidence: 0
+        };
+      }
     });
-    
+
     return matches;
-  }, [dbTables]);
-  
-  return { findBestMatchingTable, findMatchingColumns };
+  }, [dbTables, validateColumnExists, getColumnMetadata]);
+
+  return {
+    findBestMatchingTable,
+    findMatchingColumns,
+    validateColumnExists,
+    getColumnMetadata
+  };
 };
 
 /**

@@ -188,54 +188,57 @@ function App() {
                     },
                   },
                   
-                  // Partner Resources - Business Relationships
+                  // New Partners Parent Menu Item
                   {
-                    name: "partners",
-                    list: "/partners",
+                    name: "partners_menu", // Unique name for the menu item itself
                     meta: {
                       label: "Partners",
-                      icon: <HandshakeIcon />,
+                      icon: <HandshakeIcon />, // Using the imported HandshakeIcon
                     },
                   },
-                  {
-                    name: "doc_custodians",
-                    list: "/partners?tab=0",
-                    create: "/partners/doc-custodians/create",
-                    edit: "/partners/doc-custodians/edit/:id",
-                    show: "/partners/doc-custodians/show/:id",
-                    meta: {
-                      label: "Doc Custodians",
-                      icon: <FolderSpecialIcon />,
-                      canDelete: true,
-                      parent: "partners",
-                    },
-                  },
-                  {
-                    name: "sellers",
-                    list: "/partners?tab=1",
-                    create: "/partners/sellers/create",
-                    edit: "/partners/sellers/edit/:id",
-                    show: "/partners/sellers/show/:id",
-                    meta: {
-                      label: "Sellers",
-                      icon: <StorefrontIcon />,
-                      canDelete: true,
-                      parent: "partners",
-                    },
-                  },
-                  {
-                    name: "prior_servicers",
-                    list: "/partners?tab=2",
-                    create: "/partners/prior-servicers/create",
-                    edit: "/partners/prior-servicers/edit/:id",
-                    show: "/partners/prior-servicers/show/:id",
-                    meta: {
-                      label: "Prior Servicers",
-                      icon: <SupportAgentIcon />,
-                      canDelete: true,
-                      parent: "partners",
-                    },
-                  },
+                  // Doc Custodians Resource (now under Partners)
+                   {
+                     name: "doc_custodians",
+                     list: "/partners?tab=0", // Keep original list path logic
+                     create: "/partners/doc-custodians/create",
+                     edit: "/partners/doc-custodians/edit/:id",
+                     show: "/partners/doc-custodians/show/:id",
+                     meta: {
+                       label: "Doc Custodians",
+                       icon: <FolderSpecialIcon />,
+                       canDelete: true,
+                       parent: "partners_menu", // Nest under the new Partners item
+                     },
+                   },
+                   // Sellers Resource (now under Partners)
+                   {
+                     name: "sellers",
+                     list: "/partners?tab=1", // Keep original list path logic
+                     create: "/partners/sellers/create",
+                     edit: "/partners/sellers/edit/:id",
+                     show: "/partners/sellers/show/:id",
+                     meta: {
+                       label: "Sellers",
+                       icon: <StorefrontIcon />,
+                       canDelete: true,
+                       parent: "partners_menu", // Nest under the new Partners item
+                     },
+                   },
+                   // Prior Servicers Resource (now under Partners)
+                   {
+                     name: "prior_servicers",
+                     list: "/partners?tab=2", // Keep original list path logic
+                     create: "/partners/prior-servicers/create",
+                     edit: "/partners/prior-servicers/edit/:id",
+                     show: "/partners/prior-servicers/show/:id",
+                     meta: {
+                       label: "Prior Servicers",
+                       icon: <SupportAgentIcon />, // Original icon
+                       canDelete: true,
+                       parent: "partners_menu", // Nest under the new Partners item
+                     },
+                   },
+                  // Servicers Resource (now under Partners)
                   {
                     name: "servicers",
                     list: "/servicers",
@@ -244,9 +247,11 @@ function App() {
                     show: "/servicers/show/:id",
                     meta: {
                       canDelete: true,
-                      icon: <AccountBalanceIcon />,
+                      icon: <AccountBalanceIcon />, // Restoring original icon
+                      parent: "partners_menu", // Nest under the new Partners item
                     },
                   },
+                  // Investors Resource (now under Partners)
                   {
                     name: "investors",
                     list: "/investors",
@@ -256,9 +261,20 @@ function App() {
                     meta: {
                       canDelete: true,
                       icon: <TrendingUpIcon />,
+                      parent: "partners_menu", // Nest under the new Partners item
                     },
                   },
-                  
+                  // Existing Partners Resource (routes only, no top-level menu item)
+                  {
+                     name: "partners", // This resource handles the routing for /partners/*
+                     list: "/partners", // Base path for the partners page
+                     // No create/edit/show at the top level for this route group
+                     meta: {
+                       // This resource might not need direct menu representation if handled by specific sub-routes or a dedicated page
+                       // For now, assuming it's just for routing as before. Let's hide it from the main menu explicitly.
+                       hide: true, 
+                     },
+                  },
                   // Import Resource
                   {
                     name: "import",
@@ -268,18 +284,6 @@ function App() {
                       icon: <FileUploadIcon />,
                     },
                   },
-                  {
-                    name: "uploads",
-                    list: "/uploads",
-                    create: "/uploads/create",
-                    show: "/uploads/show/:id",
-                    meta: {
-                      label: "File Uploads",
-                      canDelete: true,
-                      icon: <FileUploadIcon />,
-                    },
-                  },
-                  
                   // Admin Section
                   {
                     name: "admin",

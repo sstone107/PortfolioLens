@@ -11,6 +11,9 @@ export interface ColumnMapping {
   confidence: number;
   originalIndex: number;
   sample?: unknown[];
+  inferredDataType?: string;
+  createNewValue?: string;
+  needsReview?: boolean;
 }
 
 export interface SheetMapping {
@@ -74,10 +77,14 @@ export interface BatchImportState {
   // Import settings
   headerRow: number;
   tablePrefix: string;
-  
+
   // Templates
   templates: MappingTemplate[];
   selectedTemplateId: string | null;
+
+  // Similarity cache
+  similarityMatrix: Record<string, Record<string, number>>;
+  bestMatches: Record<string, { field: string; score: number }>;
   
   // Results
   importResults: {
@@ -92,11 +99,16 @@ export interface BatchImportState {
   // Actions
   setFile: (fileName: string, fileType: string, fileData: ArrayBuffer, fileSize: number) => void;
   clearFile: () => void;
-  
+
   setSheets: (sheets: SheetMapping[]) => void;
   updateSheet: (sheetId: string, updates: Partial<SheetMapping>) => void;
   updateSheetColumn: (sheetId: string, originalName: string, updates: Partial<ColumnMapping>) => void;
+  batchUpdateSheetColumns: (sheetId: string, updates: Record<string, Partial<ColumnMapping>>) => void;
   setSelectedSheetId: (id: string | null) => void;
+
+  // Similarity related actions
+  setSimilarityMatrix: (matrix: Record<string, Record<string, number>>) => void;
+  setBestMatches: (matches: Record<string, { field: string; score: number }>) => void;
   
   setProgress: (progress: Partial<ImportProgress>) => void;
   
@@ -135,10 +147,13 @@ const initialState: Omit<BatchImportState, 'setFile' | 'clearFile' | 'setSheets'
   
   headerRow: 0,
   tablePrefix: '',
-  
+
   templates: [],
   selectedTemplateId: null,
-  
+
+  similarityMatrix: {},
+  bestMatches: {},
+
   importResults: {
     success: false,
     createdTables: [],
@@ -177,20 +192,73 @@ export const useBatchImportStore = create<BatchImportState>()(
         ),
       })),
       
-      updateSheetColumn: (sheetId, originalName, updates) => set((state) => ({
-        sheets: state.sheets.map((sheet) => 
-          sheet.id === sheetId 
-            ? {
-                ...sheet,
-                columns: sheet.columns.map((column) => 
-                  column.originalName === originalName 
-                    ? { ...column, ...updates } 
-                    : column
-                ),
-              } 
-            : sheet
-        ),
-      })),
+      updateSheetColumn: (sheetId, originalName, updates) => set((state) => {
+        const sheetIndex = state.sheets.findIndex(sheet => sheet.id === sheetId);
+        if (sheetIndex === -1) return state;
+
+        const columnIndex = state.sheets[sheetIndex].columns.findIndex(
+          column => column.originalName === originalName
+        );
+        if (columnIndex === -1) return state;
+
+        // Create new sheets array
+        const newSheets = [...state.sheets];
+
+        // Create new sheet with new columns array
+        const newSheet = {
+          ...newSheets[sheetIndex],
+          columns: [...newSheets[sheetIndex].columns]
+        };
+
+        // Update the specific column with new properties
+        newSheet.columns[columnIndex] = {
+          ...newSheet.columns[columnIndex],
+          ...updates
+        };
+
+        // Replace the sheet in the array
+        newSheets[sheetIndex] = newSheet;
+
+        // Return updated state
+        return { ...state, sheets: newSheets };
+      }),
+
+      batchUpdateSheetColumns: (sheetId, updates) => set((state) => {
+        // Create a new copy of the sheets array
+        const sheetIndex = state.sheets.findIndex(sheet => sheet.id === sheetId);
+        if (sheetIndex === -1) return state; // Sheet not found
+
+        // Create a new copy of the sheet and its columns
+        const updatedSheet = {
+          ...state.sheets[sheetIndex],
+          columns: [...state.sheets[sheetIndex].columns]
+        };
+
+        // Update each column in a single state change
+        Object.entries(updates).forEach(([originalName, columnUpdates]) => {
+          const columnIndex = updatedSheet.columns.findIndex(
+            column => column.originalName === originalName
+          );
+
+          if (columnIndex !== -1) {
+            // Create a new column with updates applied
+            updatedSheet.columns[columnIndex] = {
+              ...updatedSheet.columns[columnIndex],
+              ...columnUpdates
+            };
+          }
+        });
+
+        // Create a new sheets array with the updated sheet
+        const newSheets = [...state.sheets];
+        newSheets[sheetIndex] = updatedSheet;
+
+        // Return the new state
+        return {
+          ...state,
+          sheets: newSheets
+        };
+      }),
       
       setSelectedSheetId: (id) => set({ selectedSheetId: id }),
       
@@ -203,9 +271,14 @@ export const useBatchImportStore = create<BatchImportState>()(
       setTablePrefix: (tablePrefix) => set({ tablePrefix }),
       
       setTemplates: (templates) => set({ templates }),
-      
+
       setSelectedTemplateId: (selectedTemplateId) => set({ selectedTemplateId }),
-      
+
+      // Similarity matrix actions
+      setSimilarityMatrix: (matrix) => set({ similarityMatrix: matrix }),
+
+      setBestMatches: (matches) => set({ bestMatches: matches }),
+
       setImportResults: (results) => set((state) => ({ 
         importResults: { ...state.importResults, ...results } 
       })),
@@ -215,8 +288,13 @@ export const useBatchImportStore = create<BatchImportState>()(
       }),
       
       setMappingInProgress: (mappingInProgress) => set({ mappingInProgress }),
-      
-      reset: () => set(initialState),
+
+      reset: () => set(state => ({
+        ...initialState,
+        // Keep the similarity matrix when resetting
+        similarityMatrix: state.similarityMatrix,
+        bestMatches: state.bestMatches,
+      })),
     }),
     { name: 'batch-import-store' }
   )

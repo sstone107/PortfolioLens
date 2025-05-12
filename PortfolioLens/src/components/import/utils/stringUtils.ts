@@ -22,16 +22,30 @@ export const normalizeString = (str: string): string => {
     .trim();
 };
 
+// Keep track of existing table columns for lookup (to be set externally)
+let existingDbColumns: Set<string> = new Set();
+
+/**
+ * Set the existing DB columns for lookup during normalization
+ * This allows normalizeForDb to avoid prefixing existing numeric fields
+ */
+export const setExistingColumns = (columns: string[]) => {
+  existingDbColumns = new Set(columns.map(name => name.toLowerCase()));
+};
+
 /**
  * Normalize a column or table name for database use:
  * - Convert to lowercase
  * - Replace spaces/special chars with underscores
  * - Remove duplicate underscores
- * - Ensure it starts with a letter
+ * - Ensure it starts with a letter (only if not already in database)
+ *
+ * @param str The string to normalize
+ * @param checkExisting Whether to check against existing DB columns
  */
-export const normalizeForDb = (str: string): string => {
+export const normalizeForDb = (str: string, checkExisting: boolean = true): string => {
   if (!str) return '';
-  
+
   // First normalize the string
   let normalized = str
     .toLowerCase()
@@ -40,12 +54,19 @@ export const normalizeForDb = (str: string): string => {
     .replace(/_+/g, '_')      // Replace multiple underscores with single
     .trim()
     .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
-  
-  // If it starts with a digit, prefix with "col_"
+
+  // Check if the normalized string starts with a digit
   if (/^\d/.test(normalized)) {
+    // Check if this exact column name already exists in the database
+    // If it does, don't add the col_ prefix - respect the existing name
+    if (checkExisting && existingDbColumns.has(normalized)) {
+      return normalized; // Keep existing name even if it starts with a digit
+    }
+
+    // Otherwise follow standard SQL naming conventions - prefix with col_
     normalized = 'col_' + normalized;
   }
-  
+
   return normalized;
 };
 
@@ -104,13 +125,13 @@ export const extractUnitFromHeader = (str: string): { name: string; unit: string
 /**
  * Enhanced string normalization for matching
  * Strips out all non-alphanumeric characters and converts to lowercase
+ * This is the strict normalization that ignores spaces, special chars, and underscores
  */
 export const normalizeForMatching = (str: string): string => {
   if (!str) return '';
-  
+
   // Convert to lowercase
-  // Remove all non-alphanumeric characters
-  // Remove all whitespace
+  // Remove all non-alphanumeric characters (spaces, underscores, special chars, etc.)
   return str
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
@@ -119,18 +140,26 @@ export const normalizeForMatching = (str: string): string => {
 
 /**
  * Calculate string similarity as a percentage (0-100)
- * Using enhanced normalization and Levenshtein distance
+ * Using enhanced normalization and specialized heuristics for column matching
  */
 export const calculateSimilarity = (str1: string, str2: string): number => {
   if (!str1 && !str2) return 100;
   if (!str1 || !str2) return 0;
-  
-  // Check for direct match after aggressive normalization first
+
+  // Check for direct match after aggressive normalization first (ignoring all non-alphanumeric chars)
+  // This handles cases like "P & I Payment" matching "PIPayment" or "P_I_Payment"
   const strictNorm1 = normalizeForMatching(str1);
   const strictNorm2 = normalizeForMatching(str2);
 
-  // If they're exactly the same after normalization, it's a 100% match
-  if (strictNorm1 === strictNorm2) return 100;
+  // If they're exactly the same after stripping all non-alphanumeric chars, it's a 100% match
+  if (strictNorm1 === strictNorm2 && strictNorm1.length > 0) {
+    return 100;
+  }
+
+  // Case where both are normalized to empty strings but weren't originally empty
+  if (strictNorm1 === '' && strictNorm2 === '' && str1 !== '' && str2 !== '') {
+    return 90; // High match for special character only names
+  }
 
   // Check for common Excel to DB name patterns
   // "Loan Information" → "loan_information"
@@ -139,44 +168,48 @@ export const calculateSimilarity = (str1: string, str2: string): number => {
   if (normalizeForDb(str1).replace(/_/g, '') === normalizeForDb(str2).replace(/_/g, '')) {
     return 100; // These are essentially the same in database context
   }
-  
-  // Common transformations that should be considered very high matches
-  // Database column name conversions (e.g., "Loan Information" → "loan_information")
-  const dbForm1 = normalizeForDb(str1).replace(/_/g, '');
-  const dbForm2 = normalizeForDb(str2).replace(/_/g, '');
-  
-  if (dbForm1 === dbForm2) return 98; // Almost perfect match
-  
-  // Check for special cases:
-  // 1. Pluralization differences
+
+  // Handle pluralization (loans vs loan)
   if (
-    (strictNorm1 + 's' === strictNorm2) || 
+    (strictNorm1 + 's' === strictNorm2) ||
     (strictNorm2 + 's' === strictNorm1) ||
     (strictNorm1.endsWith('s') && strictNorm1.slice(0, -1) === strictNorm2) ||
     (strictNorm2.endsWith('s') && strictNorm2.slice(0, -1) === strictNorm1)
   ) {
     return 95; // Pluralization differences are high confidence
   }
-  
-  // 2. One string contains the other completely
+
+  // Handle substring containment (loanAmount vs amount)
+  // Calculate containment score - weight by length ratio
   if (strictNorm1.includes(strictNorm2) || strictNorm2.includes(strictNorm1)) {
-    const containmentRatio = Math.min(strictNorm1.length, strictNorm2.length) / 
-                             Math.max(strictNorm1.length, strictNorm2.length);
-    // Return a scaled value based on length ratio
-    return Math.round(90 * containmentRatio);
+    // Calculate containment ratio based on length
+    const containedStr = strictNorm1.length < strictNorm2.length ? strictNorm1 : strictNorm2;
+    const containerStr = strictNorm1.length < strictNorm2.length ? strictNorm2 : strictNorm1;
+
+    // Simple cases: one is fully contained in the other
+    if (containerStr.startsWith(containedStr) || containerStr.endsWith(containedStr)) {
+      // Beginning or end is a stronger match
+      const ratio = containedStr.length / containerStr.length;
+      return Math.min(90, Math.round(85 + (ratio * 10)));
+    } else {
+      // Middle containment is a bit weaker
+      const ratio = containedStr.length / containerStr.length;
+      return Math.min(85, Math.round(75 + (ratio * 15)));
+    }
   }
-  
+
   // For all other cases, use Levenshtein distance on normalized strings
   const normStr1 = normalizeString(str1);
   const normStr2 = normalizeString(str2);
-  
+
   const maxLength = Math.max(normStr1.length, normStr2.length);
   if (maxLength === 0) return 100;
-  
+
   const distance = levenshtein.get(normStr1, normStr2);
   const similarity = Math.max(0, 100 - Math.floor((distance / maxLength) * 100));
-  
-  return similarity;
+
+  // Cap at 100%
+  return Math.min(100, similarity);
 };
 
 /**

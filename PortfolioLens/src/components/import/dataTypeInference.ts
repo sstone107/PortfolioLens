@@ -6,13 +6,15 @@
 import { normalizeString } from './utils/stringUtils';
 
 // Available Supabase data types
-export type SupabaseDataType = 
-  | 'text' 
-  | 'numeric' 
-  | 'integer' 
-  | 'boolean' 
-  | 'date' 
-  | 'timestamp' 
+export type SupabaseDataType =
+  | 'text'
+  | 'numeric'
+  | 'integer'
+  | 'boolean'
+  | 'date'
+  | 'timestamp'
+  | 'timestamp without time zone'
+  | 'timestamp with time zone'
   | 'uuid';
 
 // Type inference result

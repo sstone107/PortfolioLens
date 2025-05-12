@@ -474,8 +474,8 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         }}
       >
         <AutoAwesomeIcon
-          color="primary"
           sx={{
+            color: '#4caf50', // medium green to match progress bar
             fontSize: 80,
             mb: 4,
             animation: 'pulse 1.5s infinite ease-in-out',
@@ -487,7 +487,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
           }}
         />
 
-        <Typography variant="h4" gutterBottom fontWeight="medium" color="primary.main">
+        <Typography variant="h4" gutterBottom fontWeight="medium" sx={{ color: '#4caf50' }}>
           Processing Your Data
         </Typography>
 
@@ -500,11 +500,82 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         </Typography>
 
         <Box sx={{ width: '100%', maxWidth: 500, mb: 4 }}>
-          <LinearProgress
-            variant={progress.percent ? "determinate" : "indeterminate"}
-            value={progress.percent}
-            sx={{ height: 12, borderRadius: 2 }}
-          />
+          {/* Animated green progress bar */}
+          <Box sx={{
+            position: 'relative',
+            height: 16,
+            borderRadius: 3,
+            backgroundColor: '#e8f5e9', // light green background
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+            overflow: 'hidden'
+          }}>
+            {/* Custom animation for indeterminate progress */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: '100%',
+                borderRadius: 3,
+                overflow: 'hidden'
+              }}
+            >
+              {/* First moving gradient */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  height: '100%',
+                  width: '50%',
+                  backgroundImage: 'linear-gradient(90deg, #43a047, #66bb6a)',
+                  boxShadow: '0 0 8px rgba(76,175,80,0.5)',
+                  borderRadius: 3,
+                  animation: 'gradient-slide1 1.6s infinite ease-in-out',
+                  '@keyframes gradient-slide1': {
+                    '0%': { transform: 'translateX(-100%)' },
+                    '100%': { transform: 'translateX(200%)' }
+                  }
+                }}
+              />
+
+              {/* Second moving gradient (slightly delayed) */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: '-25%',
+                  height: '100%',
+                  width: '40%',
+                  backgroundImage: 'linear-gradient(90deg, #66bb6a, #81c784)',
+                  boxShadow: '0 0 8px rgba(76,175,80,0.5)',
+                  borderRadius: 3,
+                  animation: 'gradient-slide2 1.6s 0.3s infinite ease-in-out',
+                  '@keyframes gradient-slide2': {
+                    '0%': { transform: 'translateX(-100%)' },
+                    '100%': { transform: 'translateX(300%)' }
+                  }
+                }}
+              />
+
+              {/* Shimmer effect for extra polish */}
+              <Box sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                height: '100%',
+                width: '100%',
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+                animation: 'shimmer 2s infinite',
+                '@keyframes shimmer': {
+                  '0%': { transform: 'translateX(-100%)' },
+                  '100%': { transform: 'translateX(100%)' }
+                }
+              }} />
+            </Box>
+          </Box>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
@@ -614,7 +685,15 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
               <TableCell>Sheet Name</TableCell>
               <TableCell>Database Table</TableCell>
               <TableCell>Header Row</TableCell>
-              <TableCell>Skip</TableCell>
+              <TableCell sx={{
+                pr: 2,
+                pl: 2,
+                textAlign: 'center',
+                backgroundColor: 'transparent',
+                width: 100, // Give it a fixed width like ColumnMappingStep
+              }}>
+                Skip
+              </TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
@@ -624,8 +703,11 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
             {sheets.map((sheet) => (
               <TableRow 
                 key={sheet.id}
-                sx={{ 
-                  backgroundColor: getRowBackground(sheet),
+                sx={{ // Apply alternating row styling like ColumnMappingStep
+                  backgroundColor: sheet.skip ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                  '&:nth-of-type(odd)': { 
+                    backgroundColor: sheet.skip ? 'rgba(0, 0, 0, 0.06)' : 'rgba(0, 0, 0, 0.02)'
+                  },
                   '&:hover': {
                     backgroundColor: 'action.hover',
                   }
@@ -794,18 +876,56 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                   />
                 </TableCell>
                 
-                {/* Skip Toggle */}
-                <TableCell>
+                {/* Skip Toggle - Styled to match ColumnMappingStep */}
+                <TableCell sx={{
+                  pr: 2,
+                  pl: 2,
+                  textAlign: 'center',
+                  backgroundColor: sheet.skip ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                  width: 100, // Give it a fixed width like ColumnMappingStep
+                }}>
                   <FormControlLabel
                     control={
                       <Switch
                         checked={sheet.skip}
                         onChange={(e) => handleSkipToggle(sheet.id, e.target.checked)}
                         size="small"
+                        color={sheet.skip ? "default" : "success"} // Match dynamic color
+                        sx={{ // Match custom switch styling
+                          '& .MuiSwitch-switchBase': {
+                            padding: '3px'
+                          },
+                          '& .MuiSwitch-thumb': {
+                            width: 16,
+                            height: 16
+                          },
+                          '& .MuiSwitch-track': {
+                            borderRadius: 10,
+                            opacity: 0.8,
+                            backgroundColor: sheet.skip ? '#bdbdbd' : undefined
+                          },
+                          mr: 0.5 // Keep slight margin before label
+                        }}
                       />
                     }
-                    label={sheet.skip ? "Skipped" : "Import"}
-                    sx={{ m: 0 }}
+                    label={
+                      <Typography
+                        variant="caption"
+                        sx={{ // Match custom label styling
+                          fontSize: '0.7rem',
+                          whiteSpace: 'nowrap',
+                          fontWeight: 'medium',
+                          color: sheet.skip ? 'text.secondary' : 'success.main'
+                        }}
+                      >
+                        {sheet.skip ? "Skipped" : "Import"}
+                      </Typography>
+                    }
+                    sx={{ 
+                      m: 0, // Remove default margins
+                      display: 'inline-flex', // Ensure proper alignment
+                      alignItems: 'center',
+                    }}
                   />
                 </TableCell>
                 
