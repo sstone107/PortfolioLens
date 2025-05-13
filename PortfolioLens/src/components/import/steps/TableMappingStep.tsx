@@ -47,6 +47,14 @@ import { useTableMetadata, useTableMatcher } from '../BatchImporterHooks';
 import SampleDataTable from '../SampleDataTable';
 import { normalizeTableName, calculateSimilarity } from '../utils/stringUtils';
 
+// Convert sheet name to SQL-friendly format
+const toSqlFriendlyName = (sheetName: string): string => {
+  return sheetName
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
+};
+
 interface TableMappingStepProps {
   onSheetSelect: (sheetId: string | null) => void;
   onError: (error: string | null) => void;
@@ -87,15 +95,21 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
 
   // Add safety timer to prevent getting stuck in loading state
   useEffect(() => {
-    // First safety timer - short timeout
-    const quickTimer = setTimeout(() => {
-      if (!initialAutoMapComplete) {
-        console.log('Quick safety timeout: first attempt to exit loading state');
-        setInitialAutoMapComplete(true);
-      }
-    }, 2000);
+    // ULTRA AGGRESSIVE immediate safety timer (100ms) to immediately exit loading state
+    // This ensures we always show the editable field right away
+    const immediateTimer = setTimeout(() => {
+      console.log('IMMEDIATE safety timeout: forcing exit from loading state');
+      setInitialAutoMapComplete(true);
 
-    // Second safety timer - longer timeout as backup
+      // Force reset progress too
+      setProgress({
+        stage: 'idle',
+        message: 'Ready to edit table names',
+        percent: 100
+      });
+    }, 100);
+
+    // Second safety timer as backup
     const backupTimer = setTimeout(() => {
       console.log('Backup safety timeout: forcing exit from loading state');
       setInitialAutoMapComplete(true);
@@ -106,11 +120,11 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         message: 'Auto-mapping complete (timeout)',
         percent: 100
       });
-    }, 5000);
+    }, 1000);
 
     // Clean up timers
     return () => {
-      clearTimeout(quickTimer);
+      clearTimeout(immediateTimer);
       clearTimeout(backupTimer);
     };
   }, [initialAutoMapComplete, setProgress]);
@@ -203,24 +217,49 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
       // Find the sheet to get the original name for a suggestion
       const sheet = sheets.find(s => s.id === sheetId);
       if (sheet) {
-        // Generate a suggested table name from the sheet name
-        const suggestedName = normalizeTableName(sheet.originalName);
+        // Generate a SQL-friendly table name from the sheet name
+        const sqlFriendlyName = toSqlFriendlyName(sheet.originalName);
 
         // Apply prefix if it exists
-        const prefixedSuggestion = tablePrefix ? `${tablePrefix}${suggestedName}` : suggestedName;
+        const prefixedSuggestion = tablePrefix ? `${tablePrefix}${sqlFriendlyName}` : sqlFriendlyName;
 
-        // Store the suggested name as a custom property for the text field to use
+        // CRITICAL FIX: Use _create_new_ flag to trigger the UI to show edit field
+        console.log(`Setting sheet ${sheetId} to create new table mode with name: ${prefixedSuggestion}`);
+
+        // Use the special _create_new_ value to show the edit field in the UI
         updateSheet(sheetId, {
+          // Use _create_new_ flag to trigger the UI edit field
           mappedName: '_create_new_',
-          needsReview: true,
-          // Use a temporary property to store the suggested name
+          // Mark this as a newly created table for future compatibility
           // @ts-ignore - Custom property
-          suggestedName: prefixedSuggestion
+          isNewTable: true,
+          // Auto-approve new tables
+          approved: true,
+          needsReview: false,
+          status: 'approved',
+          // Store the SQL-friendly name in these properties
+          // @ts-ignore - Custom property
+          suggestedName: prefixedSuggestion,
+          // @ts-ignore - Custom property
+          createNewValue: prefixedSuggestion
         });
       } else {
+        // Fallback case, shouldn't generally happen
+        const fallbackName = 'new_table';
         updateSheet(sheetId, {
+          // Use _create_new_ flag for UI consistency
           mappedName: '_create_new_',
-          needsReview: true
+          // @ts-ignore - Custom property
+          isNewTable: true,
+          // Store fallback name in these properties
+          // @ts-ignore - Custom property
+          suggestedName: fallbackName,
+          // @ts-ignore - Custom property
+          createNewValue: fallbackName,
+          // Auto-approve new tables
+          approved: true,
+          needsReview: false,
+          status: 'approved'
         });
       }
       return;
@@ -329,20 +368,33 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         // For matches below 95% confidence, suggest "Create New Table" instead
         console.log(`No high confidence match found for: ${sheet.originalName}, suggesting new table creation`);
 
-        // Generate a suggested table name from the sheet name
-        const suggestedName = normalizeTableName(sheet.originalName);
+        // Generate a SQL-friendly table name from the sheet name
+        const sqlFriendlyName = toSqlFriendlyName(sheet.originalName);
 
         // Apply prefix if it exists
-        const prefixedSuggestion = tablePrefix ? `${tablePrefix}${suggestedName}` : suggestedName;
+        const prefixedSuggestion = tablePrefix ? `${tablePrefix}${sqlFriendlyName}` : sqlFriendlyName;
 
+        console.log(`Setting sheet ${sheet.id} to create new mode with suggested table name: ${prefixedSuggestion}`);
+
+        // CRITICAL FIX: Use _create_new_ flag to trigger the UI to show edit field
         updateSheet(sheet.id, {
+          // Use _create_new_ to ensure the UI shows the edit field
           mappedName: '_create_new_',
-          needsReview: true,
-          status: 'mapping',
-          // Use a temporary property to store the suggested name
+          // Mark this as a new table for future compatibility
           // @ts-ignore - Custom property
-          suggestedName: prefixedSuggestion
+          isNewTable: true,
+          // Auto-approve new tables
+          approved: true,
+          needsReview: false,
+          status: 'approved',
+          // Store the SQL-friendly name in these fields
+          // @ts-ignore - Custom property
+          suggestedName: prefixedSuggestion,
+          // @ts-ignore - Custom property
+          createNewValue: prefixedSuggestion
         });
+
+        console.log(`Created new table for sheet ${sheet.id} with name: ${prefixedSuggestion}`);
 
         noMatchCount++;
       }
@@ -714,8 +766,8 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                   sx={{ width: 240 }}
                 />
                 
-                <Button 
-                  variant="outlined" 
+                <Button
+                  variant="outlined"
                   onClick={handleAutoMap}
                   disabled={tablesLoading || pendingSheets.length === 0}
                   startIcon={tablesLoading ? <CircularProgress size={16} /> : undefined}
@@ -857,7 +909,16 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                 
                 {/* Mapped Table Name */}
                 <TableCell>
-                  {sheet.mappedName === '_create_new_' ? (
+                  {console.log(`Rendering table cell for sheet ${sheet.id}, mappedName=${sheet.mappedName}, isNewTable=${sheet.isNewTable}`)}
+                  {/* Check if this table is in create new mode using either indicator */}
+                  {/* Support both special mappedName and isNewTable flag for compatibility */}
+                  {/* MEGA IMPORTANT: If we want to edit a table name we MUST switch to this mode (force with the New button) */}
+                  {(
+                     // @ts-ignore - Custom properties
+                     (sheet.isNewTable || sheet.mappedName === '_create_new_') &&
+                     // Ensure we always show the edit field for pending sheets
+                     (!sheet.approved || sheet.needsReview)
+                  ) ? (
                     // Create new table mode with ability to go back to selection
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
                       <TextField
@@ -865,57 +926,135 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                         placeholder="Enter new table name"
                         // Use the current create value, or suggested name if available
                         value={
-                          // @ts-ignore - Custom properties
-                          sheet.createNewValue ||
-                          sheet.suggestedName ||
-                          normalizeTableName(sheet.originalName)
+                          // @ts-ignore
+                          sheet.createNewValue || 
+                          // @ts-ignore
+                          sheet.suggestedName || 
+                          toSqlFriendlyName(sheet.originalName) // Fallback
                         }
                         onChange={(e) => {
                           // Get the entered value
                           const enteredValue = e.target.value;
 
-                          // Check if it's empty, then default back to _create_new_
+                          // Check if it's empty, then default back to original
                           if (!enteredValue.trim()) {
+                            // Default to SQL-friendly version of sheet name
+                            const defaultName = toSqlFriendlyName(sheet.originalName);
+
                             updateSheet(sheet.id, {
-                              mappedName: '_create_new_',
-                              needsReview: true
+                              // Set the actual name
+                              mappedName: defaultName,
+                              // @ts-ignore - Custom property
+                              isNewTable: true,
+                              // Store default name in these properties
+                              // @ts-ignore - Custom property
+                              suggestedName: defaultName,
+                              // @ts-ignore - Custom property
+                              createNewValue: defaultName,
+                              // Auto-approve
+                              approved: true,
+                              needsReview: false,
+                              status: 'approved'
                             });
                           } else {
-                            // Use a custom handler for the create new mode
+                            // Normalize the entered name for SQL compatibility
                             const normalizedName = normalizeTableName(enteredValue);
+
+                            // CRITICAL FIX: Store the actual name as mappedName, not _create_new_
                             updateSheet(sheet.id, {
-                              // Store both the createNewValue and mappedName
+                              // Set the actual name
+                              mappedName: normalizedName,
                               // @ts-ignore - Custom property
-                              createNewValue: enteredValue,
-                              // Keep mappedName as _create_new_ to maintain the create mode
-                              // until the user hits enter or the field loses focus
-                              mappedName: '_create_new_',
-                              needsReview: true
+                              isNewTable: true,
+                              // Store the normalized name in these properties
+                              // @ts-ignore - Custom property
+                              suggestedName: normalizedName,
+                              // @ts-ignore - Custom property
+                              createNewValue: normalizedName,
+                              // Auto-approve new tables
+                              approved: true,
+                              needsReview: false,
+                              status: 'approved'
                             });
                           }
                         }}
                         disabled={sheet.skip}
                         fullWidth
-                        error={!sheet.mappedName || sheet.mappedName === '_create_new_'}
-                        helperText={(!sheet.mappedName || sheet.mappedName === '_create_new_') && !sheet.skip ? "Required" : ""}
+                        error={false}
+                        helperText=""
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <Typography
+                                component="span"
+                                sx={{
+                                  color: '#9c27b0', // Purple color
+                                  fontWeight: 'bold',
+                                  fontSize: '1.2rem',
+                                }}
+                              >
+                                +
+                              </Typography>
+                            </InputAdornment>
+                          ),
+                        }}
                         sx={{ minWidth: 200 }}
                         // Add onBlur handler to commit the value when field loses focus
                         onBlur={(e) => {
-                          // @ts-ignore - Custom property
-                          const finalValue = sheet.createNewValue;
-                          if (finalValue && typeof finalValue === 'string') {
-                            // Commit the change, converting from _create_new_ mode to a specific table name
-                            handleMappedNameChange(sheet.id, finalValue);
+                          // Simply ensure the current value is saved correctly
+                          // (it's already being updated in the onChange handler)
+                          const currentValue = e.target.value;
+                          if (currentValue && currentValue.trim()) {
+                            const normalizedName = normalizeTableName(currentValue);
+
+                            // Switch to showing the final name when focus is lost
+                            updateSheet(sheet.id, {
+                              // Use the actual normalized name as the final mappedName
+                              mappedName: normalizedName,
+                              // Keep the isNewTable flag for visual indicator
+                              // @ts-ignore - Custom property
+                              isNewTable: true,
+                              // Store for compatibility
+                              // @ts-ignore - Custom property
+                              suggestedName: normalizedName,
+                              // @ts-ignore - Custom property
+                              createNewValue: normalizedName,
+                              // Auto-approve
+                              approved: true,
+                              needsReview: false,
+                              status: 'approved'
+                            });
+
+                            console.log(`Finalized new table name on blur: ${normalizedName}`);
                           }
                         }}
                         // Add onKeyDown handler to commit on Enter key
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            // @ts-ignore - Custom property
-                            const finalValue = sheet.createNewValue;
-                            if (finalValue && typeof finalValue === 'string') {
-                              // Commit the change, converting from _create_new_ mode to a specific table name
-                              handleMappedNameChange(sheet.id, finalValue);
+                            // Simply ensure the current value is saved correctly
+                            const currentValue = e.target.value;
+                            if (currentValue && currentValue.trim()) {
+                              const normalizedName = normalizeTableName(currentValue);
+
+                              // Switch to showing the final name when Enter is pressed
+                              updateSheet(sheet.id, {
+                                // Use the actual normalized name as the final mappedName
+                                mappedName: normalizedName,
+                                // Keep the isNewTable flag for visual indicator
+                                // @ts-ignore - Custom property
+                                isNewTable: true,
+                                // Store for compatibility
+                                // @ts-ignore - Custom property
+                                suggestedName: normalizedName,
+                                // @ts-ignore - Custom property
+                                createNewValue: normalizedName,
+                                // Auto-approve
+                                approved: true,
+                                needsReview: false,
+                                status: 'approved'
+                              });
+
+                              console.log(`Finalized new table name on Enter: ${normalizedName}`);
                               // Blur the field to prevent further edit
                               e.currentTarget.blur();
                             }
@@ -935,21 +1074,69 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                   ) : (
                     // Table selection mode with dropdown
                     <Select
-                      size="small"
-                      value={getValidSelectValue(sheet.mappedName, getSortedTableSuggestions(sheet.originalName, tables, ''))}
-                      onChange={(e) => handleMappedNameChange(sheet.id, e.target.value)}
+                        size="small"
+                        value={getValidSelectValue(sheet.mappedName, getSortedTableSuggestions(sheet.originalName, tables, ''))}
+                        onChange={(e) => {
+                        // Enhanced handler for dropdown selection
+                        const selectedValue = e.target.value;
+                        console.log(`Selected value from dropdown:`, selectedValue);
+
+                        // Special handling for Create New Table option
+                        if (selectedValue === '_create_new_') {
+                          // Generate SQL-friendly name first
+                          const sqlFriendlyName = toSqlFriendlyName(sheet.originalName);
+                          const prefixedSuggestion = tablePrefix ? `${tablePrefix}${sqlFriendlyName}` : sqlFriendlyName;
+
+                          // CRITICAL FIX: Use _create_new_ flag to trigger the UI to show edit field
+                          console.log(`Setting sheet ${sheet.id} to create new table mode with name: ${prefixedSuggestion}`);
+
+                          // Use the special _create_new_ value to trigger the UI to show the edit field
+                          updateSheet(sheet.id, {
+                            // Use _create_new_ to ensure the UI shows the edit field
+                            mappedName: '_create_new_',
+                            // Mark this as a new table
+                            // @ts-ignore - Custom property
+                            isNewTable: true,
+                            // Auto-approve
+                            approved: true,
+                            needsReview: false,
+                            status: 'approved',
+                            // Store the real name in these fields
+                            // @ts-ignore - Custom property
+                            suggestedName: prefixedSuggestion,
+                            // @ts-ignore - Custom property
+                            createNewValue: prefixedSuggestion
+                          });
+                          console.log(`Set sheet ${sheet.id} to create new table mode with suggested name: ${prefixedSuggestion}`);
+                        } else {
+                          // For other selections, use the normal handler
+                          handleMappedNameChange(sheet.id, selectedValue);
+                        }
+                      }}
                       disabled={sheet.skip}
                       error={!sheet.mappedName && !sheet.skip}
                       displayEmpty
-                      fullWidth
-                      sx={{ minWidth: 200 }}
+                      sx={{ minWidth: 150, flexGrow: 1 }}
                     >
                       <MenuItem value="">
                         <em>Select a table</em>
                       </MenuItem>
                       
                       <MenuItem value="_create_new_">
-                        <Typography color="primary">+ Create New Table</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Typography
+                            component="span"
+                            sx={{
+                              color: '#9c27b0', // Purple color
+                              fontWeight: 'bold',
+                              fontSize: '1.2rem',
+                              mr: 1
+                            }}
+                          >
+                            +
+                          </Typography>
+                          <Typography color="primary">Create New Table</Typography>
+                        </Box>
                       </MenuItem>
                       
                       <Divider />
@@ -1084,15 +1271,29 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                         </Tooltip>
                       );
                     } else if (effectivelyApproved) {
+                      // Check if this is a new table
+                      // @ts-ignore - Custom property
+                      const isNewTable = sheet.isNewTable;
+
                       return (
                         <Tooltip
-                          title={hasHighConfidenceMatch ? `Auto-approved (${matchConfidence}% match)` : "Approved"}
+                          title={
+                            isNewTable
+                              ? "New table will be created"
+                              : hasHighConfidenceMatch
+                                ? `Auto-approved (${matchConfidence}% match)`
+                                : "Approved"
+                          }
                           placement="top"
                         >
                           <Chip
-                            label="Approved"
-                            color="success"
-                            icon={<CheckCircleIcon fontSize="small" />}
+                            label={isNewTable ? "New Table" : "Approved"}
+                            color={isNewTable ? "secondary" : "success"}
+                            icon={
+                              isNewTable
+                                ? <Typography component="span" sx={{ color: '#9c27b0', fontWeight: 'bold', fontSize: '1.2rem' }}>+</Typography>
+                                : <CheckCircleIcon fontSize="small" />
+                            }
                             size="small"
                           />
                         </Tooltip>
@@ -1281,10 +1482,8 @@ const getSortedTableSuggestions = (
       // Make sure we're using a normalized table name that won't conflict with reserved words
       const safeTableName = normalizeTableName(tableName);
 
-      // For display purposes, show with prefix ONLY if this is for auto-mapping
-      const displayName = prefix && prefix.length > 0 ? 
-        `${table.name} (will create as: ${prefix}${table.name})` : 
-        table.name;
+      // Display name should simply be the original table name
+      const displayName = table.name;
 
       return {
         name: safeTableName,      // Safe name for database operations

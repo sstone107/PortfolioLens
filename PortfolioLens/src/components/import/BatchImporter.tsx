@@ -21,7 +21,7 @@ import MemoryIcon from '@mui/icons-material/Memory';
 import WifiOffIcon from '@mui/icons-material/WifiOff';
 import { useBatchImportStore } from '../../store/batchImportStore';
 import FileUploadStep from './steps/FileUploadStep';
-import TableMappingStep from './steps/TableMappingStep';
+import TableMappingStepVirtualized from './steps/TableMappingStepVirtualized';
 import ColumnMappingStepVirtualized from './steps/ColumnMappingStepVirtualized';
 import ReviewImportStep from './steps/ReviewImportStep';
 import { normalizeTableName } from './utils/stringUtils';
@@ -240,13 +240,9 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
         );
       case 1:
         return (
-          <TableMappingStep 
+          <TableMappingStepVirtualized
             onSheetSelect={setSelectedSheetId}
             onError={setError}
-            onSettingsChange={(headerRow, tablePrefix) => {
-              setHeaderRow(headerRow);
-              setTablePrefix(tablePrefix || '');
-            }}
           />
         );
       case 2:

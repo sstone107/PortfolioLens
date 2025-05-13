@@ -1,0 +1,1367 @@
+/**
+ * TableMappingStepVirtualized.tsx
+ * Virtualized implementation of TableMappingStep with performance improvements and UX enhancements
+ */
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { FixedSizeList as List } from 'react-window';
+import { 
+  Box,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+  TextField,
+  Switch,
+  FormControlLabel,
+  Button,
+  Alert,
+  Chip,
+  IconButton,
+  Tooltip,
+  MenuItem,
+  Stack,
+  Select,
+  InputAdornment,
+  CircularProgress,
+  Card,
+  CardContent,
+  CardHeader,
+  Divider,
+  LinearProgress,
+  useTheme,
+  useMediaQuery
+} from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import AddCircleIcon from '@mui/icons-material/AddCircle';
+import { useBatchImportStore, SheetMapping } from '../../../store/batchImportStore';
+import { useTableMetadata } from '../BatchImporterHooks';
+import SampleDataTable from '../SampleDataTable';
+import { normalizeTableName } from '../utils/stringUtils';
+import useAutoTableMatch from '../hooks/useAutoTableMatch';
+import { SelectChangeEvent } from '@mui/material';
+import { ErrorBoundary } from '../../common';
+import ImportErrorFallback from '../ImportErrorFallback';
+
+interface TableMappingStepProps {
+  onSheetSelect: (sheetId: string | null) => void;
+  onError: (error: string | null) => void;
+}
+
+/**
+ * Virtualized Table Mapping step with enhanced performance and UX
+ */
+export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
+  onSheetSelect,
+  onError
+}) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // States
+  const [selectedSheet, setSelectedSheet] = useState<SheetMapping | null>(null);
+  const [showAllSamples, setShowAllSamples] = useState(false);
+  const [headerRowEdits, setHeaderRowEdits] = useState<Record<string, { editedName: string; isEditing: boolean }>>({}); 
+  const [initialAutoMapComplete, setInitialAutoMapComplete] = useState(false);
+  const [autoMapAttempted, setAutoMapAttempted] = useState(false);
+  
+  // Access batch import store
+  const {
+    sheets,
+    headerRow: globalHeaderRow,
+    tablePrefix,
+    progress,
+    setProgress,
+    updateSheet,
+    setHeaderRow: setGlobalHeaderRow,
+    setTablePrefix: setGlobalTablePrefix,
+  } = useBatchImportStore();
+  
+  // Load database metadata
+  const { tables, loading: tablesLoading, error: tablesError } = useTableMetadata();
+  
+  // Track when tables finish loading to validate mappings
+  const [tablesLoaded, setTablesLoaded] = useState(false);
+  
+  // Counter to limit validation logging
+  const [validationLogCounter, setValidationLogCounter] = useState(0);
+  
+  // IMPORTANT: Define validateTableExists early to avoid temporal dead zone issues
+  // Validate if a table name exists in the loaded table options
+  const validateTableExists = useCallback((tableName: string): boolean => {
+    // Special values are always valid
+    if (!tableName || tableName === '' || tableName === '_create_new_') return true;
+    
+    // Check if tables is available and properly loaded
+    if (!tables || !Array.isArray(tables) || tables.length === 0) {
+      // Limit logging to reduce console noise
+      if (validationLogCounter < 3) {
+        console.warn('Cannot validate table name while tables are loading');
+        setValidationLogCounter(prev => prev + 1);
+      }
+      return true; // Assume valid during loading to prevent errors
+    }
+    
+    // Check if the tableName exists in our list of valid tables
+    return tables.some(table => table && table.name === tableName);
+  }, [tables, validationLogCounter]);
+  
+  // Enhanced table matching with the new hook
+  const {
+    getSortedTableSuggestions,
+    autoMapSheets,
+    getEffectiveStatus,
+    toSqlFriendlyName
+  } = useAutoTableMatch(sheets, tables, tablePrefix);
+  
+  // Validate all existing mappings when tables finish loading
+  useEffect(() => {
+    // Safety check to ensure validateTableExists is properly defined
+    if (typeof validateTableExists !== 'function') {
+      console.warn('validateTableExists not available yet, skipping validation');
+      return;
+    }
+    
+    if (!tablesLoading && tables && tables.length > 0 && !tablesLoaded) {
+      console.log('Tables loaded - validating existing mappings...');
+      setTablesLoaded(true);
+      
+      try {
+        // Check for and fix invalid mappings
+        const invalidMappedSheets = sheets.filter(s => 
+          !s.skip && 
+          s.mappedName && 
+          s.mappedName !== '_create_new_' && 
+          !validateTableExists(s.mappedName)
+        );
+
+      if (invalidMappedSheets.length > 0) {
+        console.warn('Found invalid table mappings that need to be reset:', 
+          invalidMappedSheets.map(s => `${s.originalName} -> ${s.mappedName}`).join(', '));
+          
+        // Reset invalid mappings to empty
+        invalidMappedSheets.forEach(sheet => {
+          console.log(`Resetting invalid mapping for sheet: ${sheet.originalName}`);
+          updateSheet(sheet.id, {
+            mappedName: '',
+            approved: false,
+            needsReview: true,
+            isNewTable: false,
+            status: 'pending'
+          });
+        });
+      }
+      } catch (error) {
+        console.error('Error during table validation:', error);
+        // Still mark as loaded even if validation fails to prevent retries
+        setTablesLoaded(true); 
+      }
+    }
+  }, [tablesLoading, tables, sheets, tablesLoaded, updateSheet, validateTableExists]);
+  
+  // Define column widths for the virtualized list cells
+  // These should roughly match the TableHead cell widths or desired proportions
+  const columnWidths = {
+    sheetName: isMobile ? '150px' : '25%', // Flex grow can also be used e.g. flex: 2
+    databaseTable: isMobile ? '200px' : '30%', // flex: 3
+    headerRow: isMobile ? '80px' : '100px',
+    skip: isMobile ? '100px' : '120px',
+    status: isMobile ? '120px' : '150px',
+    actions: isMobile ? '80px' : '100px',
+  };
+
+  const cellBaseStyle: React.CSSProperties = {
+    padding: theme.spacing(1, 2), // Mimic TableCell padding
+    display: 'flex',
+    alignItems: 'center',
+    boxSizing: 'border-box', // Important for width calculations with padding/border
+    overflow: 'hidden', // Prevent content overflow issues
+    textOverflow: 'ellipsis', // Add ellipsis for overflowing text
+    whiteSpace: 'nowrap', // Keep content on one line unless wrapped intentionally
+  };
+  
+  // Add safety timer to prevent getting stuck in loading state
+  useEffect(() => {
+    const immediateTimer = setTimeout(() => {
+      setInitialAutoMapComplete(true);
+      setProgress({
+        stage: 'idle',
+        message: 'Ready to edit table names',
+        percent: 100
+      });
+    }, 300);
+
+    return () => {
+      clearTimeout(immediateTimer);
+    };
+  }, [setProgress]);
+
+  // Auto-map tables when component loads
+  useEffect(() => {
+    // Only try auto-mapping once to prevent infinite loops
+    if (autoMapAttempted || tablesLoading || !tables.length) {
+      return;
+    }
+
+    // Log the initial state to help with debugging
+    console.log('Init auto-mapping with tables:', tables.length, 'sheets:', sheets.length);
+    
+    // Mark that we've attempted auto-mapping
+    setAutoMapAttempted(true);
+    
+    // Safety check for validateTableExists function
+    if (typeof validateTableExists !== 'function') {
+      console.error('validateTableExists function not available during auto-mapping');
+      setProgress({
+        stage: 'idle',
+        message: 'Auto-mapping skipped due to initialization error',
+        percent: 100
+      });
+      setInitialAutoMapComplete(true);
+      return;
+    }
+    
+    try {
+      // Check if we have unmapped sheets that need auto-mapping
+      const unmappedSheets = sheets.filter(s => !s.skip && 
+        (!s.mappedName || s.mappedName === '' || !s.approved));
+
+      // Also check for invalid mappings that need to be fixed
+      const invalidMappedSheets = sheets.filter(s => 
+        !s.skip && 
+        s.mappedName && 
+        s.mappedName !== '_create_new_' && 
+        !validateTableExists(s.mappedName)
+      );
+
+    // Log any invalid mappings for debugging
+    if (invalidMappedSheets.length > 0) {
+      console.warn('Found invalid table mappings:', 
+        invalidMappedSheets.map(s => `${s.originalName} -> ${s.mappedName}`));
+    }
+
+    if (unmappedSheets.length > 0 || invalidMappedSheets.length > 0) {
+      // Set progress to analyzing state to show loading
+      setProgress({
+        stage: 'analyzing',
+        message: 'Auto-mapping sheets to tables...',
+        percent: 50
+      });
+
+      // Use setTimeout to allow UI to update with progress indicator
+      setTimeout(() => {
+        try {
+          // Run auto-mapping
+          const mappings = autoMapSheets();
+          
+          // Apply the mappings to each sheet
+          mappings.forEach(mapping => {
+            updateSheet(mapping.sheetId, mapping);
+          });
+          
+          // For invalid mappings, clear the mappedName to force re-selection
+          invalidMappedSheets.forEach(sheet => {
+            updateSheet(sheet.id, {
+              mappedName: '',
+              approved: false,
+              needsReview: true,
+              isNewTable: false,
+              status: 'pending'
+            });
+          });
+          
+          // Find the first sheet that needs review, if any
+          // Prioritize invalid mappings so they get fixed first
+          const firstInvalidSheet = invalidMappedSheets[0];
+          const firstNeedsReview = sheets.find(s => !s.skip && s.needsReview);
+          
+          if (firstInvalidSheet) {
+            setSelectedSheet(firstInvalidSheet);
+            onSheetSelect(firstInvalidSheet.id);
+          } else if (firstNeedsReview) {
+            setSelectedSheet(firstNeedsReview);
+            onSheetSelect(firstNeedsReview.id);
+          }
+        } catch (error) {
+          console.error('Error during auto-mapping:', error);
+        } finally {
+          // Always reset progress when done, even if there was an error
+          setProgress({
+            stage: 'idle',
+            message: 'Auto-mapping complete',
+            percent: 100
+          });
+
+          // Exit loading state
+          setInitialAutoMapComplete(true);
+        }
+      }, 300);
+    } else {
+      // No sheets to map, mark as complete
+      setInitialAutoMapComplete(true);
+    }
+    } catch (error) {
+      console.error('Error in table auto-mapping top level:', error);
+      
+      // Set safe fallback state
+      setProgress({
+        stage: 'idle',
+        message: 'Error during auto-mapping',
+        percent: 100
+      });
+      setInitialAutoMapComplete(true);
+    }
+  }, [tables, tablesLoading, sheets, setProgress, autoMapAttempted, updateSheet, autoMapSheets, onSheetSelect, validateTableExists]);
+
+  // Set error if tables failed to load
+  useEffect(() => {
+    if (tablesError) {
+      console.error('Table loading error:', tablesError);
+      onError(tablesError);
+    } else {
+      onError(null);
+    }
+  }, [tablesError, onError]);
+  
+  // Handle selection of a sheet for preview
+  const handleSelectSheet = useCallback((sheetId: string) => {
+    const sheet = sheets.find(s => s.id === sheetId);
+    if (sheet) {
+      setSelectedSheet(sheet);
+      onSheetSelect(sheetId);
+    }
+  }, [sheets, onSheetSelect]);
+  
+  // Handle sheet name change
+  const handleMappedNameChange = useCallback((sheetId: string, value: string) => {
+    const sheet = sheets.find(s => s.id === sheetId);
+    if (!sheet) return;
+
+    const isCreatingNew = value === '_create_new_';
+    const isSelectingExisting = value !== '' && !isCreatingNew;
+
+    // When selecting "Create New", prepare a default suggested name
+    if (isCreatingNew) {
+      // Generate a SQL-friendly name based on the sheet name
+      const suggestedName = tablePrefix 
+        ? `${tablePrefix}${toSqlFriendlyName(sheet.originalName)}`
+        : toSqlFriendlyName(sheet.originalName);
+      
+      console.log(`Preparing "_create_new_" mode for sheet: ${sheet.originalName} with suggested: ${suggestedName}`);
+      
+      updateSheet(sheetId, {
+        mappedName: '_create_new_', // Special value indicating create new mode
+        approved: false, // Don't auto-approve new tables until user confirms the name
+        needsReview: false, // Don't show this as needing review since it's in create mode
+        isNewTable: true, // Flag this as a new table
+        suggestedName: suggestedName, // Store the suggested name for default value
+        createNewValue: suggestedName, // Set initial value for the text field
+        status: 'mapping' // Change status to mapping 
+      });
+      return;
+    }
+    
+    // When selecting an existing table
+    if (isSelectingExisting) {
+      updateSheet(sheetId, {
+        mappedName: value,
+        approved: false, // Requires re-approval when selecting existing table
+        needsReview: true, // Existing tables should be reviewed by default
+        isNewTable: false, // Not a new table
+        status: 'mapping' // Change status to mapping when selection is made
+      });
+      return;
+    }
+
+    // If clearing selection (value is ''), reset all flags
+    if (value === '') {
+      updateSheet(sheetId, {
+        mappedName: '',
+        approved: false,
+        needsReview: false,
+        isNewTable: false,
+        suggestedName: undefined,
+        createNewValue: undefined,
+        status: 'pending'
+      });
+    }
+  }, [sheets, updateSheet, tablePrefix, toSqlFriendlyName]);
+  
+  // Handle skip toggle
+  const handleSkipToggle = useCallback((sheetId: string, skip: boolean) => {
+    updateSheet(sheetId, {
+      skip, 
+      needsReview: true,
+      status: skip ? 'pending' : 'mapping'
+    });
+  }, [updateSheet]);
+  
+  // Handle sheet approval
+  const handleApprove = useCallback((sheetId: string) => {
+    const sheet = sheets.find(s => s.id === sheetId);
+    if (!sheet) return;
+
+    // If already approved and trying to cancel (e.g. by unchecking 'approved'), revert to 'pending' or 'needs review'
+    const currentMappedName = sheet.mappedName || ''; // Fallback to empty if undefined
+    // const isCurrentlyNewTable = sheet.isNewTable || false;
+
+    updateSheet(sheetId, {
+      mappedName: currentMappedName,
+      approved: false,
+      needsReview: false,
+      isNewTable: false, // Reset this, will be set true if user approves a new name
+      status: 'pending' as SheetMapping['status'] // Reset status
+    });
+  }, [sheets, updateSheet]);
+
+  const handleApproveNew = useCallback((sheetId: string) => {
+    const sheet = sheets.find(s => s.id === sheetId);
+    if (!sheet) return;
+
+    if (sheet.mappedName === '_create_new_') {
+      // User is approving a new table name typed into the text field
+      const currentEditState = headerRowEdits[sheet.id];
+      let newTableName = toSqlFriendlyName(sheet.originalName); // Default value
+
+      if (currentEditState && typeof currentEditState === 'object' && typeof currentEditState.editedName === 'string') {
+        newTableName = currentEditState.editedName;
+      }
+
+      updateSheet(sheet.id, {
+        mappedName: newTableName,
+        approved: true,
+        needsReview: false,
+        isNewTable: true,
+        status: 'approved' as SheetMapping['status']
+      });
+      
+      setHeaderRowEdits(prev => {
+        const prevSheetEditState = prev[sheet.id];
+        // Ensure we are spreading an object, providing a default if necessary
+        const baseState = (prevSheetEditState && typeof prevSheetEditState === 'object') 
+                          ? { ...prevSheetEditState } // Create a copy to spread
+                          : { editedName: newTableName }; 
+        return {
+          ...prev,
+          [sheet.id]: { ...baseState, isEditing: false }
+        };
+      });
+    } else if (sheet.mappedName && sheet.mappedName !== '') {
+      updateSheet(sheetId, {
+        approved: true,
+        needsReview: false, // Explicitly approved, so no longer needs review
+        isNewTable: false, // It's an existing table
+        status: 'approved' as SheetMapping['status']
+      });
+    }
+  }, [sheets, updateSheet, headerRowEdits, toSqlFriendlyName]);
+
+  // Public auto-mapping function (for button click)
+  const handleAutoMap = useCallback(() => {
+    // Show progress indicator
+    setProgress({
+      stage: 'analyzing',
+      message: 'Auto-mapping sheets to tables...',
+      percent: 50
+    });
+
+    // Use setTimeout to ensure the progress indicator shows
+    setTimeout(() => {
+      try {
+        // Run auto-mapping and apply results
+        const mappings = autoMapSheets();
+        
+        // Apply the mappings to each sheet
+        mappings.forEach(mapping => {
+          updateSheet(mapping.sheetId, mapping);
+        });
+      } catch (error) {
+        console.error('Error during manual auto-mapping:', error);
+      } finally {
+        // Always reset progress when done
+        setProgress({
+          stage: 'idle',
+          message: 'Auto-mapping complete',
+          percent: 100
+        });
+      }
+    }, 100);
+  }, [setProgress, autoMapSheets, updateSheet]);
+  
+  // Handle header row change for a specific sheet
+  const handleHeaderRowChange = useCallback((sheetId: string, row: number) => {
+    // Reset edit state when header row changes
+    setHeaderRowEdits(prev => ({
+       ...prev, 
+       [sheetId]: { ...(prev[sheetId] || {}), editedName: '', isEditing: false } 
+    }));
+    updateSheet(sheetId, { 
+      headerRow: row,
+      needsReview: true // Changing header row requires review
+    });
+  }, [updateSheet]);
+  
+  // Handle global header row change (converts from 1-based UI to 0-based internal)
+  const handleGlobalHeaderRowChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const uiRowNumber = parseInt(e.target.value, 10);
+    // Convert from 1-based (UI) to 0-based (internal)
+    const internalRow = uiRowNumber - 1;
+
+    if (!isNaN(uiRowNumber) && uiRowNumber >= 1) {
+      setGlobalHeaderRow(internalRow);
+      // Update all sheets with the 0-based row index
+      sheets.forEach(sheet => {
+        updateSheet(sheet.id, {
+          headerRow: internalRow,
+          needsReview: true
+        });
+      });
+    }
+  }, [sheets, updateSheet, setGlobalHeaderRow]);
+  
+  // Handle global table prefix change
+  const handleGlobalTablePrefixChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const prefix = e.target.value;
+    const oldPrefix = tablePrefix;
+
+    // Store the prefix globally
+    setGlobalTablePrefix(prefix);
+
+    // Update names for all sheets based on their current state
+    sheets.forEach(sheet => {
+      // For sheets in "Create New" mode
+      if (sheet.mappedName === '_create_new_') {
+        // Get the current user-entered value, if available
+        const userEnteredValue = sheet.createNewValue;
+
+        if (userEnteredValue) {
+          // Remove old prefix if present and add new one
+          let cleanValue = userEnteredValue;
+          if (oldPrefix && cleanValue.startsWith(oldPrefix)) {
+            cleanValue = cleanValue.substring(oldPrefix.length);
+          }
+          const prefixedValue = prefix ? `${prefix}${cleanValue}` : cleanValue;
+
+          // Update with new prefixed value while preserving create new mode
+          updateSheet(sheet.id, {
+            createNewValue: prefixedValue,
+            mappedName: '_create_new_'
+          });
+        }
+
+        // Also update the suggested name
+        let baseName;
+        if (typeof sheet.suggestedName === 'string') {
+          baseName = sheet.suggestedName.replace(oldPrefix || '', '');
+        } else {
+          baseName = toSqlFriendlyName(sheet.originalName);
+        }
+
+        // Apply the new prefix
+        const newSuggestion = prefix ? `${prefix}${baseName}` : baseName;
+
+        // Update the sheet with the new suggested name
+        updateSheet(sheet.id, {
+          suggestedName: newSuggestion
+        });
+      }
+      // For sheets with actual table names that were manually created (not mapped to existing)
+      else if (sheet.mappedName && sheet.wasCreatedNew) {
+        // Remove old prefix if present
+        let baseName = sheet.mappedName;
+        if (oldPrefix && baseName.startsWith(oldPrefix)) {
+          baseName = baseName.substring(oldPrefix.length);
+        }
+
+        // Apply new prefix
+        const newName = prefix ? `${prefix}${baseName}` : baseName;
+
+        // Update with new prefixed name
+        updateSheet(sheet.id, {
+          mappedName: newName,
+          needsReview: true
+        });
+      }
+    });
+  }, [tablePrefix, setGlobalTablePrefix, sheets, updateSheet, toSqlFriendlyName]);
+  
+  // Memoized sheet groupings based on status
+  const [pendingSheets, approvedSheets, skippedSheets] = useMemo(() => {
+    const pending: SheetMapping[] = [];
+    const approved: SheetMapping[] = [];
+    const skipped: SheetMapping[] = [];
+    
+    sheets.forEach(sheet => {
+      if (sheet.skip) {
+        skipped.push(sheet);
+        return;
+      }
+      
+      // Get the effective approval status using our memoized function
+      const status = getEffectiveStatus(sheet);
+      
+      if (status.isApproved) {
+        approved.push(sheet);
+      } else if (status.needsReview) {
+        pending.push(sheet);
+      } else {
+        // Everything else
+        approved.push(sheet);
+      }
+    });
+    
+    return [pending, approved, skipped];
+  }, [sheets, getEffectiveStatus]);
+  
+  // Memoized displayable sheets list for rendering
+  const displayableSheets = useMemo(() => {
+    return [...sheets]; // Return a shallow copy, preserving original order
+  }, [sheets]);
+  
+  // Enhanced loading state
+  if ((!initialAutoMapComplete || progress.stage === 'analyzing' || progress.stage === 'reading') 
+        && !autoMapAttempted && tables.length > 0) {
+    return (
+      <Box
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          width: '100vw',
+          textAlign: 'center',
+          p: 3,
+          backgroundColor: 'background.paper',
+          zIndex: 9999
+        }}
+      >
+        <AutoAwesomeIcon
+          sx={{
+            color: theme.palette.success.main,
+            fontSize: 80,
+            mb: 4,
+            animation: 'pulse 1.5s infinite ease-in-out',
+            '@keyframes pulse': {
+              '0%': { opacity: 0.6, transform: 'scale(0.9)' },
+              '50%': { opacity: 1, transform: 'scale(1.1)' },
+              '100%': { opacity: 0.6, transform: 'scale(0.9)' }
+            }
+          }}
+        />
+
+        <Typography variant="h4" gutterBottom fontWeight="medium" sx={{ color: theme.palette.success.main }}>
+          Processing Your Data
+        </Typography>
+
+        <Typography variant="h6" gutterBottom sx={{ maxWidth: 600, mb: 4 }}>
+          Please wait while we analyze and map your spreadsheet
+        </Typography>
+
+        <Typography variant="body1" gutterBottom sx={{ maxWidth: 500, mb: 4 }}>
+          {progress.message || "Analyzing your data and matching to database tables..."}
+        </Typography>
+
+        <Box sx={{ width: '100%', maxWidth: 500, mb: 4 }}>
+          <LinearProgress 
+            color="success" 
+            variant="indeterminate"
+            sx={{ height: 8, borderRadius: 2 }}
+          />
+        </Box>
+
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Only tables with ≥95% confidence will be auto-approved
+        </Typography>
+      </Box>
+    );
+  }
+
+  // Render a row for the virtualized list
+  const renderTableRow = useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
+    const sheet = displayableSheets[index];
+    if (!sheet) return null;
+
+    // Get effective status from the hook
+    const status = getEffectiveStatus(sheet);
+
+    // Style left border based on status
+    const borderLeftColor = sheet.skip
+      ? 'transparent'
+      : status.isApproved
+        ? theme.palette.success.light
+        : status.needsReview
+          ? theme.palette.warning.light
+          : 'transparent';
+
+    return (
+      <div // This is the row container, equivalent to <tr>
+        key={sheet.id}
+        className="ReactWindowRow"
+        style={{
+          ...style,
+          backgroundColor: sheet.skip ? 'rgba(0, 0, 0, 0.04)' : theme.palette.background.paper, // Ensure background for non-skipped
+          borderLeft: sheet.skip ? 'none' : '4px solid',
+          borderLeftColor,
+          display: 'flex', // Make this a flex container for cells
+          alignItems: 'center', // Align items vertically in the center
+          borderBottom: `1px solid ${theme.palette.divider}`, // Add bottom border like TableRow
+        }}
+      >
+        {/* Sheet Name - Cell 1 */}
+        <div style={{ ...cellBaseStyle, width: columnWidths.sheetName }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+            {status.needsReview && !sheet.skip ? (
+              <Tooltip title="Table mapping needs review">
+                <WarningIcon color="warning" fontSize="small" sx={{ mr: 1, opacity: 0.7, flexShrink: 0 }} />
+              </Tooltip>
+            ) : status.isApproved && !sheet.skip ? (
+              <Tooltip title={status.confidence >= 95 ? `Table mapping auto-approved (${status.confidence}% confidence)` : "Table mapping approved"}>
+                <CheckCircleIcon color="success" fontSize="small" sx={{ mr: 1, opacity: 0.7, flexShrink: 0 }} />
+              </Tooltip>
+            ) : null}
+            <Typography fontWeight={sheet.id === selectedSheet?.id ? 'bold' : 'normal'} noWrap>
+              {sheet.originalName}
+            </Typography>
+          </Box>
+          {sheet.error && (
+            <Typography variant="caption" color="error" noWrap>
+              Error: {sheet.error}
+            </Typography>
+          )}
+        </div>
+        
+        {/* Mapped Table Name - Cell 2 */}
+        <div style={{ ...cellBaseStyle, width: columnWidths.databaseTable, display: 'block' /* Allow select to fill */ }}>
+          {/* Check if this table is in create new mode */}
+          {(sheet.isNewTable || sheet.mappedName === '_create_new_') ? (
+            // Create new table mode with edit field
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
+              <TextField
+                size="small"
+                placeholder="Enter new table name"
+                // Use the current create value, or suggested name if available
+                value={                  
+                  (() => {
+                    const value = sheet.mappedName !== '_create_new_' && sheet.isNewTable
+                      ? sheet.mappedName
+                      : (sheet.createNewValue ||
+                         sheet.suggestedName ||
+                         toSqlFriendlyName(sheet.originalName));
+                    return value;
+                  })()
+                }
+                onChange={(e) => {
+                  const enteredValue = e.target.value;
+                  if (!enteredValue.trim()) {
+                    // Default to SQL-friendly version of sheet name
+                    const defaultName = toSqlFriendlyName(sheet.originalName);
+                    updateSheet(sheet.id, {
+                      mappedName: '_create_new_',
+                      isNewTable: true,
+                      suggestedName: defaultName,
+                      approved: true,
+                      needsReview: false,
+                      status: 'approved'
+                    });
+                  } else {
+                    // Normalize the entered name for SQL compatibility
+                    const normalizedName = normalizeTableName(enteredValue);
+                    updateSheet(sheet.id, {
+                      mappedName: '_create_new_',
+                      isNewTable: true,
+                      suggestedName: normalizedName,
+                      approved: true,
+                      needsReview: false,
+                      status: 'approved'
+                    });
+                  }
+                }}
+                disabled={sheet.skip}
+                fullWidth
+                error={false}
+                helperText=""
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Typography
+                        component="span"
+                        sx={{
+                          color: theme.palette.secondary.main,
+                          fontWeight: 'bold',
+                          fontSize: '1.2rem',
+                          mr: 0.5 // Adjust margin for better spacing
+                        }}
+                      >
+                        +
+                      </Typography>
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ minWidth: 180 }} // Ensure it has a reasonable min width
+                // Add onBlur handler to commit the value when field loses focus
+                onBlur={(e) => {
+                  const currentValue = e.target.value;
+                  if (currentValue && currentValue.trim()) {
+                    const normalizedName = normalizeTableName(currentValue);
+                    updateSheet(sheet.id, {
+                      mappedName: normalizedName,
+                      isNewTable: true,
+                      suggestedName: normalizedName,
+                      approved: true,
+                      needsReview: false,
+                      status: 'approved'
+                    });
+                  }
+                }}
+                // Add onKeyDown handler to commit on Enter key
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const currentValue = e.target.value;
+                    if (currentValue && currentValue.trim()) {
+                      const normalizedName = normalizeTableName(currentValue);
+                      updateSheet(sheet.id, {
+                        mappedName: normalizedName,
+                        isNewTable: true,
+                        suggestedName: normalizedName,
+                        approved: true,
+                        needsReview: false,
+                        status: 'approved'
+                      });
+                      e.currentTarget.blur();
+                    }
+                  }
+                }}
+              />
+              <Tooltip title="Back to table selection">
+                <IconButton
+                  size="small"
+                  onClick={() => handleMappedNameChange(sheet.id, '')}
+                  sx={{ ml: 1, mt: 1 }}
+                >
+                  <ArrowBackIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          ) : (
+            // Table selection mode with dropdown
+            <Select
+              size="small"
+              // Properly handle value selection state during loading and for invalid values
+              value={(() => {
+                const mappedName = sheet.mappedName || '';
+                
+                // Special values are always valid
+                if (mappedName === '_create_new_' || mappedName === '') {
+                  return mappedName;
+                }
+                
+                // During table loading, preserve the current value to prevent flickering
+                // but only for special values like _create_new_ to avoid MUI warnings
+                if (tablesLoading) {
+                  return '';  // Return empty during loading for regular tables
+                }
+                
+                // After tables have loaded, validate if this is a real table
+                // This ensures we don't have "MUI: out-of-range value" warnings
+                const isValidOption = validateTableExists(mappedName);
+                
+                if (!isValidOption) {
+                  console.warn(`Invalid table mapping found: ${sheet.originalName} -> ${mappedName}`);
+                  return ''; // Use empty value instead of invalid one
+                }
+                
+                return mappedName;
+              })()}
+              onChange={(e: SelectChangeEvent<string>) => handleMappedNameChange(sheet.id, e.target.value)}
+              disabled={sheet.skip || tablesLoading} // Also disable select while tables load
+              error={(!tablesLoading && sheet.mappedName && sheet.mappedName !== '_create_new_' && 
+                     !validateTableExists(sheet.mappedName))}
+              displayEmpty
+              sx={{ 
+                minWidth: 150, 
+                flexGrow: 1, 
+                width: '100%',
+                // Add error styling when there's an invalid selection
+                ...((!tablesLoading && sheet.mappedName && sheet.mappedName !== '_create_new_' && 
+                   !validateTableExists(sheet.mappedName)) && {
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: theme.palette.error.main,
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: theme.palette.error.main,
+                  }
+                })
+              }}
+              // Helper text for invalid table selection will be shown in the menu item
+            >
+              <MenuItem value="">
+                <em>{tablesLoading ? 'Loading tables...' : 'Select a table'}</em>
+              </MenuItem>
+              
+              {/* Create New Table Option - Always visible */}
+              <MenuItem value="_create_new_">
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  width: '100%',
+                  padding: '8px 0'
+                }}>
+                  <AddCircleIcon
+                    sx={{
+                      color: theme.palette.secondary.main,
+                      mr: 1
+                    }}
+                  />
+                  <Typography color="primary" fontWeight="medium">Create New Table</Typography>
+                </Box>
+              </MenuItem>
+              
+              {/* Show warning for invalid table selection */}
+              {!tablesLoading && sheet.mappedName && sheet.mappedName !== '_create_new_' && 
+               !validateTableExists(sheet.mappedName) && (
+                <MenuItem disabled value="__invalid__" sx={{ 
+                  backgroundColor: theme.palette.error.light,
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  marginTop: '4px',
+                  marginBottom: '4px'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <WarningIcon color="error" sx={{ mr: 1, fontSize: 18 }} />
+                    <Typography variant="body2" color="error" fontWeight="medium">
+                      Invalid table selected: "{sheet.mappedName}"
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                    This table no longer exists. Please select another table or create a new one.
+                  </Typography>
+                </MenuItem>
+              )}
+              
+              <Divider />
+              
+              <MenuItem disabled>
+                <Typography variant="caption" color="text.secondary">
+                  Existing Tables (by match confidence)
+                </Typography>
+              </MenuItem>
+              
+              {/* Table suggestions sorted by confidence - Only render if tables are loaded */}
+              {!tablesLoading && getSortedTableSuggestions(sheet.originalName).map((suggestion) => (
+                <MenuItem key={suggestion.name} value={suggestion.name}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <Typography>
+                      {suggestion.originalName}
+                    </Typography>
+                    <Chip
+                      label={`${suggestion.confidence}%`}
+                      size="small"
+                      color={suggestion.confidence >= 95 ? 'success' : suggestion.confidence >= 70 ? 'warning' : 'error'}
+                      sx={{ ml: 1 }}
+                    />
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          )}
+        </div>
+        
+        {/* Header Row - Cell 3 */}
+        <div style={{ ...cellBaseStyle, width: columnWidths.headerRow }}>
+          <TextField
+            type="number"
+            size="small"
+            // Display 1-based for user
+            value={(headerRowEdits[sheet.id] && headerRowEdits[sheet.id].editedName) ? headerRowEdits[sheet.id].editedName : (sheet.headerRow + 1)}
+            onChange={(e) => {
+              // Convert from 1-based (UI) to 0-based (internal)
+              const uiValue = parseInt(e.target.value, 10);
+              const internalValue = uiValue - 1;
+              if (!isNaN(uiValue) && uiValue >= 1) {
+                handleHeaderRowChange(sheet.id, internalValue);
+              }
+            }}
+            disabled={sheet.skip}
+            InputProps={{ inputProps: { min: 1 } }}
+            sx={{ width: 80 }}
+          />
+        </div>
+        
+        {/* Skip Toggle - Cell 4 */}
+        <div style={{ ...cellBaseStyle, width: columnWidths.skip, justifyContent: 'center' }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={sheet.skip}
+                onChange={(e) => handleSkipToggle(sheet.id, e.target.checked)}
+                size="small"
+                color={sheet.skip ? "default" : "success"}
+                sx={{
+                  '& .MuiSwitch-switchBase': {
+                    padding: '3px'
+                  },
+                  '& .MuiSwitch-thumb': {
+                    width: 16,
+                    height: 16
+                  },
+                  '& .MuiSwitch-track': {
+                    borderRadius: 10,
+                    opacity: 0.8,
+                    backgroundColor: sheet.skip ? '#bdbdbd' : undefined
+                  },
+                  mr: 0.5
+                }}
+              />
+            }
+            label={
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.7rem',
+                  whiteSpace: 'nowrap',
+                  fontWeight: 'medium',
+                  color: sheet.skip ? 'text.secondary' : 'success.main'
+                }}
+              >
+                {sheet.skip ? "Skipped" : "Import"}
+              </Typography>
+            }
+            sx={{ 
+              m: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
+          />
+        </div>
+        
+        {/* Status - Cell 5 */}
+        <div style={{ ...cellBaseStyle, width: columnWidths.status }}>
+          {(() => {
+            if (status.needsReview && !sheet.skip) {
+              return (
+                <Tooltip title="Table mapping needs review" placement="top">
+                  <Chip
+                    label="Needs Review"
+                    color="warning"
+                    icon={<WarningIcon fontSize="small" />}
+                    size="small"
+                  />
+                </Tooltip>
+              );
+            } else if (status.isApproved && !sheet.skip) {
+              return (
+                <Tooltip
+                  title={
+                    status.isNewTable
+                      ? "New table will be created"
+                      : status.confidence >= 95
+                        ? `Auto-approved (${status.confidence}% match)`
+                        : "Approved"
+                  }
+                  placement="top"
+                >
+                  <Chip
+                    label={status.isNewTable ? "New Table" : "Approved"}
+                    color={status.isNewTable ? "secondary" : "success"}
+                    icon={
+                      status.isNewTable
+                        ? <AddCircleIcon fontSize="small" />
+                        : <CheckCircleIcon fontSize="small" />
+                    }
+                    size="small"
+                  />
+                </Tooltip>
+              );
+            } else if (sheet.skip) {
+              return (
+                <Chip
+                  label="Skipped"
+                  color="default"
+                  size="small"
+                />
+              );
+            } else {
+              return (
+                <Chip
+                  label="Pending"
+                  color="default"
+                  size="small"
+                />
+              );
+            }
+          })()}
+        </div>
+        
+        {/* Actions - Cell 6 */}
+        <div style={{ ...cellBaseStyle, width: columnWidths.actions, justifyContent: 'center' }}>
+          <Stack direction="row" spacing={1}>
+            <Tooltip title="View Sample Data">
+              <IconButton
+                size="small"
+                onClick={() => handleSelectSheet(sheet.id)}
+              >
+                <VisibilityIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            
+            {status.needsReview && !sheet.skip && (
+              <Tooltip title="Approve Mapping">
+                <IconButton
+                  size="small"
+                  color="success"
+                  onClick={() => handleApproveNew(sheet.id)}
+                  disabled={!sheet.mappedName || sheet.mappedName === '_create_new_'}
+                >
+                  <CheckCircleIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
+        </div>
+      </div>
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayableSheets, getEffectiveStatus, theme.palette, selectedSheet, headerRowEdits, tables, tablePrefix, 
+      handleMappedNameChange, handleHeaderRowChange, handleSkipToggle, handleApproveNew, handleSelectSheet, 
+      updateSheet, toSqlFriendlyName, columnWidths, cellBaseStyle, tablesLoading, validateTableExists]);
+
+  // Calculate summary counts
+  const pendingCount = pendingSheets.length;
+  const approvedCount = approvedSheets.length;
+  const skippedCount = skippedSheets.length;
+
+  // Main UI - only shown after initial mapping is complete
+  return (
+    <Box>
+      <Card sx={{ mb: 4 }}>
+        <CardHeader
+          title="Sheet to Table Mapping"
+          subheader={
+            progress && progress.stage === 'analyzing'
+              ? "Auto-mapping sheets to tables... (Only ≥95% confidence matches will be auto-approved)"
+              : "Map each Excel sheet to a database table"
+          }
+          action={
+            progress && progress.stage === 'analyzing' && (
+              <CircularProgress size={24} sx={{ mr: 2 }} />
+            )
+          }
+        />
+        <Divider />
+        <CardContent>
+          <Stack spacing={3}>
+            {/* Global settings */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                Global Settings
+              </Typography>
+              
+              <Stack direction={isMobile ? "column" : "row"} spacing={2} alignItems={isMobile ? "flex-start" : "center"}>
+                <TextField
+                  label="Header Row"
+                  type="number"
+                  size="small"
+                  // Display 1-based for user
+                  value={globalHeaderRow + 1}
+                  onChange={handleGlobalHeaderRowChange}
+                  InputProps={{ inputProps: { min: 1 } }}
+                  helperText="Row number starts at 1"
+                  sx={{ width: 140 }}
+                />
+                
+                <TextField
+                  label="Table Prefix"
+                  size="small"
+                  value={tablePrefix}
+                  onChange={handleGlobalTablePrefixChange}
+                  placeholder="e.g., import_"
+                  helperText="Optional prefix for new tables only"
+                  sx={{ width: 240 }}
+                />
+                
+                <Button
+                  variant="outlined"
+                  onClick={handleAutoMap}
+                  disabled={tablesLoading || pendingSheets.length === 0}
+                  startIcon={tablesLoading ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+                >
+                  Auto-Map Sheets
+                </Button>
+              </Stack>
+            </Box>
+            
+            {/* Summary */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Mapping Summary
+              </Typography>
+              
+              <Stack direction="row" spacing={2} flexWrap="wrap">
+                <Chip 
+                  icon={<WarningIcon />} 
+                  label={`${pendingSheets.length} Need Review`}
+                  color="warning"
+                  variant={pendingSheets.length > 0 ? "filled" : "outlined"}
+                />
+                
+                <Chip 
+                  icon={<CheckCircleIcon />} 
+                  label={`${approvedSheets.length} Approved`}
+                  color="success"
+                  variant={approvedSheets.length > 0 ? "filled" : "outlined"}
+                />
+                
+                <Chip 
+                  label={`${skippedSheets.length} Skipped`}
+                  color="default"
+                  variant={skippedSheets.length > 0 ? "filled" : "outlined"}
+                />
+              </Stack>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+      
+      {/* Virtualized table for sheets */}
+      <Box sx={{ mb: 2, height: 400, overflow: 'hidden' }}>
+        <TableContainer component={Paper} sx={{ mb: 0 }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow sx={{ backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[100] }}>
+                {/* Adjust TableCell widths/flex to match div cells above if needed, or rely on content size */}
+                <TableCell sx={{ width: columnWidths.sheetName, borderBottom: `2px solid ${theme.palette.primary.main}` }}>Sheet Name</TableCell>
+                <TableCell sx={{ width: columnWidths.databaseTable, borderBottom: `2px solid ${theme.palette.primary.main}` }}>Database Table</TableCell>
+                <TableCell sx={{ width: columnWidths.headerRow, borderBottom: `2px solid ${theme.palette.primary.main}` }}>Header Row</TableCell>
+                <TableCell sx={{ width: columnWidths.skip, textAlign: 'center', borderBottom: `2px solid ${theme.palette.primary.main}` }}>Skip</TableCell>
+                <TableCell sx={{ width: columnWidths.status, borderBottom: `2px solid ${theme.palette.primary.main}` }}>Status</TableCell>
+                <TableCell sx={{ width: columnWidths.actions, textAlign: 'center', borderBottom: `2px solid ${theme.palette.primary.main}` }}>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+          </Table>
+        </TableContainer>
+
+        {/* Virtualized body for performance with large datasets */}
+        <Box
+          component="div"
+          sx={{
+            height: 350,
+            overflow: 'auto',
+            '& .ReactWindowRow': {
+              display: 'flex',
+              width: '100%',
+              borderBottom: '1px solid rgba(224, 224, 224, 1)'
+            }
+          }}
+        >
+          <List
+            height={350}
+            width="100%"
+            itemCount={displayableSheets.length}
+            itemSize={60} // Adjust based on your row height
+            overscanCount={5} // Number of items to render outside of the visible area
+            innerElementType="div"
+          >
+            {renderTableRow}
+          </List>
+        </Box>
+      </Box>
+      
+      {/* Selected sheet preview */}
+      {selectedSheet && (
+        <Box>
+          <Typography variant="subtitle1" gutterBottom>
+            Preview: {selectedSheet.originalName}
+          </Typography>
+          
+          <SampleDataTable 
+            sheet={selectedSheet} 
+            headerRow={selectedSheet.headerRow} 
+            showDataTypes={true}
+          />
+        </Box>
+      )}
+      
+      {/* No selection prompt */}
+      {!selectedSheet && sheets.length > 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Click the view icon on a sheet to preview its data
+        </Alert>
+      )}
+      
+      {/* Show all samples toggle */}
+      {sheets.length > 0 && (
+        <Button 
+          variant="outlined" 
+          onClick={() => setShowAllSamples(!showAllSamples)}
+          sx={{ mt: 2 }}
+        >
+          {showAllSamples ? 'Hide All Samples' : 'Show All Samples'}
+        </Button>
+      )}
+      
+      {/* All sheet previews */}
+      {showAllSamples && (
+        <Box sx={{ mt: 2 }}>
+          {sheets.map((sheet) => (
+            <Box key={sheet.id} sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                {sheet.originalName} {sheet.skip ? '(Skipped)' : `→ ${sheet.mappedName}`}
+              </Typography>
+              
+              <SampleDataTable 
+                sheet={sheet} 
+                headerRow={sheet.headerRow} 
+                showDataTypes={true}
+              />
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+/**
+ * Error handling wrapper for TableMappingStepVirtualized
+ * This catches rendering errors and provides a graceful fallback UI
+ */
+const TableMappingStepWithErrorBoundary: React.FC<TableMappingStepProps> = (props) => {
+  const handleGoBack = () => {
+    // Notify parent about going back
+    props.onSheetSelect(null);
+    // Notify that error is cleared
+    props.onError(null);
+  };
+
+  return (
+    <ErrorBoundary
+      fallback={
+        <ImportErrorFallback 
+          onBackStep={handleGoBack}
+        />
+      }
+      onError={(error) => {
+        console.error('Table mapping error:', error);
+        props.onError(`Table mapping error: ${error.message}`);
+      }}
+    >
+      <TableMappingStepVirtualized {...props} />
+    </ErrorBoundary>
+  );
+};
+
+export default TableMappingStepWithErrorBoundary;

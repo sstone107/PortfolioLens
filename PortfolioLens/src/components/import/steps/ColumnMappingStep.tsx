@@ -66,6 +66,8 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
   onSheetSelect,
   onError
 }) => {
+  const processedSheetKeys = useRef<Record<string, boolean>>({}); // Correct placement for useRef
+
   /**
    * Normalize PostgreSQL data types to standard format for UI
    * Handles special cases like 'timestamp without time zone'
@@ -574,8 +576,8 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
           // IMPORTANT: Store NON-EMPTY similarity matrix and best matches to signal completion
           // Empty objects might trigger recalculation, but non-empty objects with known keys
           // will signal that the calculation is complete
-          setSimilarityMatrix({ 'calculation_complete': true });
-          setBestMatches({ 'exact_matches_only': true });
+          setSimilarityMatrix({ "__CALCULATION_COMPLETE__": { "__FLAG__": 0 } });
+          setBestMatches({ "__EXACT_MATCHES_ONLY__": { field: "__FLAG__", score: 0 } });
 
           // Update the lastProcessedCombination ref to mark this as fully processed
           lastProcessedCombination.current = `${selectedSheet.id}_${tableSchema.name}_complete`;
@@ -987,13 +989,13 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
     // Use a static processed flag to ensure this runs only once per sheet
     // This is crucial to avoid layout thrashing and multiple state updates
     const processingKey = `${selectedSheet.id}_${tableSchema.name}_processed`;
-    if (window[processingKey]) {
+    if (processedSheetKeys.current[processingKey]) {
       // Already processed this combination
       return;
     }
 
     // Set the processed flag
-    window[processingKey] = true;
+    processedSheetKeys.current[processingKey] = true;
 
     // Use requestAnimationFrame to schedule the processing after rendering
     // This prevents layout thrashing and reduces forced reflow warnings
@@ -1339,14 +1341,17 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
           scrollButtons="auto"
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          {validSheets.map((sheet, index) => (
-            <Tab 
-              key={sheet.id} 
-              label={sheet.originalName} 
-              icon={getSheetStatusIcon(sheet)}
-              iconPosition="end"
-            />
-          ))}
+          {validSheets.map((sheet, index) => {
+            const statusIcon = getSheetStatusIcon(sheet);
+            return (
+              <Tab 
+                key={sheet.id} 
+                label={sheet.originalName} 
+                {...(statusIcon && { icon: statusIcon })}
+                iconPosition="end"
+              />
+            );
+          })}
         </Tabs>
       </Paper>
       

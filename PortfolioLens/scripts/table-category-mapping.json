@@ -1,0 +1,70 @@
+{
+  "loan_tables": [
+    {"name": "bankruptcy", "new_name": "loan_bankruptcy"},
+    {"name": "borrowers", "new_name": "loan_borrowers"},
+    {"name": "covid_19", "new_name": "loan_covid_19"},
+    {"name": "delinquency", "new_name": "loan_delinquency"},
+    {"name": "expenses", "new_name": "loan_expenses"},
+    {"name": "foreclosure", "new_name": "loan_foreclosure"},
+    {"name": "insurance", "new_name": "loan_insurance"},
+    {"name": "loan_details", "new_name": "loan_details"},
+    {"name": "loan_documents", "new_name": "loan_documents"},
+    {"name": "loan_information", "new_name": "loan_information"},
+    {"name": "loan_note_attachments", "new_name": "loan_note_attachments"},
+    {"name": "loan_notes", "new_name": "loan_notes"},
+    {"name": "loan_portfolio_mappings", "new_name": "loan_portfolio_mappings"},
+    {"name": "loan_snapshots", "new_name": "loan_snapshots"},
+    {"name": "loan_status_logs", "new_name": "loan_status_logs"},
+    {"name": "loans", "new_name": "loan_loans"},
+    {"name": "loss_mitigation", "new_name": "loan_loss_mitigation"},
+    {"name": "payment_transactions", "new_name": "loan_payment_transactions"},
+    {"name": "payments", "new_name": "loan_payments"},
+    {"name": "properties", "new_name": "loan_properties"},
+    {"name": "trailing_payments", "new_name": "loan_trailing_payments"}
+  ],
+  "system_tables": [
+    {"name": "admin_audit_log", "new_name": "sys_admin_audit_log"},
+    {"name": "audit_logs", "new_name": "sys_audit_logs"},
+    {"name": "audit_trail", "new_name": "sys_audit_trail"},
+    {"name": "columns_list", "new_name": "sys_columns_list"},
+    {"name": "global_attributes", "new_name": "sys_global_attributes"},
+    {"name": "inconsistent_loan_mappings", "new_name": "sys_inconsistent_loan_mappings"},
+    {"name": "module_visibility", "new_name": "sys_module_visibility"},
+    {"name": "record_tags", "new_name": "sys_record_tags"},
+    {"name": "roles", "new_name": "sys_roles"},
+    {"name": "schema_cache", "new_name": "sys_schema_cache"},
+    {"name": "sql_execution_log", "new_name": "sys_sql_execution_log"},
+    {"name": "sub_servicer_tags", "new_name": "sys_sub_servicer_tags"},
+    {"name": "tables_list", "new_name": "sys_tables_list"},
+    {"name": "unmapped_loans", "new_name": "sys_unmapped_loans"},
+    {"name": "user_role_assignments", "new_name": "sys_user_role_assignments"},
+    {"name": "user_roles", "new_name": "sys_user_roles"},
+    {"name": "users", "new_name": "sys_users"}
+  ],
+  "import_tables": [
+    {"name": "import_job_mappings", "new_name": "imp_job_mappings"},
+    {"name": "import_jobs", "new_name": "imp_jobs"},
+    {"name": "import_mappings", "new_name": "imp_mappings"},
+    {"name": "mapping_templates", "new_name": "imp_mapping_templates"},
+    {"name": "uploads", "new_name": "imp_uploads"}
+  ],
+  "reporting_tables": [
+    {"name": "billing_line_items", "new_name": "rpt_billing_line_items"},
+    {"name": "billing_records", "new_name": "rpt_billing_records"},
+    {"name": "saved_filters", "new_name": "rpt_saved_filters"}
+  ],
+  "partner_tables": [
+    {"name": "doc_custodians", "new_name": "prt_doc_custodians"},
+    {"name": "investors", "new_name": "prt_investors"},
+    {"name": "portfolio_loans", "new_name": "prt_portfolio_loans"},
+    {"name": "portfolio_portfolio_types", "new_name": "prt_portfolio_portfolio_types"},
+    {"name": "portfolio_types", "new_name": "prt_portfolio_types"},
+    {"name": "portfolios", "new_name": "prt_portfolios"},
+    {"name": "prior_servicers", "new_name": "prt_prior_servicers"},
+    {"name": "sellers", "new_name": "prt_sellers"},
+    {"name": "servicers", "new_name": "prt_servicers"}
+  ],
+  "skip_tables": [
+    "loan_portfolio_view"
+  ]
+}

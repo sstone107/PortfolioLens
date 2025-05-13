@@ -28,6 +28,9 @@ export interface SheetMapping {
   status: 'pending' | 'mapping' | 'ready' | 'approved' | 'failed';
   error?: string;
   firstRows?: unknown[][];
+  isNewTable?: boolean;
+  wasCreatedNew?: boolean;
+  suggestedName?: string;
 }
 
 export interface MappingTemplate {
@@ -127,8 +130,8 @@ export interface BatchImportState {
 
 // Initial state
 const initialState: Omit<BatchImportState, 'setFile' | 'clearFile' | 'setSheets' | 'updateSheet' 
-| 'updateSheetColumn' | 'setSelectedSheetId' | 'setProgress' | 'setHeaderRow' | 'setTablePrefix'
-| 'setTemplates' | 'setSelectedTemplateId' | 'setImportResults' | 'resetImportResults' 
+| 'updateSheetColumn' | 'batchUpdateSheetColumns' | 'setSelectedSheetId' | 'setProgress' | 'setHeaderRow' | 'setTablePrefix'
+| 'setTemplates' | 'setSelectedTemplateId' | 'setSimilarityMatrix' | 'setBestMatches' | 'setImportResults' | 'resetImportResults' 
 | 'setMappingInProgress' | 'reset'> = {
   fileName: '',
   fileType: '',
