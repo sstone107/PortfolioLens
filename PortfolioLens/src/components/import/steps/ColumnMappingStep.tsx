@@ -1621,7 +1621,7 @@ export const ColumnMappingStep: React.FC<ColumnMappingStepProps> = ({
                   sx={{ ml: 1 }}
                 />
                 <Box sx={{ ml: 'auto', fontSize: '0.8rem', color: 'warning.dark', fontWeight: 'normal' }}>
-                  Fields with low confidence (&lt;85%) or missing mappings need review
+                  Fields with low confidence (&lt;95%) or missing mappings need review
                 </Box>
               </Typography>
 
@@ -2641,8 +2641,8 @@ const getConfidenceColor = (confidence: number): 'success' | 'warning' | 'error'
   const cappedConfidence = Math.min(100, confidence);
 
   if (cappedConfidence >= 95) return 'success';
-  if (cappedConfidence >= 80) return 'warning';
-  if (cappedConfidence < 80) return 'error';
+  if (cappedConfidence >= 70) return 'warning';
+  if (cappedConfidence < 70) return 'error';
   return 'default';
 };
 
@@ -2651,8 +2651,8 @@ const getMatchIndicator = (confidence: number): 'success' | 'warning' | 'none' =
   // Cap confidence at 100% for display
   const cappedConfidence = Math.min(100, confidence);
 
-  if (cappedConfidence >= 95) return 'success';
-  if (cappedConfidence >= 80) return 'warning';
+  if (cappedConfidence >= 95) return 'success'; // Only mark as success at 95% or higher
+  if (cappedConfidence >= 70) return 'warning'; // Lower threshold for warning indicator
   return 'none';
 };
 
@@ -2667,7 +2667,7 @@ const getConfidenceChipColor = (confidence: number): string => {
   const cappedConfidence = Math.min(100, confidence);
 
   if (cappedConfidence >= 95) return '#4caf50'; // Success green
-  if (cappedConfidence >= 80) return '#ff9800'; // Warning orange
+  if (cappedConfidence >= 70) return '#ff9800'; // Warning orange
   return '#f44336'; // Error red for low confidence
 };
 

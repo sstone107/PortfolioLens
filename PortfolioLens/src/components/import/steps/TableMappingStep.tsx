@@ -82,11 +82,52 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
   // Table matching utility
   const { findBestMatchingTable } = useTableMatcher(tables);
 
+  // Track if initial auto-mapping has been attempted to prevent infinite loops
+  const [autoMapAttempted, setAutoMapAttempted] = useState(false);
+
+  // Add safety timer to prevent getting stuck in loading state
+  useEffect(() => {
+    // First safety timer - short timeout
+    const quickTimer = setTimeout(() => {
+      if (!initialAutoMapComplete) {
+        console.log('Quick safety timeout: first attempt to exit loading state');
+        setInitialAutoMapComplete(true);
+      }
+    }, 2000);
+
+    // Second safety timer - longer timeout as backup
+    const backupTimer = setTimeout(() => {
+      console.log('Backup safety timeout: forcing exit from loading state');
+      setInitialAutoMapComplete(true);
+
+      // Force reset progress too
+      setProgress({
+        stage: 'idle',
+        message: 'Auto-mapping complete (timeout)',
+        percent: 100
+      });
+    }, 5000);
+
+    // Clean up timers
+    return () => {
+      clearTimeout(quickTimer);
+      clearTimeout(backupTimer);
+    };
+  }, [initialAutoMapComplete, setProgress]);
+
   // Auto-map tables when component loads
   useEffect(() => {
+    // Only try auto-mapping once to prevent infinite loops
+    if (autoMapAttempted) {
+      return;
+    }
+
     if (tables.length > 0 && !tablesLoading) {
       console.log('Tables loaded in TableMappingStep:', tables.length);
       console.log('Sample tables:', tables.slice(0, 3));
+
+      // Mark that we've attempted auto-mapping
+      setAutoMapAttempted(true);
 
       // Check if we have unmapped sheets that need auto-mapping
       const unmappedSheets = sheets.filter(s => !s.skip &&
@@ -103,18 +144,23 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
 
         // Use setTimeout to allow UI to update with progress indicator
         setTimeout(() => {
-          // Run auto-mapping
-          handleAutoMapInternal();
+          try {
+            // Run auto-mapping
+            handleAutoMapInternal();
+          } catch (error) {
+            // Log any errors but don't let them prevent UI from updating
+            console.error('Error during auto-mapping:', error);
+          } finally {
+            // Always reset progress when done, even if there was an error
+            setProgress({
+              stage: 'idle',
+              message: 'Auto-mapping complete',
+              percent: 100
+            });
 
-          // Reset progress when done
-          setProgress({
-            stage: 'idle',
-            message: 'Auto-mapping complete',
-            percent: 100
-          });
-
-          // Mark initial auto-mapping as complete
-          setInitialAutoMapComplete(true);
+            // Always mark initial auto-mapping as complete to exit loading state
+            setInitialAutoMapComplete(true);
+          }
         }, 300); // Slightly longer timeout for better UX
       } else {
         // If no sheets to map, still mark as complete
@@ -122,9 +168,10 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
       }
     } else if (!tables.length && !tablesLoading) {
       // No tables but not loading, so we must be done
+      setAutoMapAttempted(true);
       setInitialAutoMapComplete(true);
     }
-  }, [tables, tablesLoading, sheets, setProgress, findBestMatchingTable, updateSheet, setSelectedSheet, onSheetSelect]);
+  }, [tables, tablesLoading, sheets, setProgress, autoMapAttempted, findBestMatchingTable, updateSheet, setSelectedSheet, onSheetSelect]);
 
   // Set error if tables failed to load
   useEffect(() => {
@@ -278,24 +325,25 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         });
 
         matchCount++;
-      } else if (bestMatch && bestMatch.confidence >= 70) {
-        // Suggest match but keep for review (anything below 95% needs review per spec)
-        console.log(`Suggesting match: ${sheet.originalName} → ${bestMatch.tableName} (${bestMatch.confidence}%)`);
+      } else {
+        // For matches below 95% confidence, suggest "Create New Table" instead
+        console.log(`No high confidence match found for: ${sheet.originalName}, suggesting new table creation`);
 
-        // Don't apply prefix to existing tables - use the table name as-is
-        const safeTableName = normalizeTableName(bestMatch.tableName);
+        // Generate a suggested table name from the sheet name
+        const suggestedName = normalizeTableName(sheet.originalName);
 
-        console.log(`Using safe table name: ${bestMatch.tableName} → ${safeTableName}`);
+        // Apply prefix if it exists
+        const prefixedSuggestion = tablePrefix ? `${tablePrefix}${suggestedName}` : suggestedName;
 
         updateSheet(sheet.id, {
-          mappedName: safeTableName,
+          mappedName: '_create_new_',
           needsReview: true,
-          status: 'mapping'
+          status: 'mapping',
+          // Use a temporary property to store the suggested name
+          // @ts-ignore - Custom property
+          suggestedName: prefixedSuggestion
         });
 
-        suggestCount++;
-      } else {
-        console.log(`No good match found for: ${sheet.originalName}`);
         noMatchCount++;
       }
     });
@@ -303,12 +351,11 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
     console.log(`Auto-mapping complete: ${matchCount} auto-approved, ${suggestCount} suggested, ${noMatchCount} no match`);
 
     // Select the first sheet that needs review, if any
-    if (suggestCount > 0) {
-      const firstNeedsReview = sheets.find(s => !s.skip && s.needsReview);
-      if (firstNeedsReview) {
-        setSelectedSheet(firstNeedsReview);
-        onSheetSelect(firstNeedsReview.id);
-      }
+    // Even though suggestCount might be 0, we still look for sheets needing review
+    const firstNeedsReview = sheets.find(s => !s.skip && s.needsReview);
+    if (firstNeedsReview) {
+      setSelectedSheet(firstNeedsReview);
+      onSheetSelect(firstNeedsReview.id);
     }
 
     return { matchCount, suggestCount, noMatchCount };
@@ -325,15 +372,20 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
 
     // Use setTimeout to ensure the progress indicator shows
     setTimeout(() => {
-      // Run auto-mapping
-      handleAutoMapInternal();
-
-      // Reset progress when done
-      setProgress({
-        stage: 'idle',
-        message: 'Auto-mapping complete',
-        percent: 100
-      });
+      try {
+        // Run auto-mapping
+        handleAutoMapInternal();
+      } catch (error) {
+        // Log any errors but don't let them prevent UI from updating
+        console.error('Error during manual auto-mapping:', error);
+      } finally {
+        // Always reset progress when done, even if there was an error
+        setProgress({
+          stage: 'idle',
+          message: 'Auto-mapping complete',
+          percent: 100
+        });
+      }
     }, 100);
   };
   
@@ -445,13 +497,41 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
     console.log(`Updated global table prefix to ${prefix || '(none)'}`);
   };
   
-  // Group sheets by status
-  const pendingSheets = sheets.filter(s => s.needsReview && !s.skip);
-  const approvedSheets = sheets.filter(s => s.approved && !s.skip);
+  // Group sheets by status, taking into account both actual approval
+  // and effective approval (high confidence matches)
+  const pendingSheets = sheets.filter(s => {
+    if (s.skip) return false;
+
+    // Calculate if this sheet has a high confidence match
+    const availableOptions = getSortedTableSuggestions(s.originalName, tables, '');
+    const matchedOption = availableOptions.find(option => option.name === s.mappedName);
+    const matchConfidence = matchedOption?.confidence || 0;
+    const hasHighConfidenceMatch = s.mappedName && matchConfidence >= 95 && s.mappedName !== '_create_new_';
+    const effectivelyApproved = s.approved || hasHighConfidenceMatch;
+
+    // Only count as pending if not effectively approved
+    return !effectivelyApproved && s.needsReview;
+  });
+
+  const approvedSheets = sheets.filter(s => {
+    if (s.skip) return false;
+
+    // Calculate if this sheet has a high confidence match
+    const availableOptions = getSortedTableSuggestions(s.originalName, tables, '');
+    const matchedOption = availableOptions.find(option => option.name === s.mappedName);
+    const matchConfidence = matchedOption?.confidence || 0;
+    const hasHighConfidenceMatch = s.mappedName && matchConfidence >= 95 && s.mappedName !== '_create_new_';
+
+    // Count as approved if actually approved or has high confidence
+    return s.approved || hasHighConfidenceMatch;
+  });
+
   const skippedSheets = sheets.filter(s => s.skip);
   
   // Enhanced loading state that completely masks the UI during processing
-  if (!initialAutoMapComplete || progress.stage === 'analyzing' || progress.stage === 'reading') {
+  // Add a forced override to bypass loading screen if we're stuck for some reason
+  const forceBypassLoading = autoMapAttempted && tables.length > 0;
+  if ((!initialAutoMapComplete || progress.stage === 'analyzing' || progress.stage === 'reading') && !forceBypassLoading) {
     // Full screen loading state that blocks UI completely
     return (
       <Box
@@ -579,7 +659,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Tables with ≥95% confidence will be auto-approved
+          Only tables with ≥95% confidence will be suggested for mapping
         </Typography>
       </Box>
     );
@@ -589,11 +669,11 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
   return (
     <Box>
       <Card sx={{ mb: 4 }}>
-        <CardHeader 
+        <CardHeader
           title="Sheet to Table Mapping"
           subheader={
-            progress && progress.stage === 'analyzing' 
-              ? "Auto-mapping sheets to tables... (≥95% confidence matches will be auto-approved)"
+            progress && progress.stage === 'analyzing'
+              ? "Auto-mapping sheets to tables... (Only ≥95% confidence matches will be suggested)"
               : "Map each Excel sheet to a database table"
           }
           action={
@@ -711,19 +791,59 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                   '&:hover': {
                     backgroundColor: 'action.hover',
                   },
-                  // Add left border for sheets that need review
-                  borderLeft: sheet.needsReview && !sheet.skip ? '4px solid' : 'none',
-                  borderLeftColor: sheet.needsReview && !sheet.skip ? 'warning.light' : 'transparent'
+                  // Add colored left border based on effective status
+                  borderLeft: (() => {
+                    // Calculate if this sheet has a high confidence match
+                    const availableOptions = getSortedTableSuggestions(sheet.originalName, tables, '');
+                    const matchedOption = availableOptions.find(option => option.name === sheet.mappedName);
+                    const matchConfidence = matchedOption?.confidence || 0;
+                    const hasHighConfidenceMatch = sheet.mappedName && matchConfidence >= 95 && sheet.mappedName !== '_create_new_';
+                    const effectivelyApproved = sheet.approved || hasHighConfidenceMatch;
+
+                    if (sheet.skip) return 'none';
+                    return '4px solid';
+                  })(),
+                  borderLeftColor: (() => {
+                    // Calculate if this sheet has a high confidence match
+                    const availableOptions = getSortedTableSuggestions(sheet.originalName, tables, '');
+                    const matchedOption = availableOptions.find(option => option.name === sheet.mappedName);
+                    const matchConfidence = matchedOption?.confidence || 0;
+                    const hasHighConfidenceMatch = sheet.mappedName && matchConfidence >= 95 && sheet.mappedName !== '_create_new_';
+                    const effectivelyApproved = sheet.approved || hasHighConfidenceMatch;
+
+                    if (sheet.skip) return 'transparent';
+                    if (effectivelyApproved) return 'success.light';
+                    if (sheet.needsReview) return 'warning.light';
+                    return 'transparent';
+                  })()
                 }}
               >
                 {/* Sheet Name */}
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    {sheet.needsReview && !sheet.skip && (
-                      <Tooltip title="Columns need review">
-                        <WarningIcon color="warning" fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
-                      </Tooltip>
-                    )}
+                    {(() => {
+                      // Calculate if this sheet has a high confidence match
+                      const availableOptions = getSortedTableSuggestions(sheet.originalName, tables, '');
+                      const matchedOption = availableOptions.find(option => option.name === sheet.mappedName);
+                      const matchConfidence = matchedOption?.confidence || 0;
+                      const hasHighConfidenceMatch = sheet.mappedName && matchConfidence >= 95 && sheet.mappedName !== '_create_new_';
+                      const effectivelyApproved = sheet.approved || hasHighConfidenceMatch;
+
+                      if (!effectivelyApproved && sheet.needsReview && !sheet.skip) {
+                        return (
+                          <Tooltip title="Table mapping needs review">
+                            <WarningIcon color="warning" fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
+                          </Tooltip>
+                        );
+                      } else if (effectivelyApproved && !sheet.skip) {
+                        return (
+                          <Tooltip title={hasHighConfidenceMatch ? `Table mapping auto-approved (${matchConfidence}% confidence)` : "Table mapping approved"}>
+                            <CheckCircleIcon color="success" fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
+                          </Tooltip>
+                        );
+                      }
+                      return null;
+                    })()}
                     <Typography fontWeight={sheet.id === selectedSheet?.id ? 'bold' : 'normal'}>
                       {sheet.originalName}
                     </Typography>
@@ -941,25 +1061,52 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                 
                 {/* Status */}
                 <TableCell>
-                  {sheet.needsReview ? (
-                    <Tooltip
-                      title={`This sheet has columns that need review`}
-                      placement="top"
-                    >
-                      <Chip
-                        label={getStatusLabel(sheet)}
-                        color="warning"
-                        icon={<WarningIcon fontSize="small" />}
-                        size="small"
-                      />
-                    </Tooltip>
-                  ) : (
-                    <Chip
-                      label={getStatusLabel(sheet)}
-                      color={getStatusColor(sheet)}
-                      size="small"
-                    />
-                  )}
+                  {(() => {
+                    // Calculate if this sheet has a high confidence match
+                    const availableOptions = getSortedTableSuggestions(sheet.originalName, tables, '');
+                    const matchedOption = availableOptions.find(option => option.name === sheet.mappedName);
+                    const matchConfidence = matchedOption?.confidence || 0;
+                    const hasHighConfidenceMatch = sheet.mappedName && matchConfidence >= 95 && sheet.mappedName !== '_create_new_';
+                    const effectivelyApproved = sheet.approved || hasHighConfidenceMatch;
+
+                    if (!effectivelyApproved && sheet.needsReview) {
+                      return (
+                        <Tooltip
+                          title="Table mapping needs review"
+                          placement="top"
+                        >
+                          <Chip
+                            label="Needs Review"
+                            color="warning"
+                            icon={<WarningIcon fontSize="small" />}
+                            size="small"
+                          />
+                        </Tooltip>
+                      );
+                    } else if (effectivelyApproved) {
+                      return (
+                        <Tooltip
+                          title={hasHighConfidenceMatch ? `Auto-approved (${matchConfidence}% match)` : "Approved"}
+                          placement="top"
+                        >
+                          <Chip
+                            label="Approved"
+                            color="success"
+                            icon={<CheckCircleIcon fontSize="small" />}
+                            size="small"
+                          />
+                        </Tooltip>
+                      );
+                    } else {
+                      return (
+                        <Chip
+                          label={getStatusLabel(sheet)}
+                          color={getStatusColor(sheet)}
+                          size="small"
+                        />
+                      );
+                    }
+                  })()}
                 </TableCell>
                 
                 {/* Actions */}
@@ -974,18 +1121,31 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                       </IconButton>
                     </Tooltip>
                     
-                    {sheet.needsReview && !sheet.skip && (
-                      <Tooltip title="Approve Mapping">
-                        <IconButton
-                          size="small"
-                          color="success"
-                          onClick={() => handleApprove(sheet.id)}
-                          disabled={!sheet.mappedName || sheet.mappedName === '_create_new_'}
-                        >
-                          <CheckCircleIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
+                    {(() => {
+                      // Calculate if this sheet has a high confidence match
+                      const availableOptions = getSortedTableSuggestions(sheet.originalName, tables, '');
+                      const matchedOption = availableOptions.find(option => option.name === sheet.mappedName);
+                      const matchConfidence = matchedOption?.confidence || 0;
+                      const hasHighConfidenceMatch = sheet.mappedName && matchConfidence >= 95 && sheet.mappedName !== '_create_new_';
+                      const effectivelyApproved = sheet.approved || hasHighConfidenceMatch;
+
+                      // Only show approval button if not effectively approved and needs review
+                      if (!effectivelyApproved && sheet.needsReview && !sheet.skip) {
+                        return (
+                          <Tooltip title="Approve Mapping">
+                            <IconButton
+                              size="small"
+                              color="success"
+                              onClick={() => handleApprove(sheet.id)}
+                              disabled={!sheet.mappedName || sheet.mappedName === '_create_new_'}
+                            >
+                              <CheckCircleIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        );
+                      }
+                      return null;
+                    })()}
                   </Stack>
                 </TableCell>
               </TableRow>

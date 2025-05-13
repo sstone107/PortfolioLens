@@ -446,7 +446,7 @@ export async function batchProcessSimilarity(
               mappedName: match.field.name,
               dataType: normalizeDataType(match.field.type),
               confidence: match.score,
-              needsReview: match.score < 95, // High confidence threshold
+              needsReview: match.score < 95, // Requires 95% confidence for auto-approval
               originalIndex: column.originalIndex,
               exactMatch: false,
               sample: column.sample,
