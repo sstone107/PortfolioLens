@@ -255,7 +255,6 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
               }}
               disabled={sheet.skip}
               fullWidth
-              error={false}
               placeholder=""
               variant="outlined"
               sx={{
@@ -309,7 +308,8 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
             value={selectValue}
             onChange={(e) => handleMappedNameChange(sheet.id, e.target.value)}
             disabled={sheet.skip || tablesLoading} // Also disable select while tables load
-            error={(!tablesLoading && sheet.mappedName && sheet.mappedName !== '_create_new_' && 
+            // Using 'error' boolean as per MUI Select API
+            error={Boolean(!tablesLoading && sheet.mappedName && sheet.mappedName !== '_create_new_' && 
                    !validateTableExists(sheet.mappedName))}
             displayEmpty
             MenuProps={{
@@ -404,8 +404,8 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
                 value={sheet.createNewValue} 
                 sx={{ 
                   fontWeight: 'bold', 
-                  backgroundColor: alpha(useTheme().palette.success.light, 0.1),
-                  border: `1px solid ${useTheme().palette.success.main}`,
+                  backgroundColor: alpha(theme.palette.success.light, 0.1),
+                  border: `1px solid ${theme.palette.success.main}`,
                   borderRadius: '4px',
                   my: 0.5
                 }}

@@ -53,6 +53,22 @@ export const useTableMetadata = () => {
     loadTables();
   }, [loadTables]);
   
+  // Set up event listener for schema cache refresh events
+  useEffect(() => {
+    const handleSchemaRefresh = (event: Event) => {
+      console.log('Schema cache refresh event detected, reloading tables...');
+      loadTables();
+    };
+    
+    // Listen for the custom event we dispatch when schema cache is refreshed
+    window.addEventListener('schema-cache-refreshed', handleSchemaRefresh);
+    
+    // Clean up the event listener on unmount
+    return () => {
+      window.removeEventListener('schema-cache-refreshed', handleSchemaRefresh);
+    };
+  }, [loadTables]);
+  
   return { tables, loading, error, reload: loadTables };
 };
 
@@ -321,6 +337,9 @@ export const useTableMatcher = (dbTables: any[]) => {
 
   // Find best matching columns for a sheet
   const findMatchingColumns = useCallback((sheet: SheetMapping, tableName: string) => {
+    // Check if this is a new table (isNewTable flag set)
+    const isCreatingNewTable = sheet.isNewTable || sheet.wasCreatedNew || sheet.createNewValue === tableName;
+    
     // Find table schema, handling ln_ prefix
     // First try exact match
     let table = dbTables.find(t => t.name === tableName);
@@ -334,8 +353,12 @@ export const useTableMatcher = (dbTables: any[]) => {
     }
     
     if (!table) {
-      console.error(`No table found for: ${tableName} (with or without ln_ prefix)`);
-      return [];
+      console.log(`No table found for: ${tableName} (with or without ln_ prefix) - treating as new table`);
+      // If this is a new table but we don't have schema info, we'll infer column mappings
+      if (!isCreatingNewTable) {
+        return [];
+      }
+      // Continue for new tables - we'll create all fields as new
     }
 
     // Create a map of all existing column names for fast lookups
@@ -410,7 +433,7 @@ export const useTableMatcher = (dbTables: any[]) => {
 
         // Handle the case with numeric prefixes - check if there's an existing column
         // with the same name after normalization (but without the col_ prefix)
-        if (/^col_\d/.test(normalizedName)) {
+        if (table && table.columns && /^col_\d/.test(normalizedName)) {
           // Try without the col_ prefix and see if it exists in the table schema
           const unprefixedName = normalizedName.substring(4); // Remove 'col_'
           // Check if this unprefixed name exists in our database
@@ -422,6 +445,26 @@ export const useTableMatcher = (dbTables: any[]) => {
               confidence: 90 // High confidence but not a perfect match
             };
           }
+        }
+
+        // Is this part of a newly created table?
+        if (isCreatingNewTable) {
+          // Special case for new tables - set to _create_new_ to trigger auto field creation
+          // The inferred data type should be prioritized here
+          const inferredType = column.inferredDataType || 
+                               (column.sample && column.sample.length > 0 ? 
+                                inferColumnType(column.originalName, column.sample).type : 
+                                column.dataType || 'text');
+
+          return {
+            ...column,
+            mappedName: '_create_new_',
+            createNewValue: normalizedName, // Store normalized name for when it gets created
+            dataType: inferredType, // Use the inferred type if available
+            confidence: 0,
+            _isNewlyCreated: true, // Mark as newly created
+            needsReview: false // Auto-approve for new tables
+          };
         }
 
         // Default case - create new field

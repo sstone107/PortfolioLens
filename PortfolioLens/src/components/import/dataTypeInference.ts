@@ -287,24 +287,44 @@ export const inferTypeFromSamples = (samples: unknown[]): TypeInferenceResult =>
   let numericCount = 0;
   let textCount = 0;
   
+  // Sample validation log for debugging
+  const sampleLog = validSamples.slice(0, 3).map(sample => String(sample));
+  console.log(`Sample data examples [${sampleLog.join(', ')}]`);
+  
   // Check each sample
   validSamples.forEach(sample => {
     const str = String(sample).trim();
+    const originalValue = str;
+    
+    // Store diagnostics to log problematic cases
+    let typeDetection = '';
     
     if (isLikelyUuid(str)) {
       uuidCount++;
+      typeDetection = 'uuid';
     } else if (isLikelyTimestamp(str)) {
       timestampCount++;
+      typeDetection = 'timestamp';
     } else if (isLikelyDate(str)) {
       dateCount++;
+      typeDetection = 'date';
     } else if (isLikelyBoolean(str)) {
       booleanCount++;
+      typeDetection = 'boolean';
     } else if (isLikelyInteger(str)) {
       integerCount++;
+      typeDetection = 'integer';
     } else if (isLikelyNumeric(str)) {
       numericCount++;
+      typeDetection = 'numeric';
     } else {
       textCount++;
+      typeDetection = 'text';
+    }
+    
+    // Log occasional samples for debugging type detection issues
+    if (Math.random() < 0.1) { // Log ~10% of samples
+      console.debug(`Sample value "${originalValue}" detected as ${typeDetection}`);
     }
   });
   
@@ -321,7 +341,92 @@ export const inferTypeFromSamples = (samples: unknown[]): TypeInferenceResult =>
     text: (textCount / total) * 100
   };
   
-  // Determine dominant type
+  // Log percentage breakdown
+  console.log('Type detection breakdown:', 
+    Object.entries(typePercentages)
+      .filter(([_, pct]) => pct > 0)
+      .map(([type, pct]) => `${type}: ${Math.round(pct)}%`)
+      .join(', ')
+  );
+  
+  // Special case handling for specific patterns
+  
+  // Check for currency values with symbols (%, $, etc.) which should be numeric
+  if (textCount > 0 && (numericCount > 0 || integerCount > 0)) {
+    // Look for currency/percentage patterns in the strings identified as text
+    const currencyRegex = /^\s*[$€£¥]\s*[\d,.]+\s*$/;
+    const percentRegex = /^\s*[\d,.]+\s*[%]\s*$/;
+    
+    let currencyCount = 0;
+    let percentCount = 0;
+    
+    validSamples.forEach(sample => {
+      const str = String(sample).trim();
+      if (currencyRegex.test(str)) {
+        currencyCount++;
+      } else if (percentRegex.test(str)) {
+        percentCount++;
+      }
+    });
+    
+    // If a significant portion are currency or percentage, treat as numeric
+    if ((currencyCount + percentCount) / total > 0.3) {
+      console.log(`Detected currency/percentage pattern (${currencyCount}/${percentCount} out of ${total})`);
+      return { 
+        type: 'numeric', 
+        confidence: 90,
+        pattern: 'Currency or percentage detected'
+      };
+    }
+  }
+  
+  // Handle leading zeros (like account numbers, zip codes, etc.)
+  const hasLeadingZeros = validSamples.some(sample => {
+    const str = String(sample);
+    return str.startsWith('0') && str.length > 1 && !str.startsWith('0.');
+  });
+  
+  if (hasLeadingZeros) {
+    // Fields with leading zeros should ALWAYS be text to preserve data
+    console.log('Leading zeros detected, using text type');
+    return { 
+      type: 'text', 
+      confidence: 95,
+      pattern: 'Leading zeros detected'
+    };
+  }
+  
+  // Prioritize inferences based on confidence threshold hierarchy
+  
+  // 1. Strong numeric/integer signals - check first to avoid misinterpreting numbers
+  if (numericCount + integerCount > total * 0.75) {
+    // If most values are numeric, check if they're all integers
+    if (integerCount > numericCount * 2) {
+      return { type: 'integer', confidence: 90 };
+    } else {
+      return { type: 'numeric', confidence: 90 };
+    }
+  }
+  
+  // 2. Strong date/timestamp signals
+  if (dateCount + timestampCount > total * 0.7) {
+    return { 
+      type: timestampCount > dateCount ? 'timestamp' : 'date', 
+      confidence: 95 
+    };
+  }
+  
+  // 3. Strong boolean signals
+  if (booleanCount > total * 0.8) {
+    return { type: 'boolean', confidence: 90 };
+  }
+  
+  // 4. UUID special case - must be nearly 100% to be confident
+  if (uuidCount > total * 0.9) {
+    return { type: 'uuid', confidence: 90 };
+  }
+  
+  // Now determine dominant type for remaining cases
   let dominantType: SupabaseDataType = 'text';
   let highestPercentage = 0;
   
@@ -332,42 +437,33 @@ export const inferTypeFromSamples = (samples: unknown[]): TypeInferenceResult =>
     }
   });
   
-  // If more than 20% are text, but numeric/integer is still dominant,
-  // check if there are leading zeros that would be lost
-  if ((dominantType === 'numeric' || dominantType === 'integer') && 
-      typePercentages.text > 20) {
-    const hasLeadingZeros = validSamples.some(sample => {
-      const str = String(sample);
-      return str.startsWith('0') && str.length > 1 && !str.startsWith('0.');
-    });
+  // Final sanity checks for potentially problematic inferences
+  
+  // 1. Mixed data with text component - be more conservative
+  if (dominantType !== 'text' && textCount > total * 0.2) {
+    console.log(`Mixed data (${dominantType}/${Math.round(highestPercentage)}% with ${Math.round(typePercentages.text)}% text)`);
     
-    if (hasLeadingZeros) {
-      // If there are leading zeros, prefer text
-      return { 
-        type: 'text', 
-        confidence: 85,
-        pattern: 'Leading zeros detected'
-      };
-    }
+    // Lower confidence for mixed data
+    return { 
+      type: dominantType, 
+      confidence: Math.min(75, highestPercentage),
+      pattern: 'Mixed data with text component'
+    };
   }
   
-  // Special cases
-  if (dominantType === 'uuid' && highestPercentage < 95) {
-    // UUID must be nearly 100% to be confident
-    return { type: 'text', confidence: 80 };
-  }
-  
-  if (dominantType === 'boolean' && validSamples.length < 5) {
-    // Need more samples for boolean confidence
-    return { type: 'text', confidence: 75 };
+  // 2. Sample size too small for non-text types
+  if (dominantType !== 'text' && validSamples.length < 3) {
+    console.log(`Small sample size (${validSamples.length}) for non-text type ${dominantType}`);
+    return { type: dominantType, confidence: Math.min(70, highestPercentage) };
   }
   
   // Adjust confidence based on percentage
   let confidence = Math.round(highestPercentage);
   
-  // If confidence is low, default to text
-  if (confidence < 70 && dominantType !== 'text') {
-    return { type: 'text', confidence: 75 };
+  // When confidence is low, default to text as the safest option
+  if (confidence < 65 && dominantType !== 'text') {
+    console.log(`Low confidence (${confidence}%) for ${dominantType}, defaulting to text`);
+    return { type: 'text', confidence: 80 };
   }
   
   return { type: dominantType, confidence };
@@ -375,6 +471,7 @@ export const inferTypeFromSamples = (samples: unknown[]): TypeInferenceResult =>
 
 /**
  * Combined inference using both header name and sample data
+ * Priority is given to sample data analysis over header name heuristics
  * @param headerName Column header name
  * @param samples Array of sample values
  * @returns The most likely type with confidence score
@@ -386,48 +483,102 @@ export const inferColumnType = (
   // Get header-based inference
   const headerInference = inferTypeFromColumnHeader(headerName);
   
-  if (samples.length === 0) {
-    // No samples, rely on header-based inference
+  // If no sample data available, rely on header-based inference
+  if (!samples || samples.length === 0 || samples.every(s => s === null || s === undefined || s === '')) {
+    console.log(`No samples for ${headerName}, using header inference: ${headerInference[0].type}`);
     return headerInference[0];
   }
   
-  // Get sample-based inference
+  // Get sample-based inference - this is our primary inference method
   const sampleInference = inferTypeFromSamples(samples);
   
-  // If header inference strongly suggests a type, use it
-  const strongHeaderInference = headerInference.find(h => h.confidence > 90);
-  if (strongHeaderInference) {
+  // Log the inferences for comparison
+  console.log(`Inference for ${headerName}: sample=${sampleInference.type}(${sampleInference.confidence}), header=${headerInference[0].type}(${headerInference[0].confidence})`);
+  
+  // CRITICAL TYPE CONFLICTS - special handling for known problematic cases
+  
+  // 1. Special handler for "Loan Age" and "Term" fields (often mistyped as date)
+  if (headerName.match(/loan\s*age|term|months|years|frequency/i) && 
+      sampleInference.type === 'date' && 
+      headerInference[0].type === 'integer') {
+    console.log(`Type conflict for '${headerName}': Header suggests integer, sample suggests date. Using integer.`);
+    return { type: 'integer', confidence: 90, pattern: 'Age/Term field corrected from date' };
+  }
+  
+  // 2. Special handler for "Number of Units" field
+  if (headerName.match(/number\s*of\s*units|unit\s*count/i) && 
+      sampleInference.type === 'date') {
+    console.log(`Type conflict for '${headerName}': Sample incorrectly suggests date. Using integer.`);
+    return { type: 'integer', confidence: 90, pattern: 'Number field corrected from date' };
+  }
+  
+  // 3. Special handling for rate and percentage fields with text/string samples
+  if (headerName.match(/rate|percentage|ratio|ltv|dti|cltv/i) && 
+      sampleInference.type === 'text' && 
+      (headerInference[0].type === 'numeric' || headerInference[0].type === 'integer')) {
+    // Check if text samples have percentage or currency symbols
+    const percentCheck = samples.some(s => String(s).includes('%') || String(s).match(/\d+(\.\d+)?%/));
+    if (percentCheck) {
+      console.log(`Type conflict for '${headerName}': Contains percentage symbols. Using numeric.`);
+      return { type: 'numeric', confidence: 95, pattern: 'Rate field with percentage symbols' };
+    }
+  }
+  
+  // DATA-DRIVEN INFERENCE HIERARCHY
+  
+  // 1. Always use sample inference if leading zeros detected (crucial for account numbers)
+  if (sampleInference.pattern === 'Leading zeros detected') {
+    return sampleInference; // Always preserve leading zeros
+  }
+  
+  // 2. PRIMARY: If sample data provides a confident type (75%+), always use it
+  if (sampleInference.confidence >= 75) {
+    return sampleInference;
+  }
+  
+  // 3. Special case for currency and percentage patterns - force to numeric
+  if (sampleInference.pattern === 'Currency or percentage detected') {
+    return { ...sampleInference, confidence: 95 }; // Boost confidence
+  }
+  
+  // 4. SPECIAL HANDLING: Reconcile header vs sample conflicts
+  
+  // If sample suggests text but header strongly suggests a specific type
+  if (sampleInference.type === 'text' && 
+      (headerInference[0].type !== 'text' && headerInference[0].confidence >= 90)) {
+    
+    // Check if this might be missing data
+    const emptyRatio = samples.filter(s => !s || String(s).trim() === '').length / samples.length;
+    
+    if (emptyRatio > 0.5) {
+      // Mostly empty - use header inference
+      console.log(`Field '${headerName}' has ${Math.round(emptyRatio*100)}% empty values, using header inference`);
+      return headerInference[0];
+    }
+  }
+  
+  // 5. FALLBACK: If samples don't provide confident type, 
+  // use header inference if it's strong
+  const strongHeaderInference = headerInference.find(h => h.confidence > 85);
+  if (strongHeaderInference && sampleInference.confidence < 70) {
     return strongHeaderInference;
   }
   
-  // If sample inference is very confident, use it
-  if (sampleInference.confidence > 85) {
-    return sampleInference;
-  }
-  
-  // Combine the inferences - check if header and sample agree
-  const headerSuggestion = headerInference[0];
-  
-  if (headerSuggestion.type === sampleInference.type) {
-    // Both agree, boost confidence
+  // 6. COMPROMISE: If both methods have low confidence but agree on the type,
+  // boost the confidence
+  if (headerInference[0].type === sampleInference.type) {
     return {
-      type: headerSuggestion.type,
-      confidence: Math.min(95, Math.max(headerSuggestion.confidence, sampleInference.confidence) + 5)
+      type: headerInference[0].type,
+      confidence: Math.min(95, Math.max(headerInference[0].confidence, sampleInference.confidence) + 10)
     };
   }
   
-  // Special case: if header suggests numeric/integer but samples show text with leading zeros
-  if ((headerSuggestion.type === 'numeric' || headerSuggestion.type === 'integer') && 
-      sampleInference.type === 'text' && 
-      sampleInference.pattern === 'Leading zeros detected') {
+  // 7. LAST RESORT: Without other strong signals, prefer sample-based inference
+  // even with low confidence, as it's based on actual data
+  if (sampleInference.confidence > 50) {
     return sampleInference;
   }
   
-  // They disagree - prefer sample inference if it's strong enough
-  if (sampleInference.confidence > 75) {
-    return sampleInference;
-  }
-  
-  // Otherwise fall back to header inference
-  return headerSuggestion;
+  // If nothing else, fall back to header inference
+  return headerInference[0];
 };

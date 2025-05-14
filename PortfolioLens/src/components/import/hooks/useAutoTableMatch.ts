@@ -468,14 +468,43 @@ export const useAutoTableMatch = ({
   // Using constants that are defined at the top level of the file
 
   const autoMapColumns = useCallback((sheetId: string, sheetColumns: ColumnMapping[], tableSchema: any) => {
-    if (!tableSchema || !tableSchema.columns || tableSchema.columns.length === 0) {
-      console.warn(`Auto-mapping columns for sheet ${sheetId} skipped: table schema or columns missing.`);
+    // Get the sheet we're working with
+    const sheet = sheets.find(s => s.id === sheetId);
+    if (!sheet) {
+      console.error(`Sheet ${sheetId} not found when trying to auto-map columns.`);
       return;
     }
-    console.log(`Auto-mapping columns for sheet ${sheetId} against table ${tableSchema.table_name}`);
+    
+    // Check if this is a new table
+    const isNewTable = sheet.isNewTable || sheet.wasCreatedNew || sheet.createNewValue === sheet.mappedName;
+    
+    // If table schema is missing but this is a new table, we should still process it
+    if (!tableSchema || !tableSchema.columns || tableSchema.columns.length === 0) {
+      if (isNewTable) {
+        console.log(`Auto-mapping columns for new table sheet ${sheetId} (${sheet.mappedName})`);
+      } else {
+        console.warn(`Auto-mapping columns for sheet ${sheetId} skipped: table schema or columns missing.`);
+        return;
+      }
+    } else {
+      console.log(`Auto-mapping columns for sheet ${sheetId} against table ${tableSchema?.table_name || tableSchema?.name}`);
+    }
+
+    // Normalize column header names function (moved inside to prevent circular dependency)
+    const normalizeFieldName = (originalName: string): string => {
+      // Convert to lowercase, replace spaces and special chars with underscores
+      return originalName
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s]/g, '_')    // Replace special chars with underscore
+        .replace(/\s+/g, '_')        // Replace spaces with underscore
+        .replace(/_+/g, '_')         // Replace multiple underscores with single
+        .replace(/^_+|_+$/g, '');    // Remove leading/trailing underscores
+    };
 
     const updatedSheetColumns = sheetColumns.map((sheetCol): ColumnMapping => {
-      if (sheetCol.skip || sheetCol.mappedName) { 
+      // Skip already mapped columns
+      if (sheetCol.skip || (sheetCol.mappedName && sheetCol.mappedName !== '_create_new_')) { 
         return {
           ...sheetCol,
           mappedName: sheetCol.mappedName,
@@ -483,14 +512,35 @@ export const useAutoTableMatch = ({
         } as ColumnMapping;
       }
 
+      // For new tables, auto-create all unmapped columns
+      if (isNewTable) {
+        // Generate inferred field name
+        const inferredName = normalizeFieldName(sheetCol.originalName);
+        
+        // For new tables, set unmapped columns to _create_new_ 
+        console.log(`Auto-creating column ${sheetCol.originalName} -> ${inferredName} in new table`);
+        return {
+          ...sheetCol,
+          mappedName: '_create_new_',
+          createNewValue: inferredName,
+          dataType: sheetCol.inferredDataType || sheetCol.dataType || 'text',
+          confidence: 100, // High confidence for auto-created fields
+          _isNewlyCreated: true,
+          needsReview: false // Auto-approve new fields in new tables
+        } as ColumnMapping;
+      }
+
+      // For existing tables, try to find best match
       let bestMatch: { mappedName: string; score: number } = { mappedName: '', score: -1 };
       
-      tableSchema.columns.forEach((dbCol: { name: string; [key: string]: any }) => { 
-        const score = calculateSimilarity(sheetCol.originalName, dbCol.name);
-        if (score >= COLUMN_MATCH_THRESHOLD && score > bestMatch.score) { 
-          bestMatch = { mappedName: dbCol.name, score };
-        }
-      });
+      if (tableSchema && tableSchema.columns) {
+        tableSchema.columns.forEach((dbCol: { name: string; [key: string]: any }) => { 
+          const score = calculateSimilarity(sheetCol.originalName, dbCol.name);
+          if (score >= COLUMN_MATCH_THRESHOLD && score > bestMatch.score) { 
+            bestMatch = { mappedName: dbCol.name, score };
+          }
+        });
+      }
 
       if (bestMatch.score >= COLUMN_MATCH_THRESHOLD) { 
         console.log(`Column ${sheetCol.originalName} -> ${bestMatch.mappedName} (Score: ${bestMatch.score})`);
@@ -500,15 +550,21 @@ export const useAutoTableMatch = ({
           confidence: bestMatch.score,
         } as ColumnMapping;
       }
+      
+      // No match found in existing table - set to _create_new_ for manual handling
+      const inferredName = normalizeFieldName(sheetCol.originalName);
       return {
         ...sheetCol,
-        mappedName: '', 
+        mappedName: '_create_new_',
+        createNewValue: inferredName,
+        dataType: sheetCol.inferredDataType || sheetCol.dataType || 'text', 
         confidence: 0,
+        _isNewlyCreated: true,
+        needsReview: true // Require review for new fields in existing tables
       } as ColumnMapping;
     });
 
-    const currentSheet = sheets.find(s => s.id === sheetId);
-    if (currentSheet) {
+    if (sheet) {
       updateSheet(sheetId, { columns: updatedSheetColumns });
     } else {
       console.error(`Sheet ${sheetId} not found when trying to update column mappings.`);
@@ -596,11 +652,18 @@ export const useAutoTableMatch = ({
         columns: existingColumns 
       });
 
-      if (finalMappedName && finalMappedName !== '_create_new_' && tables) {
-        const targetTableSchema = tables.find(t => normalizeTableName(t.name) === finalMappedName);
-        if (targetTableSchema && existingColumns.length > 0) { 
-          autoMapColumns(sheetId, existingColumns, targetTableSchema);
+      // Always try to auto-map columns, both for existing tables and new tables
+      if (finalMappedName && tables) {
+        let targetTableSchema = null;
+        
+        // Find existing table schema if not creating new
+        if (finalMappedName !== '_create_new_') {
+          targetTableSchema = tables.find(t => normalizeTableName(t.name) === finalMappedName);
         }
+        
+        // Even if no schema is found (for new tables), still call autoMapColumns
+        // The updated function will handle both cases appropriately
+        autoMapColumns(sheetId, existingColumns, targetTableSchema);
       }
     });
   }, [evaluateSheets, sheets, tables, updateSheet, autoMapColumns, normalizeTableName, toSqlFriendlyName, tablePrefix, TABLE_AUTO_APPROVE_THRESHOLD]);

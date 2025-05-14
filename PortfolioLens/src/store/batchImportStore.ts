@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
+import { normalizeForDb, normalizeTableName } from '../components/import/utils/stringUtils';
+import { inferColumnType } from '../components/import/dataTypeInference';
 
 // Types for sheet and column mapping
 export interface ColumnMapping {
@@ -101,9 +103,17 @@ export interface BatchImportState {
     errors: { sheet: string; message: string }[];
   };
   
+  // Schema cache for dynamic/synthetic tables
+  tableSchemas: Record<string, any>;
+  columnMappings: Record<string, any[]>;
+  sheetMappingStatus: Record<string, { approved: boolean; source: string }>;
+  
   // Actions
   setFile: (fileName: string, fileType: string, fileData: ArrayBuffer, fileSize: number) => void;
   clearFile: () => void;
+  
+  // Dynamic schema creation
+  createDynamicSchemaForSheet: (sheetId: string, tableName: string) => void;
 
   setSheets: (sheets: SheetMapping[]) => void;
   updateSheet: (sheetId: string, updates: Partial<SheetMapping>) => void;
@@ -167,6 +177,11 @@ const initialState: Omit<BatchImportState, 'setFile' | 'clearFile' | 'setSheets'
     importedRows: 0,
     errors: [],
   },
+  
+  // Schema cache
+  tableSchemas: {},
+  columnMappings: {},
+  sheetMappingStatus: {},
 };
 
 // Create the store
@@ -294,6 +309,106 @@ export const useBatchImportStore = create<BatchImportState>()(
       
       setMappingInProgress: (mappingInProgress) => set({ mappingInProgress }),
 
+      createDynamicSchemaForSheet: (sheetId, tableName) => {
+        // Get the current state
+        const currentState = useBatchImportStore.getState();
+        
+        // Logging the current state of schemas to debug
+        console.log(`[AutoCreate] Current schemas before creation:`, 
+          Object.keys(currentState.tableSchemas), 
+          `Looking for sheet ${sheetId}`
+        );
+        
+        return set((state) => {
+        // Find the sheet by ID
+        const sheet = state.sheets.find(s => s.id === sheetId);
+        if (!sheet) {
+          console.error(`[Schema Generation] Sheet ${sheetId} not found.`);
+          return state;
+        }
+        
+        console.log(`[Schema Generation] Creating dynamic schema for sheet ${sheet.originalName} -> ${tableName}`);
+        
+        // Create columns from sheet data
+        const columns = sheet.columns.map((col, index) => {
+          // Get the best field name
+          const fieldName = col.createNewValue || 
+                           (col.mappedName && col.mappedName !== '_create_new_' ? 
+                            col.mappedName : normalizeForDb(col.originalName));
+                            
+          // Infer data type from sample data if available
+          const inferenceResult = col.sample ? inferColumnType(col.originalName, col.sample) : null;
+          const dataType = col.inferredDataType || 
+                          (inferenceResult ? inferenceResult.type : col.dataType || 'text');
+          
+          // Return a complete column definition with UI properties
+          return {
+            name: fieldName,
+            originalName: col.originalName,
+            displayName: col.originalName,
+            normalizedName: fieldName,
+            type: dataType,
+            dataType: dataType,
+            is_nullable: 'YES',
+            description: `Auto-generated from: ${col.originalName}`,
+            ordinal: index,
+            source: 'auto',
+            import: true,
+            reviewStatus: 'approved',
+            created: true,
+            confidence: 100,
+            needsReview: false
+          };
+        });
+        
+        // Create schema object
+        const schemaObject = {
+          name: tableName,
+          table_name: tableName,
+          schema: 'public',
+          description: `Auto-generated from sheet: ${sheet.originalName}`,
+          createdAt: new Date().toISOString(),
+          createdBy: 'auto',
+          isDynamic: true,
+          columns: columns
+        };
+        
+        // Also update column mappings for this sheet
+        const sheetColumnMappings = columns.map(col => ({
+          ...col,
+          mappedName: '_create_new_',
+          createNewValue: col.name,
+          dataType: col.type || col.dataType
+        }));
+        
+        // Create updated state
+        const updatedState = {
+          ...state,
+          // Update table schemas cache
+          tableSchemas: {
+            ...state.tableSchemas,
+            [tableName]: schemaObject
+          },
+          // Update column mappings
+          columnMappings: {
+            ...state.columnMappings,
+            [sheetId]: sheetColumnMappings
+          },
+          // Update sheet mapping status
+          sheetMappingStatus: {
+            ...state.sheetMappingStatus,
+            [sheetId]: { approved: true, source: 'auto' }
+          }
+        };
+        
+        // Log schema details for validation
+        console.log(`[AutoCreate] Injected schema for ${tableName}:`, schemaObject);
+        console.log(`[AutoCreate] Updated Zustand column mappings:`, sheetColumnMappings);
+        
+        return updatedState;
+      });
+      },
+      
       reset: () => set(state => ({
         ...initialState,
         // Keep the similarity matrix when resetting
