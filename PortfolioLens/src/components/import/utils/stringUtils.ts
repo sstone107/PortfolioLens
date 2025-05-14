@@ -22,6 +22,18 @@ export const normalizeString = (str: string): string => {
     .trim();
 };
 
+/**
+ * Normalizes a table name by removing the ln_ prefix if present
+ * Used for display and comparison purposes
+ * 
+ * @param name The table name to normalize
+ * @returns The normalized name without the ln_ prefix
+ */
+export const normalizeName = (name: string): string => {
+  if (!name) return '';
+  return name.startsWith('ln_') ? name.slice(3) : name;
+};
+
 // Keep track of existing table columns for lookup (to be set externally)
 let existingDbColumns: Set<string> = new Set();
 

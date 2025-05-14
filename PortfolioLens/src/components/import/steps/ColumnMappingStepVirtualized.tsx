@@ -63,6 +63,7 @@ import SampleDataTable from '../SampleDataTable';
 import { normalizeDataType, ColumnInfo, DbFieldInfo, MappingResult } from '../services/mappingEngine';
 import { generateMappings, clearSimilarityCaches } from '../services/SimilarityService';
 import { createDebouncedSearch, searchFields } from '../utils/searchUtils';
+import { normalizeName } from '../utils/stringUtils';
 
 interface ColumnMappingStepProps {
   onSheetSelect: (sheetId: string | null) => void;
@@ -79,6 +80,7 @@ interface ColumnItemData {
   handleSkipChange: (column: ColumnMapping, newValue: boolean) => void;
   handleCreateNewField: (column: ColumnMapping, newName?: string) => void;
   handleCancelNewField: (column: ColumnMapping) => void;
+  handleApproveColumn: (column: ColumnMapping) => void;
   normalizeDataType: (type: string) => string;
   fieldSearchText: string;
   isCreatingNewField: (column: ColumnMapping) => boolean;
@@ -202,8 +204,16 @@ const ColumnRow = React.memo(({ index, style, data }: {
       return;
     }
 
-    // Save the new field
+    console.log('Saving new field and will auto-approve it');
+    
+    // Save the new field - this sets needsReview: true and _isNewlyCreated: true
     data.handleCreateNewField(column, fieldName);
+    
+    // Now auto-approve the field (user initiated with Enter or clicking save)
+    // Need a timeout to ensure the field is created first
+    setTimeout(() => {
+      data.handleApproveColumn(column);
+    }, 300);
   }, [validateFieldName, fieldName, data, column]);
 
   // Handle cancel button click
@@ -214,11 +224,22 @@ const ColumnRow = React.memo(({ index, style, data }: {
   // Handle keyboard events for field editing
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !fieldError) {
+      // When user presses Enter to create a field, it should be auto-approved
       handleSaveField();
+      
+      // Auto-approve the field after saving - column will be passed to handleSaveField
+      // We'll use a small timeout to ensure the field is created first
+      setTimeout(() => {
+        console.log('Auto-approving field after Enter key press');
+        if (column) {
+          // Approve the column (remove needsReview flag)
+          data.handleApproveColumn(column);
+        }
+      }, 200);
     } else if (e.key === "Escape") {
       handleCancelEdit();
     }
-  }, [handleSaveField, handleCancelEdit, fieldError]);
+  }, [handleSaveField, handleCancelEdit, fieldError, column, data]);
 
   // Get confidence color and styles consistent with the table mapping UI
   // Using useCallback to avoid recreation on each render
@@ -667,12 +688,52 @@ const ColumnRow = React.memo(({ index, style, data }: {
           width: '100%',
           overflow: 'hidden'
         }}>
-          {rowNeedsReview && (
-            <Tooltip title="Needs review" placement="top">
-              <WarningIcon color="warning" fontSize="small" sx={{ mr: 1, opacity: 0.7, flexShrink: 0 }} />
+          {rowNeedsReview ? (
+            // Show warning icon for fields that need review
+            <Tooltip 
+              key={`review-tooltip-${column.originalName}`}
+              title={column._isNewlyCreated ? "Newly created field" : "This field needs review"} 
+              placement="top"
+              disableInteractive={true}
+            >
+              <Box sx={{
+                display: 'flex', 
+                alignItems: 'center',
+                backgroundColor: column._isNewlyCreated ? theme.palette.primary.light + '25' : undefined,
+                borderRadius: column._isNewlyCreated ? 1 : 0,
+                px: column._isNewlyCreated ? 0.5 : 0,
+                mr: 1
+              }}>
+                {column._isNewlyCreated ? (
+                  <React.Fragment>
+                    <CheckIcon color="primary" fontSize="small" sx={{ opacity: 0.8, flexShrink: 0 }} />
+                    <Typography variant="caption" color="primary" fontWeight="medium" sx={{ ml: 0.5 }}>
+                      New
+                    </Typography>
+                  </React.Fragment>
+                ) : (
+                  <WarningIcon color="warning" fontSize="small" sx={{ opacity: 0.8, flexShrink: 0 }} />
+                )}
+              </Box>
+            </Tooltip>
+          ) : (
+            // Show checkmark for approved fields
+            <Tooltip 
+              key={`approved-tooltip-${column.originalName}`}
+              title="Approved" 
+              placement="top"
+              disableInteractive={true}
+            >
+              <CheckCircleIcon color="success" fontSize="small" sx={{ mr: 1, opacity: 0.7, flexShrink: 0 }} />
             </Tooltip>
           )}
-          <Tooltip title={column.originalName} enterDelay={500} arrow>
+          <Tooltip 
+            key={`column-name-tooltip-${column.originalName}`}
+            title={column.originalName} 
+            enterDelay={500} 
+            arrow
+            disableInteractive={true}
+          >
             <Typography
               variant="body2"
               noWrap
@@ -769,7 +830,12 @@ const ColumnRow = React.memo(({ index, style, data }: {
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
-                      <Tooltip title={fieldError || "Field must start with letter, use only lowercase letters, numbers, and underscores"}>
+                      <Tooltip 
+                        key={`field-error-tooltip-${column.originalName}`}
+                        title={fieldError || "Field must start with letter, use only lowercase letters, numbers, and underscores"}
+                        disableInteractive={true}
+                        placement="top"
+                      >
                         <span>
                           <IconButton
                             onClick={handleSaveField}
@@ -957,28 +1023,26 @@ const ColumnRow = React.memo(({ index, style, data }: {
       >
         {column.sample && column.sample.length > 0 ? (
           <Tooltip
+            key={`sample-tooltip-${column.originalName}`}
             title={
               <Box component="div" sx={{ p: 0.5 }}>
-                {column.sample.length > 0 ? (
-                  <>
-                    <Typography variant="caption" fontWeight="medium" gutterBottom>
-                      Sample values:
+                <Typography variant="caption" fontWeight="medium" gutterBottom>
+                  Sample values:
+                </Typography>
+                {column.sample.slice(0, 5).map((value, idx) => (
+                  <Box key={idx} sx={{ mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre' }}>
+                      {String(value !== null && value !== undefined ? value : '')}
                     </Typography>
-                    {column.sample.slice(0, 5).map((value, idx) => (
-                      <Box key={idx} sx={{ mt: 0.5 }}>
-                        <Typography variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre' }}>
-                          {String(value !== null && value !== undefined ? value : '')}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </>
-                ) : (
-                  <Typography variant="caption">No sample data available</Typography>
-                )}
+                  </Box>
+                ))}
               </Box>
             }
             placement="left"
             arrow
+            disableInteractive={true}
+            enterDelay={500}
+            leaveDelay={100}
           >
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Typography
@@ -1329,10 +1393,37 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
   // Track newly created fields
   const [newlyCreatedFields, setNewlyCreatedFields] = useState<Record<string, Array<{name: string, type: string}>>>({});
 
+  // Cache for normalized table name lookups to avoid repeated logging
+  const normalizedTableCache = useRef(new Map());
+  
   // Get the table schema for the selected sheet
   const tableSchema = useMemo(() => {
     if (!selectedSheet || !tables) return null;
-    return tables.find((table: any) => table.name === selectedSheet.mappedName) || null;
+    
+    // First try exact match
+    let table = tables.find((table: any) => table.name === selectedSheet.mappedName);
+    
+    // If no exact match, try normalized match (ln_ prefix agnostic)
+    if (!table) {
+      // Check cache first to avoid repeated lookups and logs
+      const cacheKey = selectedSheet.mappedName;
+      if (normalizedTableCache.current.has(cacheKey)) {
+        return normalizedTableCache.current.get(cacheKey);
+      }
+      
+      table = tables.find((table: any) => normalizeName(table.name) === normalizeName(selectedSheet.mappedName));
+      
+      if (table) {
+        // Only log the first time we find this mapping
+        if (!normalizedTableCache.current.has(cacheKey)) {
+          console.log(`Found table with normalized name: ${selectedSheet.mappedName} → ${table.name}`);
+          // Cache the result
+          normalizedTableCache.current.set(cacheKey, table);
+        }
+      }
+    }
+    
+    return table;
   }, [selectedSheet, tables]);
 
   // Create debounced search function (150ms delay)
@@ -1383,10 +1474,18 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       const dbType = normalizeDataType(matchedField.type);
       const columnType = normalizeDataType(column.dataType);
 
-      // Exact matches or high confidence (95%+) with matching types don't need review
-      if ((column.confidence === 100 || column.confidence >= 95) &&
-          dbType === columnType) {
-        return false; // No review needed - properly matched and typed
+      // Auto-approve rules:
+      // 1. Any exact match (100%) gets auto-approved regardless of type
+      if (column.confidence === 100) {
+        return false;
+      }
+      // 2. High confidence matches (90%+) get auto-approved regardless of type
+      if (column.confidence >= 90) {
+        return false;
+      }
+      // 3. Medium-high confidence (80%+) with matching types get auto-approved
+      if (column.confidence >= 80 && dbType === columnType) {
+        return false;
       }
 
       // For non-exact matches, check if this is a manually validated field
@@ -1396,9 +1495,13 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       }
     }
 
-    // For newly created fields with consistent types, don't need review
-    if (isInNewlyCreated && column.needsReview === false) {
-      return false;
+    // Special handling for newly created fields
+    // Only keep in needs review state if not explicitly approved already
+    if (isInNewlyCreated || column._isNewlyCreated) {
+      // Log for debug purposes
+      console.log(`Checking newly created field ${column.originalName}:`, 
+        column.needsReview !== false ? 'Needs review' : 'Already approved');
+      return column.needsReview !== false;
     }
 
     // Default - need review unless explicitly marked otherwise
@@ -1553,15 +1656,23 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
 
     // Filter based on view mode
     if (viewMode === 'all') {
-      // In "all" mode, we'll sort to prioritize needs review, then by data type
-      filteredCols = [...selectedSheet.columns];
+      // In "all" mode, we'll show all non-skipped columns
+      filteredCols = selectedSheet.columns.filter(col => !col.skip);
 
-      // Sort with priority for needs review, then by data type
+      // Sort with priority for needs review and newly created fields, then by data type
       filteredCols.sort((a, b) => {
+        // First prioritize newly created fields
+        const aIsNewlyCreated = a._isNewlyCreated ? 1 : 0;
+        const bIsNewlyCreated = b._isNewlyCreated ? 1 : 0;
+        
+        if (aIsNewlyCreated !== bIsNewlyCreated) {
+          return bIsNewlyCreated - aIsNewlyCreated; // Put newly created at top
+        }
+        
+        // Then prioritize by review status
         const aReviewNeeded = needsReview(a) ? 1 : 0;
         const bReviewNeeded = needsReview(b) ? 1 : 0;
 
-        // First, prioritize by review status (needs review at top)
         if (aReviewNeeded !== bReviewNeeded) {
           return bReviewNeeded - aReviewNeeded; // Reversed to put needs review at top
         }
@@ -1569,43 +1680,79 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         // Within each status group, sort by data type for consistency
         return (a.dataType || '').localeCompare(b.dataType || '');
       });
-    } else {
-      // For "needsReview" or "approved" tabs, filter as before
-      filteredCols = selectedSheet.columns.filter(col => {
-        const needsReviewStatus = needsReview(col);
-        return viewMode === 'needsReview' ? needsReviewStatus : !needsReviewStatus;
+    } else if (viewMode === 'needsReview') {
+      // Only columns that need review
+      filteredCols = selectedSheet.columns.filter(col => !col.skip && needsReview(col));
+      
+      // Sort by newly created first, then by data type
+      filteredCols.sort((a, b) => {
+        // First prioritize newly created fields
+        const aIsNewlyCreated = a._isNewlyCreated ? 1 : 0;
+        const bIsNewlyCreated = b._isNewlyCreated ? 1 : 0;
+        
+        if (aIsNewlyCreated !== bIsNewlyCreated) {
+          return bIsNewlyCreated - aIsNewlyCreated; // Put newly created at top
+        }
+        
+        // Within each status group, sort by data type for consistency
+        return (a.dataType || '').localeCompare(b.dataType || '');
       });
+    } else { // 'approved' view
+      // Show columns that don't need review AND have mappings
+      // This ensures unmapped columns don't appear in the approved tab
+      filteredCols = selectedSheet.columns.filter(col => 
+        !col.skip && !needsReview(col) && !!col.mappedName && col.mappedName !== '_create_new_'
+      );
 
       // Sort by data type within the filtered group
       filteredCols.sort((a, b) =>
         (a.dataType || '').localeCompare(b.dataType || '')
       );
     }
+    
+    // For logging - only run in development
+    console.log(`View mode: ${viewMode}, Displaying ${filteredCols.length} columns, ` +
+      `Newly created: ${filteredCols.filter(col => col._isNewlyCreated).length}, ` +
+      `Needs review: ${filteredCols.filter(col => needsReview(col)).length}`);
 
     return filteredCols;
   }, [selectedSheet, viewMode, needsReview]);
 
+  // Add loading state during sheet switching
+  const [isSwitchingSheet, setIsSwitchingSheet] = useState(false);
+  
   // Effect to handle setting selected sheet when tab changes
   useEffect(() => {
     if (validSheets.length > 0 && selectedSheetIndex < validSheets.length) {
       const sheet = validSheets[selectedSheetIndex];
       if (sheet && sheet.id !== selectedSheetId) {
+        // Set loading state during switch
+        setIsSwitchingSheet(true);
+        
         // Persist any changes from the current sheet before switching
         if (selectedSheetId) {
           // Force an update to ensure state is saved
           const currentSheet = sheets.find(s => s.id === selectedSheetId);
           if (currentSheet) {
-            updateSheet(currentSheet.id, {
-              needsReview: currentSheet.columns.some(col => col.needsReview && !col.skip)
-            });
+            const needsReviewUpdated = currentSheet.columns.some(col => col.needsReview && !col.skip);
+            if (needsReviewUpdated !== currentSheet.needsReview) {
+              updateSheet(currentSheet.id, {
+                needsReview: needsReviewUpdated
+              });
+            }
           }
         }
 
-        // Small delay before switching to allow state to update
+        // Increased delay to ensure all state updates complete before switching
         setTimeout(() => {
           setSelectedSheetId(sheet.id);
           onSheetSelect(sheet.id);
-        }, 50);
+          
+          // Use a second timeout to ensure the new sheet is fully rendered before removing loading state
+          setTimeout(() => {
+            setIsSwitchingSheet(false);
+          }, 100);
+        }, 150);
       }
     }
   }, [selectedSheetIndex, validSheets, selectedSheetId, setSelectedSheetId, onSheetSelect, sheets, updateSheet]);
@@ -1633,6 +1780,144 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       saveChanges();
     };
   }, []);
+  
+  // Check if the current sheet should be auto-approved
+  // Use useRef to track if we've processed this sheet already to prevent loops
+  const processedSheetApprovals = useRef(new Set<string>());
+  
+  useEffect(() => {
+    if (!selectedSheet || selectedSheet.approved || !selectedSheet.id) return;
+    
+    // Skip this sheet if we've already processed it in this session
+    if (processedSheetApprovals.current.has(selectedSheet.id)) return;
+    
+    // Count columns that need review (not skipped)
+    const columnsNeedingReview = selectedSheet.columns.filter(col => 
+      !col.skip && col.needsReview
+    ).length;
+    
+    // If no columns need review, auto-approve the sheet
+    if (columnsNeedingReview === 0 && selectedSheet.columns.length > 0) {
+      console.log(`Auto-approving sheet ${selectedSheet.originalName} - all fields are approved`);
+      
+      // Mark this sheet as processed to prevent loops
+      processedSheetApprovals.current.add(selectedSheet.id);
+      
+      // Update the sheet status
+      updateSheet(selectedSheet.id, {
+        needsReview: false,
+        status: 'approved',
+        approved: true
+      });
+    }
+  }, [selectedSheet]);
+  
+  // Effect to auto-approve all sheets when the component loads
+  // Use a ref to track if we've run this effect to prevent multiple executions
+  const initialAutoApprovalRun = useRef(false);
+  
+  useEffect(() => {
+    // Wait for tables to load and ensure we have sheets to process
+    if (tablesLoading || !sheets.length || !tables.length) return;
+    
+    // Only run this once when the component loads
+    if (initialAutoApprovalRun.current) return;
+    initialAutoApprovalRun.current = true;
+    
+    // This will run once on initial load after tables are available
+    console.log('Running auto-approval for all sheets');
+    
+    // Process each sheet sequentially to avoid overwhelming the UI
+    const processAutoApproval = async () => {
+      for (const sheet of sheets) {
+        if (sheet.skip || !sheet.mappedName) continue;
+        
+        // Find matched table schema
+        let tableSchema;
+        
+        // First try exact match
+        tableSchema = tables.find((table: any) => table.name === sheet.mappedName);
+        
+        // If no exact match, try with normalized name
+        if (!tableSchema) {
+          // Check cache first to avoid repeated lookups and logs
+          const cacheKey = sheet.mappedName;
+          if (normalizedTableCache.current.has(cacheKey)) {
+            tableSchema = normalizedTableCache.current.get(cacheKey);
+          } else {
+            tableSchema = tables.find((table: any) => 
+              normalizeName(table.name) === normalizeName(sheet.mappedName)
+            );
+            
+            if (tableSchema) {
+              console.log(`[Sheet Processing] Found table with normalized name: ${sheet.mappedName} → ${tableSchema.name}`);
+              // Cache the result
+              normalizedTableCache.current.set(cacheKey, tableSchema);
+            }
+          }
+        }
+        
+        if (!tableSchema) continue;
+        
+        // Go through each column and auto-approve good matches
+        const updates: Record<string, Partial<ColumnMapping>> = {};
+        
+        sheet.columns.forEach(col => {
+          if (col.skip || !col.mappedName || col.mappedName === '_create_new_') return;
+          
+          // Already approved
+          if (col.needsReview === false) return;
+          
+          // Check confidence levels for auto-approval
+          if (col.confidence === 100) {
+            updates[col.originalName] = { needsReview: false };
+          } else if (col.confidence >= 90) {
+            updates[col.originalName] = { needsReview: false };
+          } else if (col.confidence >= 80) {
+            // For medium-high confidence, approve if types match
+            const dbField = tableSchema.columns.find((tcol: any) => tcol.name === col.mappedName);
+            if (dbField && normalizeDataType(dbField.type) === normalizeDataType(col.dataType)) {
+              updates[col.originalName] = { needsReview: false };
+            }
+          }
+        });
+        
+        // Apply updates if we have any
+        if (Object.keys(updates).length > 0) {
+          console.log(`Auto-approving ${Object.keys(updates).length} columns in sheet ${sheet.originalName}`);
+          await batchUpdateSheetColumns(sheet.id, updates);
+        }
+          
+        // Do a local check on fields after updates are applied
+        const localUpdatedColumns = [...sheet.columns].map(col => {
+          // If this column is being updated in this batch, apply that update
+          if (updates[col.originalName]) {
+            return { ...col, ...updates[col.originalName] };
+          }
+          return col;
+        });
+        
+        const columnsStillNeedingReview = localUpdatedColumns.filter(col => {
+          if (col.skip) return false; // Skip columns don't need review
+          return col.needsReview === true; // Only count columns explicitly marked as needing review
+        });
+        
+        // Only update sheet if it's not already approved and all columns are handled
+        if (columnsStillNeedingReview.length === 0 && !sheet.approved && sheet.status !== 'approved') {
+          // Sheet is fully mapped - mark as not needing review
+          console.log(`Sheet ${sheet.originalName} is fully mapped - marking as not needing review`);
+          updateSheet(sheet.id, { 
+            needsReview: false,
+            status: 'approved',
+            approved: true
+          });
+        }
+      }
+    };
+    
+    // Run the auto-approval process
+    processAutoApproval();
+  }, [tables, sheets, tablesLoading, batchUpdateSheetColumns, updateSheet]);
 
   // Generate sheet -> DB mappings for all sheets on initial load - with optimized performance
   useEffect(() => {
@@ -1657,9 +1942,23 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           return;
         }
 
-        // Get the table schema
-        const tableSchema = tables.find((table: any) => table.name === nextSheet.mappedName);
+        // Get the table schema - handle both exact match and ln_ prefix cases
+        // First try exact match
+        let tableSchema = tables.find((table: any) => table.name === nextSheet.mappedName);
+        
+        // If no exact match, try normalized match (ln_ prefix agnostic)
         if (!tableSchema) {
+          tableSchema = tables.find((table: any) => 
+            normalizeName(table.name) === normalizeName(nextSheet.mappedName)
+          );
+          
+          if (tableSchema) {
+            console.log(`[Sheet Processing] Found table with normalized name: ${nextSheet.mappedName} → ${tableSchema.name}`);
+          }
+        }
+        
+        if (!tableSchema) {
+          console.error(`[Sheet Processing] No table schema found for "${nextSheet.mappedName}" (with or without ln_ prefix)`);
           // Mark as processed even though we skipped it (no valid table schema)
           processedSheets.current.add(nextSheet.id);
           // Schedule next sheet
@@ -1696,14 +1995,29 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
             }
           );
 
-          // Convert mapping results to column updates - with chunking for large updates
+          // Convert mapping results to column updates - with auto-approval for good matches
           const updates: Record<string, Partial<ColumnMapping>> = {};
           mappingResults.forEach(result => {
+            let needsReview = true;
+            
+            // Auto-approve high confidence matches
+            if (result.confidence === 100) {
+              needsReview = false; // Auto-approve exact matches
+            } else if (result.confidence >= 90) {
+              needsReview = false; // Auto-approve high confidence matches
+            } else if (result.confidence >= 80) {
+              // For medium-high confidence, approve if types match
+              const dbField = tableSchema.columns.find((col: any) => col.name === result.mappedName);
+              if (dbField && normalizeDataType(dbField.type) === normalizeDataType(result.dataType)) {
+                needsReview = false;
+              }
+            }
+            
             updates[result.originalName] = {
               mappedName: result.mappedName,
               dataType: result.dataType,
               confidence: result.confidence,
-              needsReview: result.needsReview
+              needsReview: needsReview
             };
           });
 
@@ -1842,15 +2156,17 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         return; // Don't proceed if validation fails
       }
 
-      // CRITICAL FIX: We MUST set needsReview to TRUE initially to ensure
-      // the field stays visible in the "Needs Review" view after creation
-      // This way the user can validate what they just created
+      // When a user manually creates a field, we mark it with high confidence 
+      // but ALWAYS set needsReview=true so it remains visible in all the filter views
       updateSheetColumn(selectedSheet.id, column.originalName, {
         mappedName: name,
         dataType: dataType, // Ensure data type is set correctly
         confidence: 100, // Set high confidence for user-created fields
-        // Make sure field stays visible by marking it as needing review
-        needsReview: true
+        // Mark as NEEDING review initially so the field doesn't disappear from view
+        // This makes it easier for users to see newly created fields
+        needsReview: true,
+        // Add a special flag to identify it as a newly created field that needs review
+        _isNewlyCreated: true // This special flag helps us in filters
       });
 
       // Add the new field to our newly created fields state
@@ -1890,8 +2206,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       setNewFieldName('');
       setNewFieldError(null);
 
-      // CRITICAL: Force current view to "all" if we're currently in "approved" view
-      // This ensures the user sees their newly created field
+      // Ensure we're in "All Columns" or "Needs Review" view to see the newly created field
       if (viewMode === 'approved') {
         setViewMode('all');
       }
@@ -1901,7 +2216,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       setTimeout(() => {
         // Force a DOM refresh to ensure the newly created field is visible
         window.dispatchEvent(new Event('resize'));
-      }, 50);
+      }, 100);
     } else {
       // Enter edit mode for this column
       const suggestedName = generateUniqueFieldName(normalizeFieldName(column.originalName));
@@ -1971,10 +2286,9 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       confidence: isExistingField || isNewlyCreated ? 100 : 0
     };
 
-    // User manually mapped this column, so it should not need review if:
-    // 1. It maps to an existing database field with a matching type
-    // 2. It maps to a newly created field (we trust the user's judgment)
-    const shouldNeedReview = isExistingField || isNewlyCreated ? false : true;
+    // User manually mapped this column, so it should not need review
+    // When a user explicitly selects a mapping, we consider it approved
+    const shouldNeedReview = false;
 
     // Update the column mapping
     updateSheetColumn(selectedSheet.id, column.originalName, {
@@ -2057,6 +2371,28 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     // Record the action time
     lastActionTime.current = Date.now();
   }, [selectedSheet, updateSheetColumn]);
+  
+  // Handler for approving a column
+  const handleApproveColumn = useCallback((column: ColumnMapping) => {
+    if (!selectedSheet) return;
+    
+    // Mark the column as not needing review (approved)
+    updateSheetColumn(selectedSheet.id, column.originalName, {
+      needsReview: false
+    });
+    
+    // Update the sheet status if needed
+    const needsReviewUpdated = selectedSheet.columns.some(col => 
+      (col.originalName === column.originalName ? false : col.needsReview) && !col.skip
+    );
+    
+    if (needsReviewUpdated !== selectedSheet.needsReview) {
+      updateSheet(selectedSheet.id, { needsReview: needsReviewUpdated });
+    }
+    
+    // Record the action time
+    lastActionTime.current = Date.now();
+  }, [selectedSheet, updateSheetColumn, updateSheet]);
 
   // Handler for sheet tab change
   const handleSheetTabChange = useCallback((_event: React.SyntheticEvent, newValue: number) => {
@@ -2067,38 +2403,117 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
   const handleViewModeChange = useCallback((_event: React.SyntheticEvent, newValue: 'all' | 'needsReview' | 'approved') => {
     setViewMode(newValue);
   }, []);
+  
 
   // Handler for approving a sheet
   const handleApproveSheet = useCallback(() => {
     if (!selectedSheet) return;
 
+    // Mark the sheet as approved
     updateSheet(selectedSheet.id, {
       approved: true,
       status: 'approved'
     });
-  }, [selectedSheet, updateSheet]);
+    
+    // Also mark all columns as not needing review
+    const updates: Record<string, Partial<ColumnMapping>> = {};
+    selectedSheet.columns.forEach(col => {
+      if (col.needsReview) {
+        updates[col.originalName] = { needsReview: false };
+      }
+    });
+    
+    if (Object.keys(updates).length > 0) {
+      batchUpdateSheetColumns(selectedSheet.id, updates);
+    }
+  }, [selectedSheet, updateSheet, batchUpdateSheetColumns]);
+  
+  // Handler for approving all exact matches in the sheet
+  const handleApproveExactMatches = useCallback(() => {
+    if (!selectedSheet || !tableSchema) return;
+    
+    // Find all columns that have exact matches (high confidence) but are marked as needing review
+    const updates: Record<string, Partial<ColumnMapping>> = {};
+    
+    selectedSheet.columns.forEach(col => {
+      if (col.needsReview && !col.skip && col.mappedName && col.confidence >= 95) {
+        // Check if data types match
+        const dbField = tableSchema.columns?.find((field: any) => field.name === col.mappedName);
+        if (dbField && normalizeDataType(dbField.type) === normalizeDataType(col.dataType)) {
+          updates[col.originalName] = { needsReview: false };
+        }
+      }
+    });
+    
+    if (Object.keys(updates).length > 0) {
+      batchUpdateSheetColumns(selectedSheet.id, updates);
+      
+      // Check if all columns are now approved
+      const stillNeedsReview = selectedSheet.columns.some(col => {
+        // Skip this column if it's in our updates (no longer needs review)
+        if (updates[col.originalName]) return false;
+        // Otherwise, check its current status
+        return col.needsReview && !col.skip;
+      });
+      
+      // Update sheet status if all columns are now approved
+      if (!stillNeedsReview) {
+        updateSheet(selectedSheet.id, { needsReview: false });
+      }
+    }
+  }, [selectedSheet, tableSchema, batchUpdateSheetColumns, updateSheet, normalizeDataType]);
 
-  // Prepare data for the virtualized list
-  const listItemData = useMemo(() => ({
-    columns: filteredColumns,
-    tableColumns: tableSchema?.columns || [],
-    dataTypes,
-    handleMappedNameChange,
-    handleDataTypeChange,
-    handleSkipChange,
-    handleCreateNewField,
-    handleCancelNewField,
-    normalizeDataType,
-    fieldSearchText,
-    isCreatingNewField,
-    generateUniqueFieldName,
-    getCachedMatches,
-    editingNewField,
-    theme,
-    needsReview,
-    newlyCreatedFields,
-    selectedSheetName: selectedSheet?.mappedName
-  }), [
+  // Don't update list data during sheet switching to prevent UI thrashing
+  const listItemData = useMemo(() => {
+    // Skip updating data during sheet switching
+    if (isSwitchingSheet) {
+      // Return previous data or empty defaults if not available
+      return {
+        columns: [],
+        tableColumns: [],
+        dataTypes,
+        handleMappedNameChange,
+        handleDataTypeChange,
+        handleSkipChange,
+        handleCreateNewField,
+        handleCancelNewField,
+        handleApproveColumn,
+        normalizeDataType,
+        fieldSearchText: '',
+        isCreatingNewField,
+        generateUniqueFieldName,
+        getCachedMatches,
+        editingNewField: null,
+        theme,
+        needsReview,
+        newlyCreatedFields: {},
+        selectedSheetName: ''
+      };
+    }
+    
+    // Normal data when not switching
+    return {
+      columns: filteredColumns,
+      tableColumns: tableSchema?.columns || [],
+      dataTypes,
+      handleMappedNameChange,
+      handleDataTypeChange,
+      handleSkipChange,
+      handleCreateNewField,
+      handleCancelNewField,
+      handleApproveColumn,
+      normalizeDataType,
+      fieldSearchText,
+      isCreatingNewField,
+      generateUniqueFieldName,
+      getCachedMatches,
+      editingNewField,
+      theme,
+      needsReview,
+      newlyCreatedFields,
+      selectedSheetName: selectedSheet?.mappedName
+    };
+  }, [
     filteredColumns,
     tableSchema,
     dataTypes,
@@ -2115,7 +2530,9 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     theme,
     needsReview,
     newlyCreatedFields,
-    selectedSheet?.mappedName
+    selectedSheet?.mappedName,
+    isSwitchingSheet,
+    handleApproveColumn
   ]);
 
   // Status indicators
@@ -2226,49 +2643,58 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
                     borderColor: 'primary.main'
                   }
                 }}
-                label={
-                  <Tooltip title={(() => {
-                    // Count columns that need review for tooltip
-                    if (sheet.columns && sheet.needsReview) {
-                      const columnsNeedingReview = sheet.columns.filter(col => col.needsReview && !col.skip).length;
-                      if (columnsNeedingReview > 0) {
-                        return `${columnsNeedingReview} column${columnsNeedingReview === 1 ? '' : 's'} need${columnsNeedingReview === 1 ? 's' : ''} review`;
-                      }
+                label={(() => {
+                  // Compute tooltip text outside of render to avoid re-renders
+                  let tooltipText = tooltipTitle;
+                  
+                  // Count columns needing review - do this calculation once per render
+                  if (sheet.columns && sheet.needsReview) {
+                    const columnsNeedingReview = sheet.columns.filter(col => col.needsReview && !col.skip).length;
+                    if (columnsNeedingReview > 0) {
+                      tooltipText = `${columnsNeedingReview} column${columnsNeedingReview === 1 ? '' : 's'} need${columnsNeedingReview === 1 ? 's' : ''} review`;
                     }
-                    return tooltipTitle;
-                  })()}>
-                    <Box sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      color: selectedSheetIndex === index ? 'text.primary' : 'text.secondary',
-                    }}>
-                      {/* Check if any columns need review to show yellow checkmark */}
-                      {sheet.columns && sheet.needsReview ? (
-                        // Yellow warning checkmark for tables with columns needing review
-                        <CheckCircleIcon
-                          fontSize="small"
-                          sx={{ mr: 0.5, color: 'warning.main' }}
-                        />
-                      ) : (
-                        // Original status icon
-                        <StatusIcon
-                          fontSize="small"
-                          sx={{ mr: 0.5, color: statusColor }}
-                        />
-                      )}
-                      <Typography
-                        variant="body2"
-                        noWrap
-                        sx={{
-                          fontWeight: selectedSheetIndex === index ? 'medium' : 'normal',
-                          maxWidth: { xs: 80, sm: 120, md: 150 },
-                        }}
-                      >
-                        {sheet.originalName}
-                      </Typography>
-                    </Box>
-                  </Tooltip>
-                }
+                  }
+                  
+                  return (
+                    <Tooltip 
+                      key={`tooltip-${sheet.id}`} 
+                      title={tooltipText}
+                      placement="top"
+                      disableInteractive={true}
+                    >
+                      <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: selectedSheetIndex === index ? 'text.primary' : 'text.secondary',
+                      }}>
+                        {/* Check if any columns need review to show yellow checkmark */}
+                        {sheet.columns && sheet.needsReview ? (
+                          // Yellow warning checkmark for tables with columns needing review
+                          <CheckCircleIcon
+                            fontSize="small"
+                            sx={{ mr: 0.5, color: 'warning.main' }}
+                          />
+                        ) : (
+                          // Original status icon
+                          <StatusIcon
+                            fontSize="small"
+                            sx={{ mr: 0.5, color: statusColor }}
+                          />
+                        )}
+                        <Typography
+                          variant="body2"
+                          noWrap
+                          sx={{
+                            fontWeight: selectedSheetIndex === index ? 'medium' : 'normal',
+                            maxWidth: { xs: 80, sm: 120, md: 150 },
+                          }}
+                        >
+                          {sheet.originalName}
+                        </Typography>
+                      </Box>
+                    </Tooltip>
+                  );
+                })()}
                 value={index}
               />
             );
@@ -2278,6 +2704,16 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
 
       {/* Main Content */}
       <Box>
+        {/* Sheet switching indicator */}
+        {isSwitchingSheet && (
+          <Box sx={{ width: '100%', mb: 2 }}>
+            <LinearProgress />
+            <Typography variant="caption" sx={{ mt: 0.5, display: 'block', textAlign: 'center' }}>
+              Switching to {validSheets[selectedSheetIndex]?.originalName}...
+            </Typography>
+          </Box>
+        )}
+        
         {/* Header with action buttons */}
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">
@@ -2332,15 +2768,39 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
               <VisibilityIcon />
             </IconButton>
 
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleApproveSheet}
-              disabled={!canApprove || selectedSheet.approved}
-              startIcon={<CheckCircleIcon />}
-            >
-              {selectedSheet.approved ? 'Approved' : 'Approve Mapping'}
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Tooltip
+                title="Auto-approval happens automatically. Click to manually approve any remaining fields with good matches."
+                placement="top"
+              >
+                <span> {/* Wrapper span to fix MUI tooltip with disabled button warning */}
+                  <Button
+                    variant="outlined"
+                    color="success"
+                    onClick={handleApproveExactMatches}
+                    disabled={selectedSheet.approved || reviewColumns === 0}
+                    startIcon={<AutoAwesomeIcon />}
+                    size="small"
+                  >
+                    Approve Remaining Matches
+                  </Button>
+                </span>
+              </Tooltip>
+              
+              <Tooltip title="Approves the entire sheet and marks all fields as approved">
+                <span> {/* Wrapper span to fix MUI tooltip with disabled button warning */}
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleApproveSheet}
+                    disabled={selectedSheet.approved}
+                    startIcon={<CheckCircleIcon />}
+                  >
+                    {selectedSheet.approved ? 'Approved' : 'Approve All Fields'}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
           </Box>
         </Box>
 
@@ -2430,19 +2890,34 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
 
           {/* Virtualized Column List */}
           <Box sx={{ height: 'calc(100vh - 400px)', minHeight: 300 }}>
-            <AutoSizer>
-              {({ height, width }) => (
-                <List
-                  height={height}
-                  width={width}
-                  itemCount={filteredColumns.length}
-                  itemSize={50}
-                  itemData={listItemData}
-                >
-                  {ColumnRow}
-                </List>
-              )}
-            </AutoSizer>
+            {isSwitchingSheet ? (
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                height: '100%',
+                flexDirection: 'column' 
+              }}>
+                <CircularProgress size={40} />
+                <Typography variant="body2" sx={{ mt: 2 }}>
+                  Loading column data...
+                </Typography>
+              </Box>
+            ) : (
+              <AutoSizer>
+                {({ height, width }) => (
+                  <List
+                    height={height}
+                    width={width}
+                    itemCount={filteredColumns.length}
+                    itemSize={50}
+                    itemData={listItemData}
+                  >
+                    {ColumnRow}
+                  </List>
+                )}
+              </AutoSizer>
+            )}
           </Box>
         </Paper>
 

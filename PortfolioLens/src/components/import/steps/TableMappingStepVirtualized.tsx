@@ -51,8 +51,9 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
   const [showPreview, setShowPreview] = useState(false); // New state to control preview visibility
   const [initialAutoMapComplete, setInitialAutoMapComplete] = useState(false);
   const [autoMapAttempted, setAutoMapAttempted] = useState(false);
-  // Cache for validation results to prevent infinite loops
-  const [validationCache, setValidationCache] = useState<Record<string, boolean>>({});
+  // Cache for validation results - will be managed by useMemo or similar later if needed
+  // For now, direct state update is removed from validateTableExists to prevent render loops
+  const [validationCache, setValidationCache] = useState<Record<string, boolean>>({}); 
   // Always filter to show only loan tables - no state needed
   
   // Access batch import store
@@ -79,70 +80,48 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
   // IMPORTANT: Define validateTableExists early to avoid temporal dead zone issues
   // Validate if a table name exists in the loaded table options
   const validateTableExists = useCallback((tableName: string): boolean => {
-    try {
-      // Special values are always valid
-      if (!tableName || tableName === '' || tableName === '_create_new_') return true;
-      
-      // Check if tables is available and properly loaded
-      if (!tables || !Array.isArray(tables) || tables.length === 0) {
-        // Limit logging to reduce console noise
-        if (validationLogCounter < 3) {
-          console.warn('Cannot validate table name while tables are loading');
-          setValidationLogCounter(prev => prev + 1);
-        }
-        return true; // Assume valid during loading to prevent errors
-      }
-      
-      // Create a cache key for this validation
-      const cacheKey = tableName.trim().toLowerCase();
-      
-      // Check cache first to avoid repeated validations
-      if (validationCache[cacheKey] !== undefined) {
-        return validationCache[cacheKey];
-      }
-      
-      // Only log in development and limit frequency
-      if (process.env.NODE_ENV === 'development' && Math.random() < 0.01) {
-        console.debug(`Validating table existence: ${tableName} against ${tables.length} tables`);
-      }
-      
-      // Handle the special case for trailing_payments
-      if (cacheKey === 'trailing_payments' || cacheKey.includes('trailing') && cacheKey.includes('payment')) {
-        // Force the trailing_payments table to be recognized
-        const result = true;
-        setValidationCache(prev => ({ ...prev, [cacheKey]: result }));
-        return result;
-      }
-      
-      // Check if the tableName exists in our list of valid tables
-      // Use multiple matching strategies:
-      // 1. Exact match - case-insensitive
-      const normalizedTarget = tableName.toLowerCase().trim();
-      
-      // 2. Normalize by removing underscores and spaces - handle slight differences in naming conventions
-      const normalizedTargetNoUnderscores = normalizedTarget.replace(/[_\s]/g, '');
-      
-      // Do existence check with multiple strategies
-      const result = tables.some(table => {
-        if (!table || !table.name) return false;
-        
-        // Strategy 1: Simple case-insensitive match
-        const normalizedTableName = table.name.toLowerCase().trim();
-        if (normalizedTableName === normalizedTarget) return true;
-        
-        // Strategy 2: More aggressive normalization removing underscores
-        const normalizedTableNameNoUnderscores = normalizedTableName.replace(/[_\s]/g, '');
-        return normalizedTableNameNoUnderscores === normalizedTargetNoUnderscores;
-      });
-      
-      // Cache the result to prevent future re-validations
-      setValidationCache(prev => ({ ...prev, [cacheKey]: result }));
-      return result;
-    } catch (err) {
-      console.error('Error in validateTableExists:', err);
-      return true; // In case of error, assume table exists to avoid blocking UI
+    // Special values are always valid as options in the Select component
+    if (tableName === '' || tableName === '_create_new_') return true;
+    
+    // If tables are not loaded yet, or no tables exist, consider other names invalid for now.
+    // This prevents errors when sheets have pre-existing mappedNames before tables load.
+    if (!tables || !Array.isArray(tables) || tables.length === 0) {
+      // Limit logging to reduce console noise
+      // if (validationLogCounter < 5 && process.env.NODE_ENV === 'development') {
+      //   console.warn(`Cannot validate table name '${tableName}' while tables are loading or empty. Assuming invalid for now.`);
+      //   setValidationLogCounter(prev => prev + 1); // This state update is problematic here too if called during render.
+      // }
+      return false; // Assume invalid if tables aren't ready, unless it's a special value handled above.
     }
-  }, [tables, validationLogCounter, validationCache]);
+    
+    const cacheKey = tableName.trim().toLowerCase();
+    // Check cache first (Note: cache is not being populated in this version to avoid state updates during render)
+    // if (validationCache[cacheKey] !== undefined) {
+    //   return validationCache[cacheKey];
+    // }
+    
+    // Development logging (conditional to reduce noise)
+    // if (process.env.NODE_ENV === 'development' && Math.random() < 0.01) {
+    //   console.debug(`Validating table existence: ${tableName} against ${tables.length} tables`);
+    // }
+
+    // Stricter validation: only existing tables are valid beyond special values.
+    // The logic for 'is this a new table the user is defining' is handled in TableMappingRow's Select options.
+    
+    const normalizedTarget = tableName.toLowerCase().trim();
+    const normalizedTargetNoUnderscores = normalizedTarget.replace(/[\_\s]/g, '');
+    
+    const result = tables.some(table => {
+      if (!table || !table.name) return false;
+      const normalizedTableName = table.name.toLowerCase().trim();
+      if (normalizedTableName === normalizedTarget) return true;
+      const normalizedTableNameNoUnderscores = normalizedTableName.replace(/[\_\s]/g, '');
+      return normalizedTableNameNoUnderscores === normalizedTargetNoUnderscores;
+    });
+    
+    // setValidationCache(prev => ({ ...prev, [cacheKey]: result })); // Removed direct state update
+    return result;
+  }, [tables]); // Removed validationLogCounter and validationCache from dependencies for now
   
   // Enhanced table matching with the new hook
   const {

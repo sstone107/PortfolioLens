@@ -20,6 +20,7 @@ import {
   useTheme,
   SelectChangeEvent
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -27,7 +28,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import { SheetMapping } from '../../../../store/batchImportStore';
 import debounce from 'lodash/debounce';
-import { normalizeTableName } from '../../utils/stringUtils';
+import { normalizeTableName, generateSqlSafeName } from '../../utils/stringUtils';
 import { getDisplayName, applyTablePrefix, TableCategory, TablePrefixes } from '../../utils/tableNameUtils';
 import { TABLE_AUTO_APPROVE_THRESHOLD } from '../../hooks/useAutoTableMatch';
 
@@ -87,133 +88,105 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
   showOnlyLoanTables = false
 }) => {
   const theme = useTheme();
-  const [newTableName, setNewTableName] = useState<string>('');
-  const [initialRender, setInitialRender] = useState(true);
-  
-  // Using imported TABLE_AUTO_APPROVE_THRESHOLD constant
-  
-  // Status from the hook
-  const status = getEffectiveStatus(sheet);
-  
-  // Returns a user-friendly version of the table name (without ln_ prefix)
-  const getLoanTableUserFriendlyName = useCallback((fullTableName: string): string => {
-    const loanPrefix = TablePrefixes[TableCategory.LOAN];
-    return fullTableName.startsWith(loanPrefix) 
-      ? fullTableName.substring(loanPrefix.length) 
-      : fullTableName;
-  }, []);
-  
-  // Ensures a table name has the ln_ prefix
-  const ensureLoanTablePrefix = useCallback((tableName: string): string => {
-    const loanPrefix = TablePrefixes[TableCategory.LOAN];
-    return tableName.startsWith(loanPrefix) ? tableName : `${loanPrefix}${tableName}`;
-  }, []);
-  
-  // Initialize newTableName when entering create new mode
-  useEffect(() => {
-    try {
-      if (sheet.mappedName === '_create_new_' || sheet.isNewTable) {
-        // Use values in order of priority:
-        // 1. User's saved value (createNewValue)
-        // 2. System suggested name (suggestedName)
-        // 3. Generate an SQL-safe name from the original sheet name
-        let fullTableName = sheet.createNewValue || 
-          sheet.suggestedName || 
-          generateSqlSafeName(sheet.originalName);
-          
-        // Ensure it has the ln_ prefix for internal storage
-        fullTableName = ensureLoanTablePrefix(fullTableName);
-        
-        // For display, remove the ln_ prefix so the user never sees it
-        const displayName = getLoanTableUserFriendlyName(fullTableName);
-        setNewTableName(displayName);
-        
-        // If we're initializing with a generated name, also update the store
-        if (!sheet.createNewValue && !sheet.suggestedName) {
-          // Update with the SQL-safe name and flags
-          updateSheet(sheet.id, {
-            mappedName: '_create_new_',
-            createNewValue: fullTableName, // Store the full name with prefix
-            suggestedName: fullTableName,  // Store the full name with prefix
-            isNewTable: true
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Error initializing newTableName:', err);
-    }
-  }, [sheet.mappedName, sheet.isNewTable, sheet.createNewValue, sheet.suggestedName, sheet.originalName, generateSqlSafeName, updateSheet, sheet.id, getLoanTableUserFriendlyName, ensureLoanTablePrefix]);
-  
-  // Debounced function to update the actual table mapping
-  const debouncedUpdateNewTableName = React.useCallback(
-    debounce((sheetId: string, value: string) => {
-      // Only update if the value is valid
-      if (value && value.trim()) {
-        const normalizedName = normalizeTableName(value);
-        updateSheet(sheetId, {
-          mappedName: normalizedName,
-          isNewTable: true,
-          createNewValue: normalizedName,
-          suggestedName: normalizedName,
-          approved: true,
-          needsReview: false,
-          status: 'approved'
-        });
-      }
-    }, 300),
-    [updateSheet]
-  );
+  const [localNewTableName, setLocalNewTableName] = useState<string>('');
+  const [isEditingNewName, setIsEditingNewName] = useState(false);
 
-  // Effect to mark that first render is complete
   useEffect(() => {
-    if (initialRender) {
-      setInitialRender(false);
+    if (sheet.mappedName === '_create_new_' && sheet.createNewValue) {
+      setLocalNewTableName(sheet.createNewValue);
+      setIsEditingNewName(true); // Ensure text field is shown
+    } else if (sheet.mappedName !== '_create_new_') {
+      // if mappedName is no longer _create_new_, reset editing state
+      setIsEditingNewName(false);
+      // setLocalNewTableName(''); // Optionally clear local name if not creating
     }
-  }, [initialRender]);
-  
-  // Handle new table name input changes
-  const handleNewTableNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      // Get user input raw value
-      const rawValue = e.target.value;
-      
-      // Update the local state with the raw value for better UX
-      setNewTableName(rawValue);
-      
-      // If the input is empty, use SQL-safe version of original sheet name with ln_ prefix
-      let baseName = rawValue 
-        ? normalizeTableName(rawValue) 
-        : generateSqlSafeName(sheet.originalName);
-      
-      // Apply ln_ prefix if not already present
-      const loanPrefix = TablePrefixes[TableCategory.LOAN];
-      const sqlSafeName = baseName.startsWith(loanPrefix) ? baseName : `${loanPrefix}${baseName}`;
-      
-      console.log(`New table name: ${rawValue} -> SQL safe: ${sqlSafeName}`);
-      
-      // Update the intermediate state
-      updateSheet(sheet.id, {
-        mappedName: '_create_new_',
-        createNewValue: sqlSafeName, // Store the SQL-safe version
-        isNewTable: true,
-        suggestedName: sqlSafeName
-      });
-      
-      // Debounce the actual update to avoid too many re-renders
-      debouncedUpdateNewTableName(sheet.id, sqlSafeName);
-    } catch (err) {
-      console.error('Error in handleNewTableNameChange:', err);
-    }
+    // Add sheet.mappedName as a dependency to handle cases where the selection changes away from '_create_new_'
+  }, [sheet.createNewValue, sheet.mappedName]);
+
+  // Handle changes to the new table name input
+  const handleNewTableNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalNewTableName(event.target.value);
   };
-  
-  // Style left border based on status
-  const borderLeftColor = sheet.skip
-    ? 'transparent'
-    : status.isApproved
-      ? theme.palette.success.light
-      : status.needsReview
-        ? theme.palette.warning.light
-        : 'transparent';
+
+  // Finalize the new table name (on Enter or Blur)
+  const handleNewTableNameFinalized = (finalNameValue: string) => {
+    console.log('[TableMappingRow] handleNewTableNameFinalized triggered with:', finalNameValue);
+    // Guard against undefined or null finalNameValue
+    if (!finalNameValue || !finalNameValue.trim()) {
+      // If the name is empty, revert to selecting '_create_new_' or clear, depending on desired UX
+      // For now, let's ensure it doesn't save an empty name as a real table
+      // updateSheet(sheet.id, { mappedName: '_create_new_', createNewValue: '', isNewTable: true, wasCreatedNew: false, approved: false, status: 'unmapped' });
+      // Or, simply do nothing and let the TextField be empty, user can re-select from dropdown
+      // setIsEditingNewName(false); // this might hide the field prematurely
+      if (sheet.mappedName === '_create_new_') {
+        // if it was already _create_new_ and they blurred an empty field, keep it _create_new_
+        // and clear any tentative createNewValue
+        updateSheet(sheet.id, { createNewValue: ''});
+      }
+      return; 
+    }
+
+    let proposedName = finalNameValue.trim();
+    const categoryPrefix = sheet.category === TableCategory.LOAN ? TablePrefixes[TableCategory.LOAN] : TablePrefixes[TableCategory.PASSTHROUGH];
+
+    if (categoryPrefix && !proposedName.startsWith(categoryPrefix)) {
+      proposedName = `${categoryPrefix}${normalizeTableName(proposedName, true)}`; // true to keep existing underscores if any after prefix
+    } else {
+      proposedName = normalizeTableName(proposedName); // Normalize the whole name if no auto prefix or already prefixed
+    }
+
+    // Check if this normalized name already exists (case-insensitive)
+    const existingTable = tables.find(t => normalizeTableName(t.name) === normalizeTableName(proposedName));
+    
+    if (existingTable) {
+      // If it matches an existing table, map to that table
+      console.log(`New name '${proposedName}' matches existing table '${existingTable.name}'. Mapping to existing.`);
+      updateSheet(sheet.id, {
+        mappedName: existingTable.name, // Use the canonical name from `tables`
+        isNewTable: false,
+        wasCreatedNew: false,
+        createNewValue: '',
+        approved: true, // Assuming mapping to existing is auto-approved
+        needsReview: false,
+        status: 'mapped',
+      });
+    } else {
+      // If it's a new name, proceed to create it
+      console.log(`Finalizing as new table: '${proposedName}'`);
+      updateSheet(sheet.id, {
+        mappedName: proposedName, // Use the processed new name
+        isNewTable: true, 
+        wasCreatedNew: true, // Mark as created
+        createNewValue: proposedName, // Store the finalized name here
+        approved: true, // New tables are auto-approved upon creation for now
+        needsReview: false,
+        status: 'mapped_new',
+      });
+    }
+    setIsEditingNewName(false); // Hide TextField after finalizing
+  };
+
+  // Determine the value for the Select component
+  const selectValue = (() => {
+    if (tablesLoading) return ''; // Show nothing or a placeholder if tables are loading
+    if (sheet.mappedName === '_create_new_') return '_create_new_';
+    // If it was created new and the mappedName matches createNewValue, it's the selected new table.
+    if (sheet.wasCreatedNew && sheet.mappedName && sheet.mappedName === sheet.createNewValue) {
+      return sheet.mappedName;
+    }
+    // If mappedName corresponds to an actual table, use it.
+    if (sheet.mappedName && validateTableExists(sheet.mappedName)) {
+      // Ensure we return the canonical name if there are slight variations
+      const matchedTable = tables.find(t => normalizeTableName(t.name) === normalizeTableName(sheet.mappedName));
+      return matchedTable ? matchedTable.name : sheet.mappedName; // Prefer canonical, fallback to mappedName if somehow no exact match but validate passed
+    }
+    // Fallback for other cases (e.g. initial state, or invalid mappedName not yet corrected)
+    // if (sheet.isNewTable && sheet.createNewValue) return '_create_new_'; // If pending new, show create new
+    return ''; // Default to 'Select a table' (empty value)
+  })();
+
+  const isNewlyCreatedAndSelected = sheet.wasCreatedNew && sheet.mappedName === sheet.createNewValue;
+  const showTextField = isEditingNewName && sheet.mappedName === '_create_new_';
 
   return (
     <div 
@@ -223,7 +196,13 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
         ...style,
         backgroundColor: sheet.skip ? 'rgba(0, 0, 0, 0.04)' : isSelected ? theme.palette.action.selected : theme.palette.background.paper,
         borderLeft: sheet.skip ? 'none' : '4px solid',
-        borderLeftColor,
+        borderLeftColor: sheet.skip
+          ? 'transparent'
+          : getEffectiveStatus(sheet).isApproved
+            ? theme.palette.success.light
+            : getEffectiveStatus(sheet).needsReview
+              ? theme.palette.warning.light
+              : 'transparent',
         display: 'flex',
         alignItems: 'center',
         borderBottom: `1px solid ${theme.palette.divider}`,
@@ -236,14 +215,14 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
       {/* Sheet Name - Cell 1 */}
       <div style={{ ...cellStyle, width: columnWidths.sheetName }}>
         <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-          {status.needsReview && !sheet.skip ? (
+          {getEffectiveStatus(sheet).needsReview && !sheet.skip ? (
             <Tooltip title="Table mapping needs review">
               <span>
                 <WarningIcon color="warning" fontSize="small" sx={{ mr: 1, opacity: 0.7, flexShrink: 0 }} />
               </span>
             </Tooltip>
-          ) : status.isApproved && !sheet.skip ? (
-            <Tooltip title={status.confidence >= TABLE_AUTO_APPROVE_THRESHOLD ? `Table mapping auto-approved (${formatConfidence(status.confidence)}% confidence)` : "Table mapping approved"}>
+          ) : getEffectiveStatus(sheet).isApproved && !sheet.skip ? (
+            <Tooltip title={getEffectiveStatus(sheet).confidence >= TABLE_AUTO_APPROVE_THRESHOLD ? `Table mapping auto-approved (${formatConfidence(getEffectiveStatus(sheet).confidence)}% confidence)` : "Table mapping approved"}>
               <span>
                 <CheckCircleIcon color="success" fontSize="small" sx={{ mr: 1, opacity: 0.7, flexShrink: 0 }} />
               </span>
@@ -262,34 +241,17 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
       
       {/* Mapped Table Name - Cell 2 */}
       <div style={{ ...cellStyle, width: columnWidths.databaseTable, display: 'block' /* Allow select to fill */ }}>
-        {/* Check if this table is in create new mode */}
-        {(sheet.isNewTable || sheet.mappedName === '_create_new_') ? (
+        {/* Show TextField only when mappedName is exactly '_create_new_'. */}
+        {(sheet.mappedName === '_create_new_') ? (
           // Create new table mode with edit field
           <Box sx={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
             <TextField
               size="small"
-              value={newTableName}
+              value={localNewTableName}
               onChange={handleNewTableNameChange}
               onBlur={(e) => {
                 // On blur, immediately apply the change
-                if (e.target.value && e.target.value.trim()) {
-                  let baseName = normalizeTableName(e.target.value);
-                  
-                  // Ensure ln_ prefix is applied
-                  const loanPrefix = TablePrefixes[TableCategory.LOAN];
-                  const normalizedName = baseName.startsWith(loanPrefix) ? 
-                    baseName : `${loanPrefix}${baseName}`;
-                    
-                  updateSheet(sheet.id, {
-                    mappedName: normalizedName,
-                    isNewTable: true,
-                    createNewValue: normalizedName,
-                    suggestedName: normalizedName,
-                    approved: true,
-                    needsReview: false,
-                    status: 'approved'
-                  });
-                }
+                handleNewTableNameFinalized(e.target.value);
               }}
               disabled={sheet.skip}
               fullWidth
@@ -320,27 +282,10 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
               }}
               sx={{ minWidth: 180 }}
               onKeyDown={(e) => {
+                console.log('[TableMappingRow] TextField onKeyDown:', e.key); // DEBUG
                 if (e.key === 'Enter') {
-                  // Apply the change immediately on Enter key
-                  if (e.currentTarget.value && e.currentTarget.value.trim()) {
-                    let baseName = normalizeTableName(e.currentTarget.value);
-                    
-                    // Ensure ln_ prefix is applied
-                    const loanPrefix = TablePrefixes[TableCategory.LOAN];
-                    const normalizedName = baseName.startsWith(loanPrefix) ? 
-                      baseName : `${loanPrefix}${baseName}`;
-                      
-                    updateSheet(sheet.id, {
-                      mappedName: normalizedName,
-                      isNewTable: true,
-                      createNewValue: normalizedName,
-                      suggestedName: normalizedName,
-                      approved: true,
-                      needsReview: false,
-                      status: 'approved'
-                    });
-                    e.currentTarget.blur();
-                  }
+                  e.preventDefault(); // Prevent form submission or other default Enter behavior
+                  handleNewTableNameFinalized(localNewTableName);
                 }
               }}
             />
@@ -360,44 +305,9 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
           // Table selection mode with dropdown
           <Select
             size="small"
-            // Properly handle value selection state during loading and for invalid values
-            value={(() => {
-              try {
-                const mappedName = sheet.mappedName || '';
-                
-                // Special values are always valid
-                if (mappedName === '_create_new_' || mappedName === '') {
-                  return mappedName;
-                }
-                
-                // During table loading, preserve the current value to prevent flickering
-                // but only for special values like _create_new_ to avoid MUI warnings
-                if (tablesLoading && !initialRender) {
-                  return ''; // Return empty during loading for regular tables
-                }
-                
-                // After tables have loaded, validate if this is a real table
-                // This ensures we don't have "MUI: out-of-range value" warnings
-                const isValidOption = validateTableExists(mappedName);
-                
-                if (!isValidOption) {
-                  console.warn(`Invalid table mapping found: ${sheet.originalName} -> ${mappedName}`);
-                  return ''; // Use empty value instead of invalid one
-                }
-                
-                return mappedName;
-              } catch (err) {
-                console.error("Error setting Select value:", err);
-                return ''; // Fallback to empty on error
-              }
-            })()}
-            onChange={(e: SelectChangeEvent<string>) => {
-              try {
-                handleMappedNameChange(sheet.id, e.target.value);
-              } catch (err) {
-                console.error("Error handling mapped name change:", err);
-              }
-            }}
+            // Properly handle value selection state
+            value={selectValue}
+            onChange={(e) => handleMappedNameChange(sheet.id, e.target.value)}
             disabled={sheet.skip || tablesLoading} // Also disable select while tables load
             error={(!tablesLoading && sheet.mappedName && sheet.mappedName !== '_create_new_' && 
                    !validateTableExists(sheet.mappedName))}
@@ -486,6 +396,36 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
             )}
             
             <Divider />
+            
+            {/* Always add the newly created table name as an option if it exists */}
+            {sheet.wasCreatedNew && sheet.createNewValue && sheet.mappedName === sheet.createNewValue && (
+              <MenuItem 
+                key={`new-${sheet.id}`} 
+                value={sheet.createNewValue} 
+                sx={{ 
+                  fontWeight: 'bold', 
+                  backgroundColor: alpha(useTheme().palette.success.light, 0.1),
+                  border: `1px solid ${useTheme().palette.success.main}`,
+                  borderRadius: '4px',
+                  my: 0.5
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Typography
+                    component="span"
+                    sx={{
+                      color: '#9c27b0', // Purple color
+                      fontWeight: 'bold',
+                      fontSize: '1.2rem',
+                      mr: 1
+                    }}
+                  >
+                    +
+                  </Typography>
+                  {sheet.createNewValue}
+                </Box>
+              </MenuItem>
+            )}
             
             
             {/* Conditional rendering for tables */}
@@ -629,7 +569,7 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
       {/* Status - Cell 5 */}
       <div style={{ ...cellStyle, width: columnWidths.status }}>
         {(() => {
-          if (status.needsReview && !sheet.skip) {
+          if (getEffectiveStatus(sheet).needsReview && !sheet.skip) {
             return (
               <Tooltip title="Table mapping needs review" placement="top">
                 <span>
@@ -642,24 +582,24 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
                 </span>
               </Tooltip>
             );
-          } else if (status.isApproved && !sheet.skip) {
+          } else if (getEffectiveStatus(sheet).isApproved && !sheet.skip) {
             return (
               <Tooltip
                 title={
-                  status.isNewTable
+                  getEffectiveStatus(sheet).isNewTable
                     ? "New table will be created"
-                    : status.confidence >= TABLE_AUTO_APPROVE_THRESHOLD
-                      ? `Auto-approved (${formatConfidence(status.confidence)}% match)`
+                    : getEffectiveStatus(sheet).confidence >= TABLE_AUTO_APPROVE_THRESHOLD
+                      ? `Auto-approved (${formatConfidence(getEffectiveStatus(sheet).confidence)}% match)`
                       : "Approved"
                 }
                 placement="top"
               >
                 <span>
                   <Chip
-                    label={status.isNewTable ? "New Table" : "Approved"}
-                    color={status.isNewTable ? "secondary" : "success"}
+                    label={getEffectiveStatus(sheet).isNewTable ? "New Table" : "Approved"}
+                    color={getEffectiveStatus(sheet).isNewTable ? "secondary" : "success"}
                     icon={
-                      status.isNewTable
+                      getEffectiveStatus(sheet).isNewTable
                         ? <AddCircleIcon fontSize="small" />
                         : <CheckCircleIcon fontSize="small" />
                     }
@@ -703,7 +643,7 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
           </Tooltip>
           
           {/* Show approval button for items that need review */}
-          {status.needsReview && !sheet.skip && (
+          {getEffectiveStatus(sheet).needsReview && !sheet.skip && (
             <Tooltip title="Approve Mapping">
               <span>
                 <IconButton

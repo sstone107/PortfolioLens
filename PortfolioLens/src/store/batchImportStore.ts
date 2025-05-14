@@ -14,6 +14,7 @@ export interface ColumnMapping {
   inferredDataType?: string;
   createNewValue?: string;
   needsReview?: boolean;
+  _isNewlyCreated?: boolean; // Special flag to track newly created fields
 }
 
 export interface SheetMapping {
@@ -31,6 +32,7 @@ export interface SheetMapping {
   isNewTable?: boolean;
   wasCreatedNew?: boolean;
   suggestedName?: string;
+  createNewValue?: string;
 }
 
 export interface MappingTemplate {

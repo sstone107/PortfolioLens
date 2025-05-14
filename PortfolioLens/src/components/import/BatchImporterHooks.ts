@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useBatchImportStore, SheetMapping } from '../../store/batchImportStore';
 import { supabaseClient } from '../../utility/supabaseClient';
 import { inferColumnType } from './dataTypeInference';
-import { calculateSimilarity, normalizeString, normalizeForDb } from './utils/stringUtils';
+import { calculateSimilarity, normalizeString, normalizeForDb, normalizeName } from './utils/stringUtils';
 
 /**
  * Hook to load database table metadata
@@ -228,10 +228,13 @@ export const useTableMatcher = (dbTables: any[]) => {
   const findBestMatchingTable = useCallback((sheetName: string) => {
     const normalizedSheetName = normalizeString(sheetName);
 
-    // Check for exact matches first
-    const exactMatch = dbTables.find(table =>
-      normalizeString(table.name) === normalizedSheetName
-    );
+    // Using imported normalizeName function that strips ln_ prefix
+
+    // Check for exact matches first (ignoring ln_ prefix)
+    const exactMatch = dbTables.find(table => {
+      const normalizedTableName = normalizeString(normalizeName(table.name));
+      return normalizedTableName === normalizedSheetName;
+    });
 
     if (exactMatch) {
       return {
@@ -240,9 +243,11 @@ export const useTableMatcher = (dbTables: any[]) => {
       };
     }
 
-    // Calculate similarity scores for all tables
+    // Calculate similarity scores for all tables, normalizing the table names
     const matches = dbTables.map(table => {
-      const similarity = calculateSimilarity(sheetName, table.name);
+      // Strip ln_ prefix for similarity comparison
+      const normalizedTableName = normalizeName(table.name);
+      const similarity = calculateSimilarity(sheetName, normalizedTableName);
       return {
         tableName: table.name,
         confidence: similarity
@@ -257,7 +262,10 @@ export const useTableMatcher = (dbTables: any[]) => {
 
     // Special case handling for known tables mapping to expenses
     if (sheetName === "Servicing Expenses" || sheetName === "Passthrough Expenses") {
-      const expensesTable = matches.find(m => m.tableName === "expenses");
+      const expensesTable = matches.find(m => {
+        const normalizedName = normalizeName(m.tableName);
+        return normalizedName === "expenses";
+      });
       if (expensesTable) {
         return {
           tableName: expensesTable.tableName,
@@ -281,7 +289,14 @@ export const useTableMatcher = (dbTables: any[]) => {
   const validateColumnExists = useCallback((tableName: string, columnName: string): boolean => {
     if (!tableName || !columnName) return false;
 
-    const table = dbTables.find(t => t.name === tableName);
+    // First try exact match
+    let table = dbTables.find(t => t.name === tableName);
+    
+    // If no exact match, try normalized match (ln_ prefix agnostic)
+    if (!table) {
+      table = dbTables.find(t => normalizeName(t.name) === normalizeName(tableName));
+    }
+    
     if (!table || !table.columns) return false;
 
     return table.columns.some((col: any) => col.name === columnName);
@@ -291,7 +306,14 @@ export const useTableMatcher = (dbTables: any[]) => {
   const getColumnMetadata = useCallback((tableName: string, columnName: string) => {
     if (!tableName || !columnName) return null;
 
-    const table = dbTables.find(t => t.name === tableName);
+    // First try exact match
+    let table = dbTables.find(t => t.name === tableName);
+    
+    // If no exact match, try normalized match (ln_ prefix agnostic)
+    if (!table) {
+      table = dbTables.find(t => normalizeName(t.name) === normalizeName(tableName));
+    }
+    
     if (!table || !table.columns) return null;
 
     return table.columns.find((col: any) => col.name === columnName) || null;
@@ -299,9 +321,22 @@ export const useTableMatcher = (dbTables: any[]) => {
 
   // Find best matching columns for a sheet
   const findMatchingColumns = useCallback((sheet: SheetMapping, tableName: string) => {
-    // Find table schema
-    const table = dbTables.find(t => t.name === tableName);
-    if (!table) return [];
+    // Find table schema, handling ln_ prefix
+    // First try exact match
+    let table = dbTables.find(t => t.name === tableName);
+    
+    // If no exact match, try normalized match
+    if (!table) {
+      table = dbTables.find(t => normalizeName(t.name) === normalizeName(tableName));
+      if (table) {
+        console.log(`Found table with normalized name: ${tableName} → ${table.name}`);
+      }
+    }
+    
+    if (!table) {
+      console.error(`No table found for: ${tableName} (with or without ln_ prefix)`);
+      return [];
+    }
 
     // Create a map of all existing column names for fast lookups
     const existingColumnMap = new Map();

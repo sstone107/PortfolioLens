@@ -2,7 +2,7 @@
  * useAutoTableMatch.ts
  * Custom hook for auto-matching Excel sheets to database tables with confidence scoring
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useBatchImportStore, SheetMapping, ColumnMapping } from '../../../store/batchImportStore';
 import { normalizeTableName, calculateSimilarity, normalizeString } from '../utils/stringUtils';
 import { applyTablePrefix, TableCategory, shouldPrefixTable, detectTableCategory } from '../utils/tableNameUtils';
@@ -298,13 +298,41 @@ export const useAutoTableMatch = ({
     return results;
   }, [sheets, findBestMatchingTable, toSqlFriendlyName, tablePrefix, matchCache]);
 
+  // Track if we've already evaluated for current state to prevent infinite updates
+  const hasEvaluatedRef = useRef(false);
+  const previousTablesLengthRef = useRef<number | null>(null);
+  const previousSheetsLengthRef = useRef<number | null>(null);
+  
   // Run evaluation on table and sheet changes
   useEffect(() => {
-    // Use optional chaining to safely access length property
-    if (tables?.length > 0 && sheets?.length > 0) {
+    // Skip evaluation if tables or sheets aren't loaded yet
+    if (!tables?.length || !sheets?.length) {
+      return;
+    }
+    
+    // Check if data has changed significantly to warrant re-evaluation
+    const tablesChanged = previousTablesLengthRef.current !== tables.length;
+    const sheetsChanged = previousSheetsLengthRef.current !== sheets.length;
+    
+    // Only evaluate if data has changed or we haven't evaluated yet
+    if (tablesChanged || sheetsChanged || !hasEvaluatedRef.current) {
+      console.log('Auto-mapping: Evaluating sheets due to tables/sheets changes', {
+        tablesLength: tables.length, 
+        sheetsLength: sheets.length,
+        tablesChanged,
+        sheetsChanged,
+        firstEvaluation: !hasEvaluatedRef.current
+      });
+      
+      // Update refs to track current state
+      previousTablesLengthRef.current = tables.length;
+      previousSheetsLengthRef.current = sheets.length;
+      hasEvaluatedRef.current = true;
+      
+      // Run the evaluation
       evaluateSheets();
     }
-  }, [tables, sheets, evaluateSheets]);
+  }, [tables, sheets]); // Removed evaluateSheets to break circular dependency
 
   /**
    * Auto-map sheets to tables with confidence-based decisions:
@@ -331,37 +359,37 @@ export const useAutoTableMatch = ({
     
     // Return a processed mapping result for client to apply
     return Object.values(evaluationResults).map(result => {
-      const { sheetId, sheetName, matchedTable, confidence, needsReview } = result;
+      const { sheetId, sheetName, matchedTable, confidence } = result; // Removed needsReview as it's re-evaluated
       
       if (matchedTable && confidence >= TABLE_AUTO_APPROVE_THRESHOLD) {
         // High confidence match - use and auto-approve
+        const normalizedMappedName = normalizeTableName(matchedTable);
         return {
           sheetId,
-          mappedName: matchedTable,
+          mappedName: normalizedMappedName, 
           approved: true,
           needsReview: false,
-          status: 'approved'
+          status: 'approved',
+          isNewTable: false // Explicitly not a new table
         };
       } else {
-        // No good match - create new table
-        const suggestedName = toSqlFriendlyName(sheetName);
-        const prefixedSuggestion = tablePrefix ? `${tablePrefix}${suggestedName}` : suggestedName;
+        // No good match or low confidence - suggest creating a new table
+        const baseSuggestedName = toSqlFriendlyName(sheetName); // Already applies ln_ and normalizes
+        const prefixedNewName = tablePrefix ? `${tablePrefix}${baseSuggestedName}` : baseSuggestedName;
         
-        // Default to create new mode with suggested name
-        // Set approved to true so it doesn't show as "Needs Review" when user already has a valid name
         return {
           sheetId,
           mappedName: '_create_new_',
-          approved: true, // Automatically approve when we have a valid suggested name
-          needsReview: false,
-          status: 'approved', // Mark as approved since we're setting a valid name
-          isNewTable: true, // Flag this as a new table explicitly
-          suggestedName: prefixedSuggestion,
-          createNewValue: prefixedSuggestion
+          approved: true, // Consider it approved for UI purposes when suggesting a new name
+          needsReview: false, // Avoids immediate 'needs review' flag
+          status: 'approved', 
+          isNewTable: true, 
+          suggestedName: prefixedNewName, 
+          createNewValue: prefixedNewName  
         };
       }
     });
-  }, [evaluateSheets, toSqlFriendlyName, tablePrefix]);
+  }, [evaluateSheets, toSqlFriendlyName, tablePrefix, tables, sheets, normalizeTableName, TABLE_AUTO_APPROVE_THRESHOLD]);
 
   /**
    * Get the effective approval status of a sheet based on confidence
@@ -378,6 +406,7 @@ export const useAutoTableMatch = ({
     return Math.round(clampedValue * 10) / 10;
   }, []);
   
+  // Memoize the effective status to reduce unnecessary recalculations
   const getEffectiveStatus = useCallback(
     (sheet: SheetMapping): {
       isApproved: boolean;
@@ -433,7 +462,7 @@ export const useAutoTableMatch = ({
         confidence: matchConfidence
       };
     },
-    [matchCache] 
+    [] // Removed matchCache dependency to prevent infinite updates
   );
 
   // Using constants that are defined at the top level of the file
@@ -501,13 +530,14 @@ export const useAutoTableMatch = ({
     const evaluationResults: Record<string, TableMatchResult> = evaluateSheets(); 
 
     Object.values(evaluationResults).forEach((result: TableMatchResult) => { 
-      const { sheetId, sheetName, matchedTable, confidence, needsReview } = result; 
-      let mappedName: string = '';
+      const { sheetId, sheetName, matchedTable, confidence } = result; 
+      let finalMappedName: string = '';
       let status: SheetMapping['status'] = 'pending';
       let approved = false;
-      let needsReviewFlag = true;
+      let needsReviewFlag = false;
       let isNewTableFlag = false; 
       let suggestedNameVal: string | undefined = undefined;
+      let createNewValueVal: string | undefined = undefined;
 
       const sheet = sheets.find(s => s.id === sheetId);
       if (sheet?.skip) {
@@ -517,58 +547,63 @@ export const useAutoTableMatch = ({
       
       if (matchedTable) { 
         if (confidence >= TABLE_AUTO_APPROVE_THRESHOLD) {
-          mappedName = matchedTable; 
+          finalMappedName = normalizeTableName(matchedTable); 
           status = 'approved';
           approved = true;
           needsReviewFlag = false;
           isNewTableFlag = false;
-          suggestedNameVal = undefined; 
-          console.log(`Auto-mapping sheet ${sheetId} to ${mappedName} (Confidence: ${confidence}%) - Approved`);
+          console.log(`Auto-mapping sheet ${sheetId} to ${finalMappedName} (Confidence: ${confidence}%) - Approved`);
         } else {
-          mappedName = '_create_new_';
+          // Low confidence match, suggest creating new
+          finalMappedName = '_create_new_';
           status = 'ready'; 
-          approved = false;
+          approved = true; // Approved for UI purposes (avoids immediate review flag)
           needsReviewFlag = false; 
           isNewTableFlag = true;
-          suggestedNameVal = matchedTable; 
+          const baseSuggestion = matchedTable ? normalizeTableName(matchedTable) : toSqlFriendlyName(sheetName);
+          const prefixedSuggestion = tablePrefix ? `${tablePrefix}${baseSuggestion}` : baseSuggestion;
+          suggestedNameVal = prefixedSuggestion;
+          createNewValueVal = prefixedSuggestion;
           console.log(`Auto-mapping sheet ${sheetId} to '_create_new_' (Confidence: ${confidence}%) - Suggested: ${suggestedNameVal}`);
         }
       } else {
-          mappedName = '_create_new_';
+          // No match found, suggest creating new
+          finalMappedName = '_create_new_';
           status = 'ready';
-          approved = false;
+          approved = true; // Approved for UI purposes
           needsReviewFlag = false; 
           isNewTableFlag = true; 
-          suggestedNameVal = undefined; 
-          console.log(`Auto-mapping sheet ${sheetId} to '_create_new_' based on new table suggestion`);
+          const baseSuggestion = toSqlFriendlyName(sheetName);
+          const prefixedSuggestion = tablePrefix ? `${tablePrefix}${baseSuggestion}` : baseSuggestion;
+          suggestedNameVal = prefixedSuggestion;
+          createNewValueVal = prefixedSuggestion;
+          console.log(`Auto-mapping sheet ${sheetId} to '_create_new_' based on new table suggestion. Suggested: ${suggestedNameVal}`);
       }
 
       const existingSheet = sheets.find(s => s.id === sheetId);
       const existingColumns = existingSheet?.columns || []; 
 
-      // Determine the final boolean value for isNewTable here
-      // isNewTableFlag is determined earlier in the loop based on logic
-      const finalIsNewTableValue: boolean = !!isNewTableFlag; // Ensure it's a boolean
+      const finalIsNewTableValue: boolean = !!isNewTableFlag;
 
       updateSheet(sheetId, {
-        mappedName,
+        mappedName: finalMappedName,
         approved,
         needsReview: needsReviewFlag,
-        // Pass the sanitized boolean value
         isNewTable: finalIsNewTableValue, 
         suggestedName: suggestedNameVal,
+        createNewValue: createNewValueVal, 
         status: status as SheetMapping['status'], 
         columns: existingColumns 
       });
 
-      if (mappedName && mappedName !== '_create_new_' && mappedName !== '' && tables) {
-        const targetTableSchema = tables.find(t => t.table_name === mappedName);
+      if (finalMappedName && finalMappedName !== '_create_new_' && tables) {
+        const targetTableSchema = tables.find(t => normalizeTableName(t.name) === finalMappedName);
         if (targetTableSchema && existingColumns.length > 0) { 
           autoMapColumns(sheetId, existingColumns, targetTableSchema);
         }
       }
     });
-  }, [evaluateSheets, sheets, tables, updateSheet, autoMapColumns]); 
+  }, [evaluateSheets, sheets, tables, updateSheet, autoMapColumns, normalizeTableName, toSqlFriendlyName, tablePrefix, TABLE_AUTO_APPROVE_THRESHOLD]);
 
   /**
    * Generate a SQL-safe name based on a friendly name
@@ -584,27 +619,21 @@ export const useAutoTableMatch = ({
     // like PostgreSQL reserved words, special characters, etc.
     let safeName = normalizeTableName(friendlyName);
     
-    // First, apply any specified tablePrefix if it doesn't already have it
-    // This is typically a client or project-specific prefix
-    if (tablePrefix && !safeName.startsWith(tablePrefix)) {
-      safeName = `${tablePrefix}${safeName}`;
-    }
-    
-    // Then ensure the loan table prefix (ln_) is added if needed
-    // Check if it already has the ln_ prefix either directly or after the tablePrefix
-    const hasLnPrefix = 
-      safeName.startsWith('ln_') || 
-      (tablePrefix && safeName.startsWith(tablePrefix) && 
-       safeName.substring(tablePrefix.length).startsWith('ln_'));
+    // First, ensure the loan table prefix (ln_) is added if needed
+    // Check if it already has the ln_ prefix
+    const loanPrefix = 'ln_';
+    const hasLnPrefix = safeName.startsWith(loanPrefix);
     
     if (!hasLnPrefix) {
-      // If there's a tablePrefix, insert ln_ after it
-      if (tablePrefix && safeName.startsWith(tablePrefix)) {
-        safeName = tablePrefix + 'ln_' + safeName.substring(tablePrefix.length);
-      } else {
-        // Otherwise just add ln_ at the beginning
-        safeName = 'ln_' + safeName;
-      }
+      // Add ln_ at the beginning
+      safeName = `${loanPrefix}${safeName}`;
+    }
+    
+    // Then apply any specified tablePrefix if it doesn't already have it
+    // This is typically a client or project-specific prefix
+    // Insert the tablePrefix after the ln_ prefix
+    if (tablePrefix && !safeName.substring(loanPrefix.length).startsWith(tablePrefix)) {
+      safeName = `${loanPrefix}${tablePrefix}${safeName.substring(loanPrefix.length)}`;
     }
     
     return safeName;
