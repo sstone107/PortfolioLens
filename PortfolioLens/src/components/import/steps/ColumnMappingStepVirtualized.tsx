@@ -204,16 +204,15 @@ const ColumnRow = React.memo(({ index, style, data }: {
       return;
     }
 
-    console.log('Saving new field and will auto-approve it');
+    console.log('Saving new field - will be auto-approved');
     
-    // Save the new field - this sets needsReview: true and _isNewlyCreated: true
-    data.handleCreateNewField(column, fieldName);
-    
-    // Now auto-approve the field (user initiated with Enter or clicking save)
-    // Need a timeout to ensure the field is created first
-    setTimeout(() => {
-      data.handleApproveColumn(column);
-    }, 300);
+    // Save the new field with needsReview: false directly
+    // This will make it already approved from the start
+    if (data && column) {
+      // Instead of using setTimeout with handleApproveColumn, let's make the field
+      // start with needsReview: false by modifying handleCreateNewField
+      data.handleCreateNewField(column, fieldName);
+    }
   }, [validateFieldName, fieldName, data, column]);
 
   // Handle cancel button click
@@ -226,20 +225,11 @@ const ColumnRow = React.memo(({ index, style, data }: {
     if (e.key === "Enter" && !fieldError) {
       // When user presses Enter to create a field, it should be auto-approved
       handleSaveField();
-      
-      // Auto-approve the field after saving - column will be passed to handleSaveField
-      // We'll use a small timeout to ensure the field is created first
-      setTimeout(() => {
-        console.log('Auto-approving field after Enter key press');
-        if (column) {
-          // Approve the column (remove needsReview flag)
-          data.handleApproveColumn(column);
-        }
-      }, 200);
+      // Auto-approval is now handled within handleSaveField
     } else if (e.key === "Escape") {
       handleCancelEdit();
     }
-  }, [handleSaveField, handleCancelEdit, fieldError, column, data]);
+  }, [handleSaveField, handleCancelEdit, fieldError]);
 
   // Get confidence color and styles consistent with the table mapping UI
   // Using useCallback to avoid recreation on each render
@@ -2156,18 +2146,19 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         return; // Don't proceed if validation fails
       }
 
-      // When a user manually creates a field, we mark it with high confidence 
-      // but ALWAYS set needsReview=true so it remains visible in all the filter views
+      // When a user manually creates a field, mark it as already approved
+      // No need for manual approval when pressing Enter
       updateSheetColumn(selectedSheet.id, column.originalName, {
         mappedName: name,
         dataType: dataType, // Ensure data type is set correctly
         confidence: 100, // Set high confidence for user-created fields
-        // Mark as NEEDING review initially so the field doesn't disappear from view
-        // This makes it easier for users to see newly created fields
-        needsReview: true,
-        // Add a special flag to identify it as a newly created field that needs review
-        _isNewlyCreated: true // This special flag helps us in filters
+        // Auto-approve fields when they're created
+        needsReview: false, 
+        // Still mark it as newly created for display purposes
+        _isNewlyCreated: true
       });
+      
+      console.log(`Created and auto-approved new field: ${name}`);
 
       // Add the new field to our newly created fields state
       setNewlyCreatedFields(prev => {
@@ -2372,27 +2363,6 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     lastActionTime.current = Date.now();
   }, [selectedSheet, updateSheetColumn]);
   
-  // Handler for approving a column
-  const handleApproveColumn = useCallback((column: ColumnMapping) => {
-    if (!selectedSheet) return;
-    
-    // Mark the column as not needing review (approved)
-    updateSheetColumn(selectedSheet.id, column.originalName, {
-      needsReview: false
-    });
-    
-    // Update the sheet status if needed
-    const needsReviewUpdated = selectedSheet.columns.some(col => 
-      (col.originalName === column.originalName ? false : col.needsReview) && !col.skip
-    );
-    
-    if (needsReviewUpdated !== selectedSheet.needsReview) {
-      updateSheet(selectedSheet.id, { needsReview: needsReviewUpdated });
-    }
-    
-    // Record the action time
-    lastActionTime.current = Date.now();
-  }, [selectedSheet, updateSheetColumn, updateSheet]);
 
   // Handler for sheet tab change
   const handleSheetTabChange = useCallback((_event: React.SyntheticEvent, newValue: number) => {
@@ -2404,6 +2374,49 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     setViewMode(newValue);
   }, []);
   
+  // Handler for approving a column
+  const handleApproveColumn = useCallback((column: ColumnMapping) => {
+    if (!selectedSheet) return;
+    
+    console.log(`Approving column ${column.originalName}`, column);
+    
+    // Mark the column as not needing review (approved)
+    updateSheetColumn(selectedSheet.id, column.originalName, {
+      needsReview: false,
+      // Clear the _isNewlyCreated flag if it exists
+      _isNewlyCreated: undefined
+    });
+    
+    // Update the sheet status if needed
+    const needsReviewUpdated = selectedSheet.columns.some(col => 
+      (col.originalName === column.originalName ? false : col.needsReview) && !col.skip
+    );
+    
+    if (needsReviewUpdated !== selectedSheet.needsReview) {
+      updateSheet(selectedSheet.id, { needsReview: needsReviewUpdated });
+    }
+    
+    console.log(`Current view mode: ${viewMode}`);
+    
+    // Force switching to all view if we're in needsReview and this was the last column
+    // This prevents the field from "disappearing" suddenly
+    if (viewMode === 'needsReview') {
+      const remainingColumnsNeedingReview = selectedSheet.columns.filter(col => 
+        col.originalName !== column.originalName && col.needsReview && !col.skip
+      ).length;
+      
+      console.log(`Remaining columns needing review: ${remainingColumnsNeedingReview}`);
+      
+      // If this was the last column in needsReview view, switch to 'all' view
+      if (remainingColumnsNeedingReview === 0) {
+        console.log('Switching to all columns view because no more fields need review');
+        setTimeout(() => setViewMode('all'), 100);
+      }
+    }
+    
+    // Record the action time
+    lastActionTime.current = Date.now();
+  }, [selectedSheet, updateSheetColumn, updateSheet, viewMode, setViewMode]);
 
   // Handler for approving a sheet
   const handleApproveSheet = useCallback(() => {
