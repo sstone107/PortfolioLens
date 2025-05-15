@@ -811,6 +811,16 @@ export const DEBUG_DATA_TYPES = {
  * @param enable Force enable/disable, or toggle if not provided
  * @returns Message indicating the new debug state
  */
+
+/**
+ * Toggle Data Type Inference Debugging
+ * 
+ * To enable detailed logging of data type inference:
+ * 1. Open browser console
+ * 2. Run: window.toggleDataTypeDebugging()
+ * 
+ * Or, set directly: window.__debugDataTypes = true
+ */
 export const toggleDataTypeDebugging = (enable?: boolean): string => {
   if (typeof window === 'undefined') {
     DEBUG_DATA_TYPES.enabled = enable !== undefined ? enable : !DEBUG_DATA_TYPES.enabled;

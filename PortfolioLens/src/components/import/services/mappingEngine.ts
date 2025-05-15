@@ -537,7 +537,7 @@ export async function generateColumnMappings(
     
     return results;
   } catch (error) {
-    console.error('Error generating column mappings:', error);
+    // // console.error('Error generating column mappings:', error);
     throw error;
   }
 }

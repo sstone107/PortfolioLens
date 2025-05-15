@@ -99,7 +99,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
     // ULTRA AGGRESSIVE immediate safety timer (100ms) to immediately exit loading state
     // This ensures we always show the editable field right away
     const immediateTimer = setTimeout(() => {
-      console.log('IMMEDIATE safety timeout: forcing exit from loading state');
+      // // console.log('IMMEDIATE safety timeout: forcing exit from loading state');
       setInitialAutoMapComplete(true);
 
       // Force reset progress too
@@ -112,7 +112,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
 
     // Second safety timer as backup
     const backupTimer = setTimeout(() => {
-      console.log('Backup safety timeout: forcing exit from loading state');
+      // // console.log('Backup safety timeout: forcing exit from loading state');
       setInitialAutoMapComplete(true);
 
       // Force reset progress too
@@ -138,8 +138,8 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
     }
 
     if (tables.length > 0 && !tablesLoading) {
-      console.log('Tables loaded in TableMappingStep:', tables.length);
-      console.log('Sample tables:', tables.slice(0, 3));
+      // // console.log('Tables loaded in TableMappingStep:', tables.length);
+      // // console.log('Sample tables:', tables.slice(0, 3));
 
       // Mark that we've attempted auto-mapping
       setAutoMapAttempted(true);
@@ -149,7 +149,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         (!s.mappedName || s.mappedName === '' || !s.approved));
 
       if (unmappedSheets.length > 0) {
-        console.log('Auto-mapping on component load for', unmappedSheets.length, 'sheets');
+        // // console.log('Auto-mapping on component load for', unmappedSheets.length, 'sheets');
         // Set progress to analyzing state to show loading
         setProgress({
           stage: 'analyzing',
@@ -164,7 +164,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
             handleAutoMapInternal();
           } catch (error) {
             // Log any errors but don't let them prevent UI from updating
-            console.error('Error during auto-mapping:', error);
+            // // console.error('Error during auto-mapping:', error);
           } finally {
             // Always reset progress when done, even if there was an error
             setProgress({
@@ -191,7 +191,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
   // Set error if tables failed to load
   useEffect(() => {
     if (tablesError) {
-      console.error('Table loading error:', tablesError);
+      // // console.error('Table loading error:', tablesError);
       onError(tablesError);
     } else {
       onError(null);
@@ -250,7 +250,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
       isNew = true;
       needsReviewUpdate = true; // New or significantly changed names always need review
 
-      console.log(`New table input: '${newName}', baseName: '${baseName}', internalName: '${finalMappedName}', userPrefix: '${tablePrefix}'`);
+      // // console.log(`New table input: '${newName}', baseName: '${baseName}', internalName: '${finalMappedName}', userPrefix: '${tablePrefix}'`);
 
     } else if (isExistingTable) {
       // Selected an existing table from dropdown. `newName` is already the correct internal name (e.g., ln_actuals)
@@ -316,12 +316,12 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
   
   // Internal auto-mapping function (used by both manual and automatic mapping)
   const handleAutoMapInternal = useCallback(() => {
-    console.log("Starting auto-mapping...");
-    console.log("Available tables:", tables);
+    // // console.log("Starting auto-mapping...");
+    // // console.log("Available tables:", tables);
 
     // Only map sheets that aren't skipped and aren't already approved
     const sheetsToMap = sheets.filter(s => !s.skip && !s.approved);
-    console.log("Sheets to map:", sheetsToMap.map(s => s.originalName));
+    // // console.log("Sheets to map:", sheetsToMap.map(s => s.originalName));
 
     let matchCount = 0;
     let suggestCount = 0;
@@ -329,18 +329,18 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
 
     sheetsToMap.forEach(sheet => {
       const bestMatch = findBestMatchingTable(sheet.originalName);
-      console.log(`Match for "${sheet.originalName}":`, bestMatch);
+      // // console.log(`Match for "${sheet.originalName}":`, bestMatch);
 
       if (bestMatch) {
         if (bestMatch.confidence === 100) {
           // Always auto-approve perfect (100%) matches without requiring any manual review
-          console.log(`Auto-approving exact match: ${sheet.originalName} → ${bestMatch.tableName} (${bestMatch.confidence}%)`);
+          // // console.log(`Auto-approving exact match: ${sheet.originalName} → ${bestMatch.tableName} (${bestMatch.confidence}%)`);
 
           // Don't apply prefix to existing tables - use the table name as-is
           const safeTableName = normalizeTableName(bestMatch.tableName);
 
-          console.log(`Using safe table name: ${bestMatch.tableName} → ${safeTableName}`);
-          console.log(`Perfect match auto-mapping debug:`, {
+          // // console.log(`Using safe table name: ${bestMatch.tableName} → ${safeTableName}`);
+          // // console.log(`Perfect match auto-mapping debug:`, {
             sheetName: sheet.originalName,
             matchedTable: bestMatch.tableName,
             safeTableName,
@@ -358,12 +358,12 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         }
         else if (bestMatch.confidence >= 95) {
           // Auto-approve high confidence matches (≥95% but not perfect) with review
-          console.log(`Auto-approving high confidence match: ${sheet.originalName} → ${bestMatch.tableName} (${bestMatch.confidence}%)`);
+          // // console.log(`Auto-approving high confidence match: ${sheet.originalName} → ${bestMatch.tableName} (${bestMatch.confidence}%)`);
 
           // Don't apply prefix to existing tables - use the table name as-is
           const safeTableName = normalizeTableName(bestMatch.tableName);
 
-          console.log(`Using safe table name: ${bestMatch.tableName} → ${safeTableName}`);
+          // // console.log(`Using safe table name: ${bestMatch.tableName} → ${safeTableName}`);
 
           updateSheet(sheet.id, {
             mappedName: safeTableName,
@@ -375,7 +375,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
           matchCount++;
         } else {
           // For matches below 95% confidence, suggest "Create New Table" instead
-          console.log(`No high confidence match found for: ${sheet.originalName}, suggesting new table creation`);
+          // // console.log(`No high confidence match found for: ${sheet.originalName}, suggesting new table creation`);
 
           // Generate a suggested table name from the sheet name
           const suggestedName = normalizeTableName(sheet.originalName);
@@ -396,7 +396,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         }
       } else {
         // No match at all case
-        console.log(`No match found for: ${sheet.originalName}, suggesting new table creation`);
+        // // console.log(`No match found for: ${sheet.originalName}, suggesting new table creation`);
 
         // Generate a SQL-friendly table name from the sheet name
         const sqlFriendlyName = toSqlFriendlyName(sheet.originalName);
@@ -404,7 +404,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         // Always apply ln_ prefix to suggested new tables
         const prefixedSuggestion = `ln_${sqlFriendlyName}`;
 
-        console.log(`Setting sheet ${sheet.id} to create new mode with suggested table name: ${prefixedSuggestion}`);
+        // // console.log(`Setting sheet ${sheet.id} to create new mode with suggested table name: ${prefixedSuggestion}`);
 
         // CRITICAL FIX: Use _create_new_ flag to trigger the UI to show edit field
         updateSheet(sheet.id, {
@@ -424,13 +424,13 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
           createNewValue: prefixedSuggestion
         });
 
-        console.log(`Created new table for sheet ${sheet.id} with name: ${prefixedSuggestion}`);
+        // // console.log(`Created new table for sheet ${sheet.id} with name: ${prefixedSuggestion}`);
 
         noMatchCount++;
       }
     });
 
-    console.log(`Auto-mapping complete: ${matchCount} auto-approved, ${suggestCount} suggested, ${noMatchCount} no match`);
+    // // console.log(`Auto-mapping complete: ${matchCount} auto-approved, ${suggestCount} suggested, ${noMatchCount} no match`);
 
     // Select the first sheet that needs review, if any
     // Even though suggestCount might be 0, we still look for sheets needing review
@@ -459,7 +459,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         handleAutoMapInternal();
       } catch (error) {
         // Log any errors but don't let them prevent UI from updating
-        console.error('Error during manual auto-mapping:', error);
+        // // console.error('Error during manual auto-mapping:', error);
       } finally {
         // Always reset progress when done, even if there was an error
         setProgress({
@@ -487,7 +487,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
     const internalRow = uiRowNumber - 1;
 
     if (!isNaN(uiRowNumber) && uiRowNumber >= 1) {
-      console.log(`Setting header row: UI=${uiRowNumber}, Internal=${internalRow}`);
+      // // console.log(`Setting header row: UI=${uiRowNumber}, Internal=${internalRow}`);
       setGlobalHeaderRow(internalRow);
 
       // Update all sheets with the 0-based row index
@@ -521,7 +521,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         }
 
         if (!baseName) { // Safety check, should not happen if mappedName was valid
-            console.warn(`Could not extract baseName from ${sheet.mappedName} for sheet ${sheet.id}`);
+            // // console.warn(`Could not extract baseName from ${sheet.mappedName} for sheet ${sheet.id}`);
             return;
         }
 
@@ -532,7 +532,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
         }
         newFullInternalName += baseName;
         
-        console.log(`Global prefix change: Sheet ${sheet.id}, oldMapped: ${sheet.mappedName}, newMapped: ${newFullInternalName}, newPrefix: ${newPrefix}, oldPrefix: ${tablePrefix}, baseName: ${baseName}`);
+        // // console.log(`Global prefix change: Sheet ${sheet.id}, oldMapped: ${sheet.mappedName}, newMapped: ${newFullInternalName}, newPrefix: ${newPrefix}, oldPrefix: ${tablePrefix}, baseName: ${baseName}`);
 
         updateSheet(sheet.id, {
           mappedName: newFullInternalName,
@@ -936,7 +936,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                 
                 {/* Mapped Table Name */}
                 <TableCell>
-                  {console.log(`Rendering table cell for sheet ${sheet.id}, mappedName=${sheet.mappedName}, isNewTable=${sheet.isNewTable}`)}
+                  {// // console.log(`Rendering table cell for sheet ${sheet.id}, mappedName=${sheet.mappedName}, isNewTable=${sheet.isNewTable}`)}
                   {/* Check if this table is in create new mode using either indicator */}
                   {/* Support both special mappedName and isNewTable flag for compatibility */}
                   {/* MEGA IMPORTANT: If we want to edit a table name we MUST switch to this mode (force with the New button) */}
@@ -1003,7 +1003,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                         onChange={(e) => {
                         // Enhanced handler for dropdown selection
                         const selectedValue = e.target.value;
-                        console.log(`Selected value from dropdown:`, selectedValue);
+                        // // console.log(`Selected value from dropdown:`, selectedValue);
 
                         // Special handling for Create New Table option
                         if (selectedValue === '_create_new_') {
@@ -1012,7 +1012,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                           const prefixedSuggestion = tablePrefix ? `${toSqlFriendlyName(tablePrefix)}_${sqlFriendlyName}` : sqlFriendlyName;
 
                           // CRITICAL FIX: Use _create_new_ flag to trigger the UI to show edit field
-                          console.log(`Setting sheet ${sheet.id} to create new table mode with name: ${prefixedSuggestion}`);
+                          // // console.log(`Setting sheet ${sheet.id} to create new table mode with name: ${prefixedSuggestion}`);
 
                           // Use the special _create_new_ value to trigger the UI to show the edit field
                           updateSheet(sheet.id, {
@@ -1031,7 +1031,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                             // @ts-ignore - Custom property
                             createNewValue: prefixedSuggestion
                           });
-                          console.log(`Set sheet ${sheet.id} to create new table mode with suggested name: ${prefixedSuggestion}`);
+                          // // console.log(`Set sheet ${sheet.id} to create new table mode with suggested name: ${prefixedSuggestion}`);
                         } else {
                           // For other selections, use the normal handler
                           handleMappedNameChange(sheet.id, selectedValue);
@@ -1394,7 +1394,7 @@ const getValidSelectValue = (
   
   // If we found a match with normalization, use that option's name
   if (normalizedMatch) {
-    console.log(`Found normalized match: ${currentValue} → ${normalizedMatch.name}`);
+    // // console.log(`Found normalized match: ${currentValue} → ${normalizedMatch.name}`);
     return normalizedMatch.name;
   }
 
@@ -1438,7 +1438,7 @@ const getSortedTableSuggestions = (
         confidence: similarity
       };
     } catch (err) {
-      console.error('Error processing table suggestion:', err, table);
+      // // console.error('Error processing table suggestion:', err, table);
       // Return a default entry with minimal information to prevent crashes
       return {
         name: 'invalid_table',

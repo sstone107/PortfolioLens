@@ -102,7 +102,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
         // Show warning if memory usage is high (> 80% of available heap)
         if (memoryRatio > 0.8 || usedHeapSizeMB > 1000) {
           setMemoryWarning(true);
-          console.warn(`High memory usage: ${usedHeapSizeMB}MB used out of ${totalHeapSizeMB}MB allocated`);
+          // // console.warn(`High memory usage: ${usedHeapSizeMB}MB used out of ${totalHeapSizeMB}MB allocated`);
         }
       }
     }, 10000);

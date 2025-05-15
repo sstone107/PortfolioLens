@@ -88,7 +88,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
     if (!tables || !Array.isArray(tables) || tables.length === 0) {
       // Limit logging to reduce console noise
       // if (validationLogCounter < 5 && process.env.NODE_ENV === 'development') {
-      //   console.warn(`Cannot validate table name '${tableName}' while tables are loading or empty. Assuming invalid for now.`);
+      //   // // console.warn(`Cannot validate table name '${tableName}' while tables are loading or empty. Assuming invalid for now.`);
       //   setValidationLogCounter(prev => prev + 1); // This state update is problematic here too if called during render.
       // }
       return false; // Assume invalid if tables aren't ready, unless it's a special value handled above.
@@ -102,7 +102,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
     
     // Development logging (conditional to reduce noise)
     // if (process.env.NODE_ENV === 'development' && Math.random() < 0.01) {
-    //   console.debug(`Validating table existence: ${tableName} against ${tables.length} tables`);
+    //   // // console.debug(`Validating table existence: ${tableName} against ${tables.length} tables`);
     // }
 
     // Stricter validation: only existing tables are valid beyond special values.
@@ -143,12 +143,12 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
   useEffect(() => {
     // Safety check to ensure validateTableExists is properly defined
     if (typeof validateTableExists !== 'function') {
-      console.warn('validateTableExists not available yet, skipping validation');
+      // // console.warn('validateTableExists not available yet, skipping validation');
       return;
     }
     
     if (!tablesLoading && tables && tables.length > 0 && !tablesLoaded) {
-      console.log('Tables loaded - validating existing mappings...');
+      // // console.log('Tables loaded - validating existing mappings...');
       setTablesLoaded(true);
       
       try {
@@ -161,12 +161,12 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
         );
 
       if (invalidMappedSheets.length > 0) {
-        console.warn('Found invalid table mappings that need to be reset:', 
-          invalidMappedSheets.map(s => `${s.originalName} -> ${s.mappedName}`).join(', '));
+        // // console.warn('Found invalid table mappings that need to be reset:', 
+        //   invalidMappedSheets.map(s => `${s.originalName} -> ${s.mappedName}`).join(', '));
           
         // Reset invalid mappings to empty
         invalidMappedSheets.forEach(sheet => {
-          console.log(`Resetting invalid mapping for sheet: ${sheet.originalName}`);
+          // // console.log(`Resetting invalid mapping for sheet: ${sheet.originalName}`);
           updateSheet(sheet.id, {
             mappedName: '',
             approved: false,
@@ -177,7 +177,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
         });
       }
       } catch (error) {
-        console.error('Error during table validation:', error);
+        // // console.error('Error during table validation:', error);
         // Still mark as loaded even if validation fails to prevent retries
         setTablesLoaded(true); 
       }
@@ -219,14 +219,14 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
     }
 
     // Log the initial state to help with debugging
-    console.log('Init auto-mapping with tables:', tables.length, 'sheets:', sheets.length);
+    // // console.log('Init auto-mapping with tables:', tables.length, 'sheets:', sheets.length);
     
     // Mark that we've attempted auto-mapping
     setAutoMapAttempted(true);
     
     // Safety check for validateTableExists function
     if (typeof validateTableExists !== 'function') {
-      console.error('validateTableExists function not available during auto-mapping');
+      // // console.error('validateTableExists function not available during auto-mapping');
       setProgress({
         stage: 'idle',
         message: 'Auto-mapping skipped due to initialization error',
@@ -249,15 +249,15 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
             s.mappedName !== '_create_new_' && 
             !validateTableExists(s.mappedName);
         } catch (err) {
-          console.error('Error filtering invalid sheets:', err);
+          // // console.error('Error filtering invalid sheets:', err);
           return false; // Skip this item on error
         }
       });
 
     // Log any invalid mappings for debugging
     if (invalidMappedSheets.length > 0) {
-      console.warn('Found invalid table mappings:', 
-        invalidMappedSheets.map(s => `${s.originalName} -> ${s.mappedName}`));
+      // // console.warn('Found invalid table mappings:', 
+      //   invalidMappedSheets.map(s => `${s.originalName} -> ${s.mappedName}`));
     }
 
     if (unmappedSheets.length > 0 || invalidMappedSheets.length > 0) {
@@ -298,7 +298,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
             onSheetSelect(firstNeedsReview.id);
           }
         } catch (error) {
-          console.error('Error during auto-mapping:', error);
+          // // console.error('Error during auto-mapping:', error);
         } finally {
           // Always reset progress when done, even if there was an error
           setProgress({
@@ -316,7 +316,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
       setInitialAutoMapComplete(true);
     }
     } catch (error) {
-      console.error('Error in table auto-mapping top level:', error);
+      // // console.error('Error in table auto-mapping top level:', error);
       
       // Set safe fallback state
       setProgress({
@@ -331,7 +331,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
   // Set error if tables failed to load
   useEffect(() => {
     if (tablesError) {
-      console.error('Table loading error:', tablesError);
+      // // console.error('Table loading error:', tablesError);
       onError(tablesError);
     } else {
       onError(null);
@@ -363,7 +363,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
         ? `${tablePrefix}${toSqlFriendlyName(sheet.originalName)}`
         : toSqlFriendlyName(sheet.originalName);
       
-      console.log(`Preparing "_create_new_" mode for sheet: ${sheet.originalName} with suggested: ${suggestedName}`);
+      // // console.log(`Preparing "_create_new_" mode for sheet: ${sheet.originalName} with suggested: ${suggestedName}`);
       
       updateSheet(sheetId, {
         mappedName: '_create_new_', // Special value indicating create new mode
@@ -538,7 +538,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
   const handleAutoMap = useCallback(() => {
     // Safety check for tables
     if (!tables || tables.length === 0) {
-      console.warn('Auto-mapping skipped: No database tables available');
+      // // console.warn('Auto-mapping skipped: No database tables available');
       return;
     }
     
@@ -555,7 +555,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
         // Run enhanced auto-mapping for both sheets and columns
         autoMapSheetsAndColumns();
       } catch (error) {
-        console.error('Error during manual auto-mapping:', error);
+        // // console.error('Error during manual auto-mapping:', error);
       } finally {
         // Always reset progress when done
         setProgress({
@@ -575,7 +575,7 @@ export const TableMappingStepVirtualized: React.FC<TableMappingStepProps> = ({
         return sheet && sheet.id && typeof sheet.id === 'string';
       });
     } catch (error) {
-      console.error('Error processing sheets for display:', error);
+      // // console.error('Error processing sheets for display:', error);
       return []; // Return empty array on error
     }
   }, [sheets]);
@@ -744,7 +744,7 @@ const TableMappingStepWithErrorBoundary: React.FC<TableMappingStepProps> = (prop
         />
       }
       onError={(error) => {
-        console.error('Table mapping error:', error);
+        // // console.error('Table mapping error:', error);
         props.onError(`Table mapping error: ${error.message}`);
       }}
     >

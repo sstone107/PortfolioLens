@@ -38,7 +38,7 @@ export async function callServerSimilarityRPC(
   
   try {
     // Call RPC endpoint
-    console.log(`Calling server RPC with ${columns.length} columns and ${fields.length} fields`);
+    // // console.log(`Calling server RPC with ${columns.length} columns and ${fields.length} fields`);
     const startTime = performance.now();
     
     const { data, error } = await supabaseClient.rpc('compute_column_similarity', {
@@ -48,10 +48,10 @@ export async function callServerSimilarityRPC(
     });
     
     const endTime = performance.now();
-    console.log(`Server RPC completed in ${Math.round(endTime - startTime)}ms`);
+    // // console.log(`Server RPC completed in ${Math.round(endTime - startTime)}ms`);
     
     if (error) {
-      console.error('RPC Error:', error);
+      // // console.error('RPC Error:', error);
       throw error;
     }
     
@@ -60,7 +60,7 @@ export async function callServerSimilarityRPC(
     
     return data;
   } catch (error) {
-    console.error('Error calling similarity RPC:', error);
+    // // console.error('Error calling similarity RPC:', error);
     throw error;
   }
 }
@@ -149,7 +149,7 @@ export async function getSimilarity(
   
   // Force client-side processing if specified
   if (options?.forceClientSide) {
-    console.log('Forced client-side similarity processing');
+    // // console.log('Forced client-side similarity processing');
     return processWithWorker(columns, fields);
   }
   
@@ -167,7 +167,7 @@ export async function getSimilarity(
       )
     ]);
   } catch (error) {
-    console.warn('Server RPC failed or timed out, falling back to client-side processing', error);
+    // // console.warn('Server RPC failed or timed out, falling back to client-side processing', error);
     serverError = error;
   }
   
@@ -177,7 +177,7 @@ export async function getSimilarity(
   }
   
   // Server failed, fall back to client-side processing
-  console.log('Using client-side similarity fallback');
+  // // console.log('Using client-side similarity fallback');
   return processWithWorker(columns, fields);
 }
 
@@ -209,7 +209,7 @@ export async function generateMappings(
       options?.progressCallback
     );
   } catch (error) {
-    console.error('Error generating mappings:', error);
+    // // console.error('Error generating mappings:', error);
     throw error;
   }
 }

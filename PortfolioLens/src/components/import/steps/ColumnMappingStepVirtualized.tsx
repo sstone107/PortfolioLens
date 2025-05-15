@@ -206,7 +206,7 @@ const ColumnRow = React.memo(({ index, style, data }: {
       return;
     }
 
-    console.log('Saving new field - will be auto-approved');
+    // // console.log('Saving new field - will be auto-approved');
     
     // Save the new field with needsReview: false directly
     // This will make it already approved from the start
@@ -628,7 +628,7 @@ const ColumnRow = React.memo(({ index, style, data }: {
           if (tableName !== currentSheetName && 
               fields.some(field => field.name === value)) {
             isInComponentNewlyCreatedFields = true;
-            console.log(`[Field Detection] Field "${value}" found in newlyCreatedFields for table "${tableName}"`);
+            // // console.log(`[Field Detection] Field "${value}" found in newlyCreatedFields for table "${tableName}"`);
           }
         });
       }
@@ -653,7 +653,7 @@ const ColumnRow = React.memo(({ index, style, data }: {
           
           if (storeCol && (storeCol.created || storeCol._isNewlyCreated)) {
             isInZustandStore = true;
-            console.log(`[Field Detection] Field "${value}" found in Zustand columnMappings`);
+            // // console.log(`[Field Detection] Field "${value}" found in Zustand columnMappings`);
           }
         }
       }
@@ -666,12 +666,12 @@ const ColumnRow = React.memo(({ index, style, data }: {
           const schemaCol = tableSchema.columns.find(c => c.name === value);
           if (schemaCol && (schemaCol.created || schemaCol._isNewlyCreated)) {
             isInZustandStore = true;
-            console.log(`[Field Detection] Field "${value}" found in Zustand tableSchemas`);
+            // // console.log(`[Field Detection] Field "${value}" found in Zustand tableSchemas`);
           }
         }
       }
     } catch (err) {
-      console.warn(`[Field Detection] Error checking Zustand store:`, err);
+      // // console.warn(`[Field Detection] Error checking Zustand store:`, err);
       // Continue without the store data
     }
     
@@ -682,11 +682,11 @@ const ColumnRow = React.memo(({ index, style, data }: {
                                
     // Extra debug logging for understanding field detection
     if (isNewlyCreatedField) {
-      console.log(`[Field Detection] "${value}" detected as newly created via:`, {
-        existingFieldHasCreationFlag,
-        isInComponentNewlyCreatedFields,
-        isInZustandStore
-      });
+      // // console.log(`[Field Detection] "${value}" detected as newly created via:`, {
+      //   existingFieldHasCreationFlag,
+      //   isInComponentNewlyCreatedFields,
+      //   isInZustandStore
+      // });
     }
 
     return (
@@ -1337,7 +1337,7 @@ const menuStyles = `
 const addStylesToDocument = () => {
   // SSR guard - check if document is defined
   if (typeof document === 'undefined') {
-    console.debug('Skipping style insertion - document not available (SSR)');
+    // // console.debug('Skipping style insertion - document not available (SSR)');
     return;
   }
 
@@ -1351,7 +1351,7 @@ const addStylesToDocument = () => {
     }
   } catch (error) {
     // Fail gracefully if DOM manipulation fails
-    console.warn('Failed to inject styles:', error);
+    // // console.warn('Failed to inject styles:', error);
   }
 };
 
@@ -1479,7 +1479,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           });
         } catch (err) {
           if (process.env.NODE_ENV === 'development') {
-            console.debug('Ignoring error in unload handler:', err);
+            // // console.debug('Ignoring error in unload handler:', err);
           }
         }
       }
@@ -1498,7 +1498,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
             });
           }
         } catch (err) {
-          console.debug('Ignoring error in blur handler:', err);
+          // // console.debug('Ignoring error in blur handler:', err);
         }
       }
     };
@@ -1514,7 +1514,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         window.removeEventListener('blur', handleBlur);
       };
     } catch (err) {
-      console.error('Failed to attach window event handlers:', err);
+      // // console.error('Failed to attach window event handlers:', err);
       return () => {}; // Empty cleanup function
     }
   }, []);
@@ -1551,7 +1551,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       if (table) {
         // Only log the first time we find this mapping
         if (!normalizedTableCache.current.has(cacheKey)) {
-          console.log(`Found table with normalized name: ${selectedSheet.mappedName} → ${table.name}`);
+          // // console.log(`Found table with normalized name: ${selectedSheet.mappedName} → ${table.name}`);
           // Cache the result
           normalizedTableCache.current.set(cacheKey, table);
         }
@@ -1592,7 +1592,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     
     // Special handling for newly created fields - always auto-approve in new tables
     if (isNewTable && (isInNewlyCreated || column._isNewlyCreated)) {
-      console.log(`Auto-approving new field ${column.originalName} in new table`);
+      // // console.log(`Auto-approving new field ${column.originalName} in new table`);
       return false; // Auto-approve all new fields in new tables
     }
     
@@ -1655,8 +1655,8 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     // For newly created fields in existing tables, respect the existing review status
     if (fieldExistsInNewlyCreated || column._isNewlyCreated) {
       // Log for debug purposes
-      console.log(`Checking newly created field ${column.originalName}:`, 
-        column.needsReview !== false ? 'Needs review' : 'Already approved');
+      // // console.log(`Checking newly created field ${column.originalName}:`, 
+      //   column.needsReview !== false ? 'Needs review' : 'Already approved');
       return column.needsReview !== false;
     }
 
@@ -1867,9 +1867,9 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     }
     
     // For logging - only run in development
-    console.log(`View mode: ${viewMode}, Displaying ${filteredCols.length} columns, ` +
-      `Newly created: ${filteredCols.filter(col => col._isNewlyCreated || col.created).length}, ` +
-      `Needs review: ${filteredCols.filter(col => needsReview(col)).length}`);
+    // // console.log(`View mode: ${viewMode}, Displaying ${filteredCols.length} columns, ` +
+    //   `Newly created: ${filteredCols.filter(col => col._isNewlyCreated || col.created).length}, ` +
+    //   `Needs review: ${filteredCols.filter(col => needsReview(col)).length}`);
 
     return filteredCols;
   }, [selectedSheet, viewMode, needsReview]);
@@ -1954,7 +1954,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     
     // If no columns need review, auto-approve the sheet
     if (columnsNeedingReview === 0 && selectedSheet.columns.length > 0) {
-      console.log(`Auto-approving sheet ${selectedSheet.originalName} - all fields are approved`);
+      // // console.log(`Auto-approving sheet ${selectedSheet.originalName} - all fields are approved`);
       
       // Mark this sheet as processed to prevent loops
       processedSheetApprovals.current.add(selectedSheet.id);
@@ -1981,7 +1981,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     initialAutoApprovalRun.current = true;
     
     // This will run once on initial load after tables are available
-    console.log('Running auto-approval for all sheets');
+    // // console.log('Running auto-approval for all sheets');
     
     // Process each sheet sequentially to avoid overwhelming the UI
     const processAutoApproval = async () => {
@@ -2006,7 +2006,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
             );
             
             if (tableSchema) {
-              console.log(`[Sheet Processing] Found table with normalized name: ${sheet.mappedName} → ${tableSchema.name}`);
+              // // console.log(`[Sheet Processing] Found table with normalized name: ${sheet.mappedName} → ${tableSchema.name}`);
               // Cache the result
               normalizedTableCache.current.set(cacheKey, tableSchema);
             }
@@ -2040,7 +2040,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         
         // Apply updates if we have any
         if (Object.keys(updates).length > 0) {
-          console.log(`Auto-approving ${Object.keys(updates).length} columns in sheet ${sheet.originalName}`);
+          // // console.log(`Auto-approving ${Object.keys(updates).length} columns in sheet ${sheet.originalName}`);
           await batchUpdateSheetColumns(sheet.id, updates);
         }
           
@@ -2061,7 +2061,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         // Only update sheet if it's not already approved and all columns are handled
         if (columnsStillNeedingReview.length === 0 && !sheet.approved && sheet.status !== 'approved') {
           // Sheet is fully mapped - mark as not needing review
-          console.log(`Sheet ${sheet.originalName} is fully mapped - marking as not needing review`);
+          // // console.log(`Sheet ${sheet.originalName} is fully mapped - marking as not needing review`);
           updateSheet(sheet.id, { 
             needsReview: false,
             status: 'approved',
@@ -2109,7 +2109,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           );
           
           if (tableSchema) {
-            console.log(`[Sheet Processing] Found table with normalized name: ${nextSheet.mappedName} → ${tableSchema.name}`);
+            // // console.log(`[Sheet Processing] Found table with normalized name: ${nextSheet.mappedName} → ${tableSchema.name}`);
           }
         }
         
@@ -2126,7 +2126,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           for (const name of potentialTableNames) {
             if (name && synthTableCache.current[name]) {
               tableSchema = synthTableCache.current[name];
-              console.log(`[Sheet Processing] Found table in component synthetic cache: ${name}`);
+              // // console.log(`[Sheet Processing] Found table in component synthetic cache: ${name}`);
               break;
             }
           }
@@ -2145,7 +2145,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           for (const name of storeTableNames) {
             if (name && tableSchemas[name]) {
               tableSchema = tableSchemas[name];
-              console.log(`[Sheet Processing] Found table in Zustand store: ${name}`);
+              // // console.log(`[Sheet Processing] Found table in Zustand store: ${name}`);
               break;
             }
           }
@@ -2157,11 +2157,11 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
                           nextSheet.mappedName === '_create_new_';
         
         if (!tableSchema) {
-          console.warn(`[Sheet Processing] No table schema found for "${nextSheet.mappedName}" (with or without ln_ prefix)`);
+          // // console.warn(`[Sheet Processing] No table schema found for "${nextSheet.mappedName}" (with or without ln_ prefix)`);
           
           if (isNewTable) {
             // For new tables, create a dynamic schema based on the sheet columns
-            console.log(`[Sheet Processing] Creating dynamic schema for new table "${nextSheet.mappedName}"`);
+            // // console.log(`[Sheet Processing] Creating dynamic schema for new table "${nextSheet.mappedName}"`);
             
             // Generate a valid SQL-safe table name with appropriate prefixes
             const tableName = nextSheet.createNewValue || 
@@ -2169,31 +2169,31 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
                               nextSheet.mappedName : 
                               `ln_${normalizeTableName(nextSheet.originalName)}`);
             
-            console.log(`[Schema Generation] Using normalized table name: ${tableName}`);
+            // // console.log(`[Schema Generation] Using normalized table name: ${tableName}`);
             
             // Use the Zustand store to create a dynamic schema
             const storeState = useBatchImportStore.getState();
-            console.log(`[Schema Generation] Before creation - schemas in store:`, Object.keys(storeState.tableSchemas));
+            // // console.log(`[Schema Generation] Before creation - schemas in store:`, Object.keys(storeState.tableSchemas));
             
             // Create the schema in the centralized store
             storeState.createDynamicSchemaForSheet(nextSheet.id, tableName);
             
             // Get the fresh state and schema after creation
             const updatedState = useBatchImportStore.getState();
-            console.log(`[Schema Generation] After creation - schemas in store:`, Object.keys(updatedState.tableSchemas));
+            // // console.log(`[Schema Generation] After creation - schemas in store:`, Object.keys(updatedState.tableSchemas));
             
             // Get the fresh schema from the store with proper error handling
             tableSchema = updatedState.tableSchemas[tableName];
             
             if (tableSchema) {
-              console.log(`[Schema Generation] Successfully created schema for ${tableName} with ${tableSchema.columns?.length || 0} columns`);
+              // // console.log(`[Schema Generation] Successfully created schema for ${tableName} with ${tableSchema.columns?.length || 0} columns`);
             } else {
-              console.error(`[Schema Generation] Schema creation failed - ${tableName} not found in store after creation`);
+              // // console.error(`[Schema Generation] Schema creation failed - ${tableName} not found in store after creation`);
             }
             
             // If for some reason the schema wasn't created in the store, create a fallback
             if (!tableSchema) {
-              console.warn(`[Schema Generation] Schema not found in store after creation, creating fallback.`);
+              // // console.warn(`[Schema Generation] Schema not found in store after creation, creating fallback.`);
               
               // Generate column definitions
               const generatedColumns = nextSheet.columns.map((col, idx) => {
@@ -2250,31 +2250,31 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
             
             // Try to refresh schema cache - this might help with subsequent sheets
             try {
-              console.log(`[Schema Generation] Refreshing schema cache to save new table: ${tableName}`);
+              // // console.log(`[Schema Generation] Refreshing schema cache to save new table: ${tableName}`);
               refreshSchemaCache();
               
               // Log schema details for debugging
-              console.log('[Schema Debug] Synthetic schema columns:', 
-                tableSchema.columns.map((col: any) => ({
-                  name: col.name,
-                  type: col.type,
-                  created: col.created
-                }))
-              );
+              // // console.log('[Schema Debug] Synthetic schema columns:', 
+              //   tableSchema.columns.map((col: any) => ({
+              //     name: col.name,
+              //     type: col.type,
+              //     created: col.created
+              //   }))
+              // );
               
               // Dispatch a custom event to notify other components that the schema was refreshed
               window.dispatchEvent(new CustomEvent('schema-cache-refreshed', { 
                 detail: { tableName, isNewTable: true, autoCreated: true }
               }));
             } catch (err) {
-              console.warn('Schema cache refresh failed:', err);
+              // // console.warn('Schema cache refresh failed:', err);
             }
             
             // Show a toast notification that we've created a synthetic schema
-            console.log(`[Schema Generation] Created synthetic schema for ${tableName} with ${tableSchema.columns.length} columns`);
+            // // console.log(`[Schema Generation] Created synthetic schema for ${tableName} with ${tableSchema.columns.length} columns`);
             
             // Make sure we update the UI to show these as created fields
-            console.log(`[Schema Generation] Auto-approving all columns as created fields`);
+            // // console.log(`[Schema Generation] Auto-approving all columns as created fields`);
             
             // Add the schema to global referenceable schemas for this component
             if (!newlyCreatedFields[tableName]) {
@@ -2317,7 +2317,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
             
             // Batch update all columns at once for better performance
             if (Object.keys(columnUpdates).length > 0) {
-              console.log(`[Schema Generation] Batch updating ${Object.keys(columnUpdates).length} columns with auto-generated mappings`);
+              // // console.log(`[Schema Generation] Batch updating ${Object.keys(columnUpdates).length} columns with auto-generated mappings`);
               batchUpdateSheetColumns(nextSheet.id, columnUpdates);
               
               // Also mark the sheet as not needing review and set to 'approved' status
@@ -2329,7 +2329,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
             }
           } else {
             // For existing tables with missing schema, log error and skip
-            console.error(`[Sheet Processing] No table schema found for existing table "${nextSheet.mappedName}" - skipping`);
+            // // console.error(`[Sheet Processing] No table schema found for existing table "${nextSheet.mappedName}" - skipping`);
             // Mark as processed even though we skipped it (no valid table schema)
             processedSheets.current.add(nextSheet.id);
             // Schedule next sheet
@@ -2352,7 +2352,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
 
           // Add extra safety check for tableSchema to ensure it exists and has columns
           if (!tableSchema || !tableSchema.columns || !Array.isArray(tableSchema.columns)) {
-            console.error(`[Sheet Processing] Invalid schema for "${nextSheet.mappedName}" after processing - creating empty schema`);
+            // // console.error(`[Sheet Processing] Invalid schema for "${nextSheet.mappedName}" after processing - creating empty schema`);
             tableSchema = {
               name: nextSheet.mappedName,
               columns: []
@@ -2381,9 +2381,9 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           });
           
           // Log the processed fields for debugging
-          console.log(`[Sheet Processing] Processing ${nextSheet.originalName} with ${dbFields.length} fields:`, 
-            dbFields.map(f => `${f.name}:${f.type}`).join(', ')
-          );
+          // // console.log(`[Sheet Processing] Processing ${nextSheet.originalName} with ${dbFields.length} fields:`, 
+          //   dbFields.map(f => `${f.name}:${f.type}`).join(', ')
+          // );
 
           // Generate mappings with progress callback
           const mappingResults = await generateMappings(
@@ -2412,7 +2412,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
                 needsReview = false;
               }
             } catch (err) {
-              console.warn(`Error checking if field is created: ${err}`);
+              // // console.warn(`Error checking if field is created: ${err}`);
             }
             
             // Auto-approve high confidence matches
@@ -2430,7 +2430,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
                   needsReview = false;
                 }
               } catch (err) {
-                console.warn(`Error comparing data types: ${err}. Using default needsReview=true`);
+                // // console.warn(`Error comparing data types: ${err}. Using default needsReview=true`);
                 // Keep the default needsReview = true
               }
             }
@@ -2464,7 +2464,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           // Schedule next sheet with requestAnimationFrame to avoid UI blocking
           requestAnimationFrame(processNextSheet);
         } catch (error) {
-          console.error(`Error processing sheet ${nextSheet.originalName}:`, error);
+          // // console.error(`Error processing sheet ${nextSheet.originalName}:`, error);
           onError(`Failed to process sheet ${nextSheet.originalName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
 
           // Mark as processed to avoid getting stuck
@@ -2580,11 +2580,11 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       const validationError = validateFieldName(name);
       if (validationError) {
         setNewFieldError(validationError);
-        console.error(`[Field Creation] Validation failed for field name "${name}": ${validationError}`);
+        // // console.error(`[Field Creation] Validation failed for field name "${name}": ${validationError}`);
         return; // Don't proceed if validation fails
       }
 
-      console.log(`[Field Creation] Creating new field: ${name} with type: ${dataType}`);
+      // // console.log(`[Field Creation] Creating new field: ${name} with type: ${dataType}`);
 
       // When a user manually creates a field, mark it as already approved
       // No need for manual approval when pressing Enter
@@ -2597,17 +2597,17 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         created: true // Mark with new flag too for redundancy
       });
       
-      console.log(`[Field Creation] Created and auto-approved new field: ${name}`);
+      // // console.log(`[Field Creation] Created and auto-approved new field: ${name}`);
 
       // Add the new field to our component's state tracking for newly created fields
       setNewlyCreatedFields(prev => {
         const tableName = selectedSheet.mappedName;
         if (!tableName) {
-          console.error(`[Field Creation] No table name found for selected sheet, can't update state`);
+          // // console.error(`[Field Creation] No table name found for selected sheet, can't update state`);
           return prev;
         }
 
-        console.log(`[Field Creation] Updating newlyCreatedFields state for table: ${tableName}`);
+        // // console.log(`[Field Creation] Updating newlyCreatedFields state for table: ${tableName}`);
         const tableFields = [...(prev[tableName] || [])];
 
         // Check if field already exists to avoid duplication
@@ -2617,9 +2617,9 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
             type: dataType,
             created: true // Explicitly set created flag
           });
-          console.log(`[Field Creation] Added field "${name}" to newlyCreatedFields state`);
+          // // console.log(`[Field Creation] Added field "${name}" to newlyCreatedFields state`);
         } else {
-          console.log(`[Field Creation] Field "${name}" already exists in state, skipping`);
+          // // console.log(`[Field Creation] Field "${name}" already exists in state, skipping`);
         }
 
         // Return updated state
@@ -2687,10 +2687,10 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
               ...updatedColumns[existingColumnIndex],
               ...columnObject
             };
-            console.log(`[Field Creation] Updated existing column in Zustand store: ${name}`);
+            // // console.log(`[Field Creation] Updated existing column in Zustand store: ${name}`);
           } else {
             updatedColumns.push(columnObject);
-            console.log(`[Field Creation] Added new column to Zustand store: ${name}`);
+            // // console.log(`[Field Creation] Added new column to Zustand store: ${name}`);
           }
           
           // Update the schema with new columns
@@ -2704,12 +2704,12 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
             tableSchemas: updatedSchemas
           });
           
-          console.log(`[Field Creation] Updated Zustand store with new field: ${name}`);
+          // // console.log(`[Field Creation] Updated Zustand store with new field: ${name}`);
         } else {
-          console.warn(`[Field Creation] No schema found for table ${tableName} in Zustand store`);
+          // // console.warn(`[Field Creation] No schema found for table ${tableName} in Zustand store`);
         }
       } catch (err) {
-        console.error(`[Field Creation] Error updating Zustand store:`, err);
+        // // console.error(`[Field Creation] Error updating Zustand store:`, err);
       }
 
       // Clear ALL column matches cache to ensure the newly created field shows up everywhere
@@ -2911,12 +2911,12 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
   
   // Handle auto-create all fields button click - this works across all sheets if allSheets is true
   const handleAutoCreateAllFields = useCallback((allSheets: boolean = false) => {
-    console.log(`Auto-creating all unmapped fields for ${allSheets ? 'ALL SHEETS' : 'current sheet'}`);
+    // // console.log(`Auto-creating all unmapped fields for ${allSheets ? 'ALL SHEETS' : 'current sheet'}`);
     
     const sheetsToProcess = allSheets ? validSheets : [selectedSheet];
     
     if (!sheetsToProcess || sheetsToProcess.length === 0) {
-      console.error('[AutoCreate] No sheets available to process');
+      // // console.error('[AutoCreate] No sheets available to process');
       // Could show a toast notification here
       return;
     }
@@ -2927,11 +2927,11 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     // Process each sheet using the Zustand store's createDynamicSchemaForSheet
     sheetsToProcess.forEach(sheet => {
       if (!sheet || sheet.skip) {
-        console.log(`[AutoCreate] Skipping sheet ${sheet?.id} - marked to skip`);
+        // // console.log(`[AutoCreate] Skipping sheet ${sheet?.id} - marked to skip`);
         return;
       }
       
-      console.log(`[AutoCreate] Processing sheet ${sheet.id} (${sheet.originalName})`);
+      // // console.log(`[AutoCreate] Processing sheet ${sheet.id} (${sheet.originalName})`);
       
       try {
         // Generate the appropriate table name
@@ -2942,19 +2942,19 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         
         // Verify we can create a schema for this sheet
         if (!sheet.columns || sheet.columns.length === 0) {
-          console.error(`[AutoCreate] Cannot create schema for ${sheet.originalName} - no columns available`);
+          // // console.error(`[AutoCreate] Cannot create schema for ${sheet.originalName} - no columns available`);
           return;
         }
         
-        console.log(`[AutoCreate] Creating schema for ${sheet.originalName} -> ${tableName}`);
+        // // console.log(`[AutoCreate] Creating schema for ${sheet.originalName} -> ${tableName}`);
         
         // Get the current state for later validation
         const storeStateBefore = useBatchImportStore.getState();
-        console.log(`[AutoCreate] Schema store before creation:`, 
-          Object.keys(storeStateBefore.tableSchemas).length, 
-          `tables including:`, 
-          Object.keys(storeStateBefore.tableSchemas).slice(0, 5)
-        );
+        // // console.log(`[AutoCreate] Schema store before creation:`, 
+        //   Object.keys(storeStateBefore.tableSchemas).length, 
+        //   `tables including:`, 
+        //   Object.keys(storeStateBefore.tableSchemas).slice(0, 5)
+        // );
         
         // Use the store function to create dynamic schema and update all mappings
         const { createDynamicSchemaForSheet } = storeStateBefore;
@@ -2964,18 +2964,18 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         
         // Get updated state after creation
         const storeStateAfter = useBatchImportStore.getState();
-        console.log(`[AutoCreate] Schema store after creation:`, 
-          Object.keys(storeStateAfter.tableSchemas).length,
-          `tables including:`,
-          Object.keys(storeStateAfter.tableSchemas).slice(0, 5)
-        );
+        // // console.log(`[AutoCreate] Schema store after creation:`, 
+        //   Object.keys(storeStateAfter.tableSchemas).length,
+        //   `tables including:`,
+        //   Object.keys(storeStateAfter.tableSchemas).slice(0, 5)
+        // );
         
         // Verify schema was created
         const schemaCreated = storeStateAfter.tableSchemas[tableName];
         if (!schemaCreated) {
-          console.error(`[AutoCreate] Failed to create schema for ${tableName} - not found in store after creation`);
+          // // console.error(`[AutoCreate] Failed to create schema for ${tableName} - not found in store after creation`);
         } else {
-          console.log(`[AutoCreate] Successfully created schema for ${tableName} with ${schemaCreated.columns?.length || 0} columns`);
+          // // console.log(`[AutoCreate] Successfully created schema for ${tableName} with ${schemaCreated.columns?.length || 0} columns`);
           createdSchemas.push(tableName);
           
           // Also update local component state to track newly created fields
@@ -2999,7 +2999,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
               }
             });
             
-            console.log(`[AutoCreate] Updated component's newlyCreatedFields state with ${updatedFields[tableName].length} fields for ${tableName}`);
+            // // console.log(`[AutoCreate] Updated component's newlyCreatedFields state with ${updatedFields[tableName].length} fields for ${tableName}`);
             return updatedFields;
           });
         }
@@ -3030,19 +3030,19 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           });
           
           if (Object.keys(columnUpdates).length > 0) {
-            console.log(`[AutoCreate] Marking ${Object.keys(columnUpdates).length} columns as newly created`);
+            // // console.log(`[AutoCreate] Marking ${Object.keys(columnUpdates).length} columns as newly created`);
             batchUpdateSheetColumns(sheet.id, columnUpdates);
           }
         }
         
-        console.log(`[AutoCreate] Updated sheet status for ${sheet.originalName}`);
+        // // console.log(`[AutoCreate] Updated sheet status for ${sheet.originalName}`);
       } catch (err) {
-        console.error(`[AutoCreate] Error processing sheet ${sheet.originalName}:`, err);
+        // // console.error(`[AutoCreate] Error processing sheet ${sheet.originalName}:`, err);
       }
     });
     
     // Log summary
-    console.log(`[AutoCreate] Created ${createdSchemas.length} schemas:`, createdSchemas);
+    // // console.log(`[AutoCreate] Created ${createdSchemas.length} schemas:`, createdSchemas);
     
     // Try to refresh schema cache to make sure new tables are recognized
     try {
@@ -3054,7 +3054,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           sheetsProcessed: sheetsToProcess.map(s => s.id)
         }
       }));
-      console.log('[AutoCreate] Schema cache refresh event dispatched');
+      // // console.log('[AutoCreate] Schema cache refresh event dispatched');
       
       // Force a state refresh to trigger re-renders
       setTimeout(() => {
@@ -3073,7 +3073,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         }, 100);
       }, 100);
     } catch (err) {
-      console.warn('[AutoCreate] Schema cache refresh failed:', err);
+      // // console.warn('[AutoCreate] Schema cache refresh failed:', err);
     }
   }, [batchUpdateSheetColumns, updateSheet, selectedSheet, validSheets, setIsProcessing, setNewlyCreatedFields, setFieldSearchText]);
   
@@ -3081,7 +3081,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
   const handleApproveColumn = useCallback((column: ColumnMapping) => {
     if (!selectedSheet) return;
     
-    console.log(`Approving column ${column.originalName}`, column);
+    // // console.log(`Approving column ${column.originalName}`, column);
     
     // Mark the column as not needing review (approved)
     updateSheetColumn(selectedSheet.id, column.originalName, {
@@ -3099,7 +3099,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
       updateSheet(selectedSheet.id, { needsReview: needsReviewUpdated });
     }
     
-    console.log(`Current view mode: ${viewMode}`);
+    // // console.log(`Current view mode: ${viewMode}`);
     
     // Force switching to all view if we're in needsReview and this was the last column
     // This prevents the field from "disappearing" suddenly
@@ -3108,11 +3108,11 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
         col.originalName !== column.originalName && col.needsReview && !col.skip
       ).length;
       
-      console.log(`Remaining columns needing review: ${remainingColumnsNeedingReview}`);
+      // // console.log(`Remaining columns needing review: ${remainingColumnsNeedingReview}`);
       
       // If this was the last column in needsReview view, switch to 'all' view
       if (remainingColumnsNeedingReview === 0) {
-        console.log('Switching to all columns view because no more fields need review');
+        // // console.log('Switching to all columns view because no more fields need review');
         setTimeout(() => setViewMode('all'), 100);
       }
     }
@@ -3152,11 +3152,11 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
     
     // If this was a new table, refresh the schema cache to make it available for auto-approval
     if (isNewTable) {
-      console.log(`Refreshing schema cache for newly created table: ${selectedSheet.mappedName}`);
+      // // console.log(`Refreshing schema cache for newly created table: ${selectedSheet.mappedName}`);
       try {
         // Refresh schema cache
         const result = await refreshSchemaCache();
-        console.log(`Schema cache refresh result:`, result);
+        // // console.log(`Schema cache refresh result:`, result);
         
         // Force refresh of table metadata to include the newly created table
         if (result.success) {
@@ -3168,7 +3168,7 @@ export const ColumnMappingStepVirtualized: React.FC<ColumnMappingStepProps> = ({
           }, 500);
         }
       } catch (error) {
-        console.error(`Error refreshing schema cache:`, error);
+        // // console.error(`Error refreshing schema cache:`, error);
       }
     }
   }, [selectedSheet, updateSheet, batchUpdateSheetColumns]);
@@ -3724,7 +3724,7 @@ const ColumnMappingStepWithErrorBoundary = (props: Props) => {
       refreshSchemaCache();
       window.dispatchEvent(new CustomEvent('schema-cache-refreshed'));
     } catch (error) {
-      console.error('Failed to refresh schema cache after error:', error);
+      // // console.error('Failed to refresh schema cache after error:', error);
     }
   };
 

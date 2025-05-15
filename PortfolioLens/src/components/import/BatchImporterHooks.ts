@@ -21,12 +21,12 @@ export const useTableMetadata = () => {
       setLoading(true);
       setError(null);
 
-      console.log('Loading tables from database...');
+      // // console.log('Loading tables from database...');
       const { data, error } = await supabaseClient
         .rpc('get_user_tables');
 
       if (error) {
-        console.error('RPC Error:', error);
+        // // console.error('RPC Error:', error);
         throw error;
       }
 
@@ -38,10 +38,10 @@ export const useTableMetadata = () => {
         description: table.description
       }));
 
-      console.log('Loaded tables:', processedTables.length);
+      // // console.log('Loaded tables:', processedTables.length);
       setTables(processedTables);
     } catch (err) {
-      console.error('Error loading table metadata:', err);
+      // // console.error('Error loading table metadata:', err);
       setError(err instanceof Error ? err.message : 'Failed to load table metadata');
     } finally {
       setLoading(false);
@@ -56,7 +56,7 @@ export const useTableMetadata = () => {
   // Set up event listener for schema cache refresh events
   useEffect(() => {
     const handleSchemaRefresh = (event: Event) => {
-      console.log('Schema cache refresh event detected, reloading tables...');
+      // // console.log('Schema cache refresh event detected, reloading tables...');
       loadTables();
     };
     
@@ -274,7 +274,7 @@ export const useTableMatcher = (dbTables: any[]) => {
     matches.sort((a, b) => b.confidence - a.confidence);
 
     // For debugging
-    console.log(`Table matches for "${sheetName}":`, matches.slice(0, 3));
+    // // console.log(`Table matches for "${sheetName}":`, matches.slice(0, 3));
 
     // Special case handling for known tables mapping to expenses
     if (sheetName === "Servicing Expenses" || sheetName === "Passthrough Expenses") {
@@ -348,12 +348,12 @@ export const useTableMatcher = (dbTables: any[]) => {
     if (!table) {
       table = dbTables.find(t => normalizeName(t.name) === normalizeName(tableName));
       if (table) {
-        console.log(`Found table with normalized name: ${tableName} → ${table.name}`);
+        // // console.log(`Found table with normalized name: ${tableName} → ${table.name}`);
       }
     }
     
     if (!table) {
-      console.log(`No table found for: ${tableName} (with or without ln_ prefix) - treating as new table`);
+      // // console.log(`No table found for: ${tableName} (with or without ln_ prefix) - treating as new table`);
       // If this is a new table but we don't have schema info, we'll infer column mappings
       if (!isCreatingNewTable) {
         return [];
@@ -513,7 +513,7 @@ export const useMappingTemplates = () => {
       
       setTemplates(data || []);
     } catch (err) {
-      console.error('Error loading mapping templates:', err);
+      // // console.error('Error loading mapping templates:', err);
       setError(err instanceof Error ? err.message : 'Failed to load templates');
     } finally {
       setLoading(false);
@@ -541,7 +541,7 @@ export const useMappingTemplates = () => {
       
       return data;
     } catch (err) {
-      console.error('Error saving mapping template:', err);
+      // // console.error('Error saving mapping template:', err);
       setError(err instanceof Error ? err.message : 'Failed to save template');
       throw err;
     } finally {
@@ -614,7 +614,7 @@ export const useBatchImport = () => {
       
       return true;
     } catch (err) {
-      console.error('Error executing import:', err);
+      // // console.error('Error executing import:', err);
       setError(err instanceof Error ? err.message : 'Failed to import data');
       
       // Update progress to failed state
