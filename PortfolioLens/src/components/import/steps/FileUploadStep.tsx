@@ -2,7 +2,7 @@
  * File Upload Step component
  * First step in the import wizard
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -20,12 +20,15 @@ import {
   SelectChangeEvent,
   Button,
   Paper,
-  Grid
+  Grid,
+  Snackbar
 } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { useBatchImportStore } from '../../../store/batchImportStore';
 import FileUploader from '../FileUploader';
 import { useMappingTemplates } from '../BatchImporterHooks';
+import { findMatchingTemplate } from '../mappingLogic';
 
 interface FileUploadStepProps {
   onHeaderRowChange: (row: number) => void;
@@ -50,8 +53,35 @@ export const FileUploadStep: React.FC<FileUploadStepProps> = ({
   // Load mapping templates
   const { templates, loading: templatesLoading } = useMappingTemplates();
   
-  // State for uploaded files
+  // State for uploaded files and auto-matching
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [autoMatchedTemplate, setAutoMatchedTemplate] = useState<string | null>(null);
+  const [showAutoMatchNotification, setShowAutoMatchNotification] = useState(false);
+  
+  // Auto-match template based on file name pattern
+  useEffect(() => {
+    const autoMatchTemplate = async () => {
+      // Only auto-match if we have a file name and no template is already selected
+      if (fileName && !selectedTemplateId && templates.length > 0) {
+        try {
+          const matchedTemplate = await findMatchingTemplate(fileName, templates);
+          
+          if (matchedTemplate) {
+            // Set the template in the store
+            setSelectedTemplateId(matchedTemplate.id);
+            
+            // Update local state to show notification
+            setAutoMatchedTemplate(matchedTemplate.name);
+            setShowAutoMatchNotification(true);
+          }
+        } catch (error) {
+          console.error('Error auto-matching template:', error);
+        }
+      }
+    };
+    
+    autoMatchTemplate();
+  }, [fileName, selectedTemplateId, templates, setSelectedTemplateId]);
   
   // Handle header row change
   const handleHeaderRowChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,6 +96,13 @@ export const FileUploadStep: React.FC<FileUploadStepProps> = ({
   // Handle template selection
   const handleTemplateChange = (e: SelectChangeEvent) => {
     setSelectedTemplateId(e.target.value || null);
+    // Clear auto-matched notification if user manually changes the template
+    setAutoMatchedTemplate(null);
+  };
+  
+  // Close auto-match notification
+  const handleCloseNotification = () => {
+    setShowAutoMatchNotification(false);
   };
   
   return (
@@ -129,6 +166,13 @@ export const FileUploadStep: React.FC<FileUploadStepProps> = ({
                 {templates.map(template => (
                   <MenuItem key={template.id} value={template.id}>
                     {template.name}
+                    {autoMatchedTemplate === template.name && (
+                      <AutoAwesomeIcon 
+                        fontSize="small" 
+                        color="primary" 
+                        sx={{ ml: 1 }}
+                      />
+                    )}
                   </MenuItem>
                 ))}
               </Select>
@@ -137,6 +181,12 @@ export const FileUploadStep: React.FC<FileUploadStepProps> = ({
             {templates.length === 0 && !templatesLoading && (
               <Alert severity="info" sx={{ mt: 2 }}>
                 No mapping templates available. Templates will be created after successful imports.
+              </Alert>
+            )}
+            
+            {autoMatchedTemplate && selectedTemplateId && (
+              <Alert severity="success" sx={{ mt: 2 }} icon={<AutoAwesomeIcon />}>
+                Template "{autoMatchedTemplate}" automatically matched based on file name pattern.
               </Alert>
             )}
           </Grid>
@@ -190,6 +240,19 @@ export const FileUploadStep: React.FC<FileUploadStepProps> = ({
           {headerRow > 0 && ` Using row ${headerRow} as headers.`}
         </Alert>
       )}
+      
+      {/* Auto-match notification */}
+      <Snackbar
+        open={showAutoMatchNotification}
+        autoHideDuration={6000}
+        onClose={handleCloseNotification}
+        message={`Template "${autoMatchedTemplate}" automatically matched based on file name pattern`}
+        action={
+          <Button color="primary" size="small" onClick={handleCloseNotification}>
+            OK
+          </Button>
+        }
+      />
     </Box>
   );
 };

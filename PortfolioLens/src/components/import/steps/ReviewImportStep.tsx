@@ -2,7 +2,7 @@
  * Review and Import Step component
  * Final step in the import wizard
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -27,7 +27,13 @@ import {
   DialogContent,
   DialogActions,
   CircularProgress,
-  Chip
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Tooltip,
+  IconButton
 } from '@mui/material';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import SaveIcon from '@mui/icons-material/Save';
@@ -35,9 +41,26 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useBatchImportStore, MappingTemplate } from '../../../store/batchImportStore';
 import { useBatchImport, useMappingTemplates } from '../BatchImporterHooks';
+import { supabaseClient } from '../../../utility/supabaseClient';
+import { recordMetadataService } from '../services/RecordMetadataService';
+import { saveTemplate as saveTemplateDirectly } from '../mappingLogic';
 import { v4 as uuidv4 } from 'uuid';
+
+// Servicer interface
+interface Servicer {
+  id: string;
+  name: string;
+  code?: string;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
 
 interface ReviewImportStepProps {
   onError: (error: string | null) => void;
@@ -52,7 +75,11 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
+  const [filePattern, setFilePattern] = useState('');
+  const [servicerId, setServicerId] = useState<string>('');
+  const [servicers, setServicers] = useState<Servicer[]>([]);
   const [confirmationChecked, setConfirmationChecked] = useState(false);
+  const [loadingServicers, setLoadingServicers] = useState(false);
   
   // Access batch import store
   const {
@@ -66,9 +93,35 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
     resetImportResults
   } = useBatchImportStore();
   
+  // Fetch servicers
+  useEffect(() => {
+    const fetchServicers = async () => {
+      try {
+        setLoadingServicers(true);
+        const { data, error } = await supabaseClient
+          .from('servicers')
+          .select('*')
+          .eq('active', true)
+          .order('name');
+          
+        if (error) {
+          throw error;
+        }
+        
+        setServicers(data || []);
+      } catch (err) {
+        onError(err instanceof Error ? err.message : 'Failed to load servicers');
+      } finally {
+        setLoadingServicers(false);
+      }
+    };
+    
+    fetchServicers();
+  }, [onError]);
+  
   // Import functionality
   const { executeImport, loading, error } = useBatchImport();
-  const { saveTemplate, loading: templateSaving } = useMappingTemplates();
+  const { saveTemplate, loading: templateSaving, loadTemplates } = useMappingTemplates();
   
   // Filter sheets that aren't skipped
   const importableSheets = sheets.filter(sheet => !sheet.skip);
@@ -93,6 +146,33 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
     // Execute the import
     const success = await executeImport();
     
+    // Log the import activity if successful
+    if (success) {
+      try {
+        // Get current user
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        
+        if (user) {
+          // Log the import activity
+          await recordMetadataService.logImportActivity({
+            userId: user.id,
+            fileName,
+            templateId: selectedTemplateId || undefined,
+            status: importResults.failedSheets.length > 0 ? 'partial' : 'success',
+            tablesCreated: importResults.createdTables || [],
+            rowsAffected: importResults.importedRows || 0,
+            errorDetails: importResults.failedSheets.length > 0 ? {
+              failedSheets: importResults.failedSheets,
+              errors: importResults.errors
+            } : undefined
+          });
+        }
+      } catch (logError) {
+        // Non-critical error, just log to console
+        console.error('Failed to log import activity:', logError);
+      }
+    }
+    
     if (!success && error) {
       onError(error);
     } else {
@@ -100,10 +180,61 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
     }
   };
   
+  // Helper function to generate a file pattern from a filename
+  const generateFilePattern = (filename: string): string => {
+    if (!filename) return '';
+    
+    // Extract filename components
+    const parts = filename.split('.');
+    const extension = parts.pop() || ''; // Get the file extension
+    const baseName = parts.join('.'); // Reconstruct base name without extension
+    
+    // Try to identify patterns in the filename
+    
+    // Check for date patterns (YYYY-MM-DD, YYYYMMDD, MM-DD-YYYY, etc.)
+    const datePatterns = [
+      /\d{4}-\d{2}-\d{2}/,       // YYYY-MM-DD
+      /\d{2}-\d{2}-\d{4}/,       // MM-DD-YYYY
+      /\d{2}\.\d{2}\.\d{4}/,     // MM.DD.YYYY
+      /\d{8}/                    // YYYYMMDD
+    ];
+    
+    let patternizedName = baseName;
+    
+    // Replace date patterns with wildcards
+    for (const pattern of datePatterns) {
+      if (pattern.test(baseName)) {
+        patternizedName = patternizedName.replace(pattern, '*');
+      }
+    }
+    
+    // Replace numeric sequences that could be report/batch numbers
+    patternizedName = patternizedName.replace(/\d+/g, '*');
+    
+    // If the pattern became too generic (all wildcards), use a more specific pattern
+    if (patternizedName.replace(/[^*]/g, '').length > patternizedName.length / 2) {
+      // Too many wildcards, use a more conservative approach
+      // Just take the first part of the name and add a wildcard
+      const nameWords = baseName.split(/[\s_-]/); // Split by common delimiters
+      if (nameWords.length > 1) {
+        patternizedName = `${nameWords[0]}*`;
+      }
+    }
+    
+    // Return the pattern with the original extension
+    return `${patternizedName}.${extension}`;
+  };
+
   // Handle save template dialog open
   const handleSaveTemplateOpen = () => {
-    setTemplateName(fileName.split('.')[0] || 'Import Template');
+    const baseTemplateName = fileName.split('.')[0] || 'Import Template';
+    setTemplateName(baseTemplateName);
     setTemplateDescription(`Template for ${fileName}`);
+    
+    // Generate and set an automatic file pattern
+    const filePattern = generateFilePattern(fileName);
+    setFilePattern(filePattern);
+    
     setSaveTemplateOpen(true);
   };
   
@@ -115,36 +246,69 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
   // Handle save template
   const handleSaveTemplate = async () => {
     try {
-      // Create template object
-      const template: Partial<MappingTemplate> = {
-        id: uuidv4(),
-        name: templateName,
-        description: templateDescription,
-        headerRow,
-        tablePrefix: tablePrefix || undefined,
-        sheetMappings: sheets.map(sheet => ({
-          id: sheet.id,
-          originalName: sheet.originalName,
-          mappedName: sheet.mappedName,
-          headerRow: sheet.headerRow,
-          skip: sheet.skip,
-          columns: sheet.columns
-        })),
-        createdBy: 'current_user', // This would be the actual user ID
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        version: 1,
-        reviewOnly: false
-      };
+      // Get current user
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
       
-      // Save template
-      await saveTemplate(template);
+      // Prepare sheet mappings JSON
+      const sheetMappingsJson = sheets.map(sheet => ({
+        id: sheet.id,
+        originalName: sheet.originalName,
+        mappedName: sheet.mappedName,
+        headerRow: sheet.headerRow,
+        skip: sheet.skip,
+        columns: sheet.columns
+      }));
+      
+      // First, generate a UUID for the template
+      const templateId = uuidv4();
+      
+      console.log('Saving template with full sheet mappings data:', {
+        templateId,
+        templateName,
+        description: templateDescription,
+        servicerId,
+        filePattern,
+        sheetMappingsCount: sheetMappingsJson.length
+      });
+      
+      // Use the save_mapping_template RPC function
+      const { data, error } = await supabaseClient.rpc('save_mapping_template', {
+        template_name: templateName,
+        template_description: templateDescription,
+        servicer_id: servicerId || null,
+        file_pattern: filePattern || null,
+        header_row: headerRow,
+        table_prefix: tablePrefix || null,
+        sheet_mappings: sheetMappingsJson,
+        user_id: user.id,
+        template_id: templateId
+      });
+      
+      if (error) {
+        console.error('Template save error:', error);
+        throw new Error(`RPC Error: ${error.message || 'Unknown error'}`);
+      }
       
       // Close dialog
       handleSaveTemplateClose();
+      
+      // Refresh templates list
+      if (loadTemplates) {
+        await loadTemplates();
+      }
+      
+      // Success message
+      console.log('Template saved successfully:', templateId);
     } catch (err) {
-      // Handle error
-      onError(err instanceof Error ? err.message : 'Failed to save template');
+      // Handle error with more details
+      console.error('Template save error:', err);
+      onError(err instanceof Error ? 
+        `Failed to save template: ${err.message}` : 
+        'Failed to save template: Unknown error'
+      );
     }
   };
   
@@ -348,28 +512,78 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
       </Stack>
       
       {/* Save Template Dialog */}
-      <Dialog open={saveTemplateOpen} onClose={handleSaveTemplateClose}>
+      <Dialog open={saveTemplateOpen} onClose={handleSaveTemplateClose} maxWidth="md" fullWidth>
         <DialogTitle>Save Import Template</DialogTitle>
         <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Template Name"
-            fullWidth
-            value={templateName}
-            onChange={(e) => setTemplateName(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          
-          <TextField
-            margin="dense"
-            label="Description"
-            fullWidth
-            multiline
-            rows={3}
-            value={templateDescription}
-            onChange={(e) => setTemplateDescription(e.target.value)}
-          />
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <TextField
+                autoFocus
+                margin="dense"
+                label="Template Name"
+                fullWidth
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                margin="dense"
+                label="Description"
+                fullWidth
+                multiline
+                rows={2}
+                value={templateDescription}
+                onChange={(e) => setTemplateDescription(e.target.value)}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                <TextField
+                  margin="dense"
+                  label="File Pattern"
+                  fullWidth
+                  placeholder="e.g., *_loan_report.xlsx"
+                  value={filePattern}
+                  onChange={(e) => setFilePattern(e.target.value)}
+                />
+                <Tooltip 
+                  title="File pattern is used to automatically match templates to uploaded files. Use wildcards like * to match any characters. e.g., monthly_*.xlsx" 
+                  placement="top"
+                  arrow
+                >
+                  <IconButton sx={{ mt: 1 }}>
+                    <HelpOutlineIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth margin="dense">
+                <InputLabel id="servicer-select-label">Servicer</InputLabel>
+                <Select
+                  labelId="servicer-select-label"
+                  id="servicer-select"
+                  value={servicerId}
+                  onChange={(e) => setServicerId(e.target.value)}
+                  label="Servicer"
+                  disabled={loadingServicers}
+                >
+                  <MenuItem value="">
+                    <em>None (All Servicers)</em>
+                  </MenuItem>
+                  {servicers.map((servicer) => (
+                    <MenuItem key={servicer.id} value={servicer.id}>
+                      {servicer.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
         </DialogContent>
         
         <DialogActions>

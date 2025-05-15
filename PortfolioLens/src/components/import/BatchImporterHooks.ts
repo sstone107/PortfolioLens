@@ -526,6 +526,9 @@ export const useMappingTemplates = () => {
       setLoading(true);
       setError(null);
       
+      // Log template for debugging
+      console.log('Saving template:', JSON.stringify(template, null, 2));
+      
       const { data, error } = await supabaseClient
         .from('mapping_templates')
         .insert(template)
@@ -533,6 +536,7 @@ export const useMappingTemplates = () => {
         .single();
       
       if (error) {
+        console.error('Supabase insert error:', error);
         throw error;
       }
       
@@ -541,7 +545,7 @@ export const useMappingTemplates = () => {
       
       return data;
     } catch (err) {
-      // // console.error('Error saving mapping template:', err);
+      console.error('Error saving mapping template:', err);
       setError(err instanceof Error ? err.message : 'Failed to save template');
       throw err;
     } finally {
