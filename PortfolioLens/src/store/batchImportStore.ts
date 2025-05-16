@@ -17,6 +17,8 @@ export interface ColumnMapping {
   createNewValue?: string;
   needsReview?: boolean;
   _isNewlyCreated?: boolean; // Special flag to track newly created fields
+  outOfRangeMapping?: boolean; // Flag for invalid data type
+  customFieldMapping?: boolean; // Flag for custom field name not in standard list
 }
 
 export interface SheetMapping {

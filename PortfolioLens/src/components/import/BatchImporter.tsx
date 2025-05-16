@@ -216,11 +216,181 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
   };
   
   // Get the active step content
+  // State for tracking if a template has been applied
+  const [templateApplied, setTemplateApplied] = useState(false);
+  const [appliedTemplateName, setAppliedTemplateName] = useState<string | null>(null);
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null);
+  const [appliedTemplateVersion, setAppliedTemplateVersion] = useState<number>(1);
+  
+  // Handle template application
+  const handleTemplateApplied = (template: any) => {
+    console.log(`Template "${template.name}" applied, preparing to apply mappings...`);
+    
+    // Apply the template to the current sheets
+    applyTemplateToSheets(template);
+    
+    // Store template information for versioning
+    setTemplateApplied(true);
+    setAppliedTemplateName(template.name || template.templateName);
+    setAppliedTemplateId(template.id || template.templateId);
+    setAppliedTemplateVersion(template.version || 1);
+    
+    // Skip ahead to review step
+    setActiveStep(3); // Jump to Review & Import step
+    
+    // Update progress
+    setProgress({
+      stage: 'review',
+      message: `Template "${template.name}" applied automatically`,
+      percent: 90
+    });
+  };
+  
+  // Apply template mappings to sheets
+  const applyTemplateToSheets = (template: any) => {
+    console.log('Applying template mappings to sheets', template);
+    
+    // The template may have sheetMappings in different formats or properties
+    // Try all possible locations where it might be stored
+    let templateMappings = null;
+    
+    // Debug the template structure to see what we're dealing with
+    console.log('DEBUG: Template object keys:', Object.keys(template));
+    
+    // First, try to extract from standardized format (from our new RPC functions)
+    if (template.sheetMappings !== undefined) {
+      // Special case - check if sheetMappings is a string (JSON)
+      if (typeof template.sheetMappings === 'string') {
+        try {
+          console.log('Found string sheetMappings, attempting to parse as JSON');
+          templateMappings = JSON.parse(template.sheetMappings);
+        } catch (e) {
+          console.error('Failed to parse sheetMappings string as JSON:', e);
+        }
+      } 
+      // Check if sheetMappings is an array
+      else if (Array.isArray(template.sheetMappings)) {
+        templateMappings = template.sheetMappings;
+        console.log('Using sheetMappings array directly');
+      }
+      // Check if sheetMappings is an object with a sheets property that's an array
+      else if (template.sheetMappings?.sheets && Array.isArray(template.sheetMappings.sheets)) {
+        templateMappings = template.sheetMappings.sheets;
+        console.log('Using sheetMappings.sheets array');
+      }
+    }
+    
+    // Try alternative property names if we still don't have mappings
+    if (!templateMappings) {
+      if (typeof template.sheet_mappings === 'string') {
+        try {
+          console.log('Found string sheet_mappings, attempting to parse as JSON');
+          templateMappings = JSON.parse(template.sheet_mappings);
+        } catch (e) {
+          console.error('Failed to parse sheet_mappings string as JSON:', e);
+        }
+      } else if (Array.isArray(template.sheet_mappings)) {
+        templateMappings = template.sheet_mappings;
+        console.log('Using sheet_mappings array');
+      } else if (template.sheet_mappings?.sheets && Array.isArray(template.sheet_mappings.sheets)) {
+        templateMappings = template.sheet_mappings.sheets;
+        console.log('Using sheet_mappings.sheets array');
+      } else if (Array.isArray(template.sheets)) {
+        templateMappings = template.sheets;
+        console.log('Using sheets array directly');
+      }
+    }
+    
+    // Debug the content of templateMappings so far
+    if (templateMappings) {
+      console.log('Found template mappings, first entry sample:', templateMappings[0]);
+    } else {
+      console.error('Failed to find template mappings data in template:', template);
+    }
+    
+    // If still no valid mappings, try to create a basic template mapping from what we have
+    if (!templateMappings && template.templateName) {
+      // This template doesn't have sheet mappings but we can use it as a signal
+      // to skip directly to the review step anyway
+      console.log('Creating synthetic template mapping based on template name:', template.name || template.templateName);
+      
+      // Still proceed with the template application UI flow
+      return;
+    }
+    
+    // No valid mapping found
+    if (!templateMappings) {
+      console.warn('Template has no usable sheet mappings, skipping template application', template);
+      
+      // Show template applied notification but don't actually apply mapping
+      // This way the user sees they're in "template mode" but will need to map manually
+      return;
+    }
+    
+    console.log(`Found ${templateMappings.length} sheet mappings to apply`);
+    
+    // Update sheets with template mappings
+    const currentSheets = [...sheets];
+    const updatedSheets = currentSheets.map(sheet => {
+      // Find matching sheet in template by trying different name formats
+      const matchingTemplateSheet = templateMappings.find(
+        (tm: any) => 
+          // Try case-insensitive match
+          tm.originalName?.toLowerCase() === sheet.originalName?.toLowerCase() ||
+          // Try with spaces removed
+          tm.originalName?.replace(/\s+/g, '') === sheet.originalName?.replace(/\s+/g, '') ||
+          // Try with underscores instead of spaces
+          tm.originalName?.replace(/\s+/g, '_') === sheet.originalName?.replace(/\s+/g, '_') ||
+          // Try original sheet name
+          tm.originalName === sheet.originalName
+      );
+      
+      if (matchingTemplateSheet) {
+        console.log(`Applying template mapping for sheet: ${sheet.originalName} → ${matchingTemplateSheet.mappedName}`);
+        
+        // Apply mapping from template
+        return {
+          ...sheet,
+          mappedName: matchingTemplateSheet.mappedName,
+          approved: true,
+          needsReview: false,
+          status: 'approved',
+          columns: sheet.columns.map(col => {
+            // Find matching column in template
+            const matchingColumn = matchingTemplateSheet.columns?.find(
+              (tc: any) => tc.originalName === col.originalName ||
+                         tc.originalName.toLowerCase() === col.originalName.toLowerCase()
+            );
+            
+            if (matchingColumn) {
+              return {
+                ...col,
+                mappedName: matchingColumn.mappedName,
+                dataType: matchingColumn.dataType,
+                skip: matchingColumn.skip || false,
+                confidence: 100, // High confidence since it comes from template
+                needsReview: false
+              };
+            }
+            
+            return col;
+          })
+        };
+      }
+      
+      return sheet;
+    });
+    
+    // Update sheets in store
+    useBatchImportStore.getState().setSheets(updatedSheets);
+  };
+  
   const getStepContent = (step: number) => {
     switch (step) {
       case 0:
         return (
           <FileUploadStep 
+            onHeaderRowChange={setHeaderRow}
             onFileLoaded={() => {
               setProgress({
                 stage: 'reading',
@@ -235,6 +405,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
                 percent: 50
               });
             }}
+            onTemplateApplied={handleTemplateApplied}
             onError={setError}
           />
         );
@@ -255,6 +426,10 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
       case 3:
         return (
           <ReviewImportStep
+            fromTemplate={templateApplied}
+            templateName={appliedTemplateName}
+            templateId={appliedTemplateId}
+            templateVersion={appliedTemplateVersion}
             onComplete={(results) => {
               setImportResults(results);
               setProgress({
@@ -263,6 +438,11 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
                 percent: 100
               });
               handleComplete();
+            }}
+            onGoBack={() => {
+              // Allow going back to table mapping step
+              setActiveStep(1);
+              setTemplateApplied(false);
             }}
             onError={setError}
           />

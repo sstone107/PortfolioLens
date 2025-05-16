@@ -1,0 +1,98 @@
+diff --git a/src/components/import/dialogs/TemplateEditorDialog.tsx b/src/components/import/dialogs/TemplateEditorDialog.tsx
+index modified b/src/components/import/dialogs/TemplateEditorDialog.tsx
+--- a/src/components/import/dialogs/TemplateEditorDialog.tsx
++++ b/src/components/import/dialogs/TemplateEditorDialog.tsx
+@@ -137,10 +137,12 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+       let sheetMappings: SheetMapping[] = [];
+       let rawMappingsData = template.sheetMappings;
+       
++      console.log('[TemplateEditorDialog] Raw sheetMappings structure:', JSON.stringify(rawMappingsData));
++      
+       // Try multiple parsing strategies
+       const tryParseSheetMappings = () => {
+         // Strategy 1: Direct array use
+-        if (Array.isArray(rawMappingsData)) {
++        if (rawMappingsData && Array.isArray(rawMappingsData)) {
+           console.log('[TemplateEditorDialog] Using direct array data');
+           return rawMappingsData;
+         }
+@@ -148,7 +150,12 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+         // Strategy 2: Object with sheets property
+         if (rawMappingsData && typeof rawMappingsData === 'object' && 'sheets' in rawMappingsData) {
+           console.log('[TemplateEditorDialog] Extracting from sheets property');
+-          return rawMappingsData.sheets;
++          // Check if the sheets property is an array
++          const sheets = rawMappingsData.sheets;
++          if (Array.isArray(sheets)) {
++            return sheets;
++          }
++          return [];
+         }
+         
+         // Strategy 3: String parsing (single JSON)
+@@ -177,6 +184,12 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+           }
+         }
+         
++        // Strategy 5: Direct check in the template for nested sheet_mappings.sheets
++        if (template.sheet_mappings && typeof template.sheet_mappings === 'object' && 'sheets' in template.sheet_mappings) {
++          console.log('[TemplateEditorDialog] Found sheets in sheet_mappings');
++          return Array.isArray(template.sheet_mappings.sheets) ? template.sheet_mappings.sheets : [];
++        }
++        
+         // No successful strategy, return empty array
+         console.warn('[TemplateEditorDialog] Could not parse sheet mappings, returning empty array');
+         return [];
+@@ -186,7 +199,7 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+       sheetMappings = tryParseSheetMappings();
+       
+       // Process each sheet mapping to handle legacy format properties
+-      sheetMappings = sheetMappings.map(sheet => {
++      sheetMappings = (sheetMappings || []).map(sheet => {
+         const sheetMapping = {...sheet};
+         
+         // Handle legacy 'name' property if used in older data formats
+@@ -194,6 +207,11 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+           sheetMapping.originalName = (sheet as any).name;
+         }
+         
++        // Handle originalName not being set
++        if (!sheetMapping.originalName && (sheet as any).sheet_name) {
++          sheetMapping.originalName = (sheet as any).sheet_name;
++        }
++        
+         // Handle legacy 'columnMappings' array if that's used instead of 'columns'
+         if (!Array.isArray(sheetMapping.columns) && Array.isArray((sheet as any).columnMappings)) {
+           sheetMapping.columns = (sheet as any).columnMappings;
+@@ -204,8 +222,17 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+           sheetMapping.columns = [];
+         }
+         
++        // Handle empty columns array by setting default
++        if (sheetMapping.columns.length === 0) {
++          console.warn(`[TemplateEditorDialog] Sheet ${sheetMapping.originalName} has no columns`);
++        }
++        
+         // Normalize columns to ensure skip is boolean
+-        sheetMapping.columns = sheetMapping.columns.map(col => ({
++        sheetMapping.columns = (sheetMapping.columns || []).map(col => ({
++          // Ensure originalName exists
++          originalName: col.originalName || col.name || col.column_name || 'Unknown Column',
++          // Ensure other properties are present
++          mappedName: col.mappedName || col.field_name || null,
+           ...col,
+           skip: typeof col.skip === 'boolean' ? col.skip : false
+         }));
+@@ -213,9 +240,11 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+         return sheetMapping;
+       });
+       
+-      console.log('[TemplateEditorDialog] Processed sheetMappings before setSheets:', sheetMappings);
++      console.log('[TemplateEditorDialog] Processed sheetMappings before setSheets:', 
++        JSON.stringify(sheetMappings));
+       
+       // Set sheets state with processed mappings
++      console.log('[TemplateEditorDialog] Sheet count:', sheetMappings.length);
+       if (sheetMappings.length === 0) {
+         console.warn('[TemplateEditorDialog] No sheets found in template');
+       }

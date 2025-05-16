@@ -489,56 +489,82 @@ export const useTableMatcher = (dbTables: any[]) => {
 };
 
 /**
- * Hook to load and manage mapping templates
+ * Hook to load and manage mapping templates using RPC functions
  */
 export const useMappingTemplates = () => {
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Load templates from database
+  // Load templates from database using RPC
   const loadTemplates = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
+      console.log('Loading mapping templates using RPC...');
+      
+      // Use the RPC function to get templates
       const { data, error } = await supabaseClient
-        .from('mapping_templates')
-        .select('*')
-        .order('createdAt', { ascending: false });
+        .rpc('get_mapping_templates');
       
       if (error) {
+        console.error('RPC error loading templates:', error);
         throw error;
       }
       
+      console.log(`Successfully loaded ${data?.length || 0} templates via RPC`);
       setTemplates(data || []);
     } catch (err) {
-      // // console.error('Error loading mapping templates:', err);
+      console.error('Error loading mapping templates:', err);
       setError(err instanceof Error ? err.message : 'Failed to load templates');
     } finally {
       setLoading(false);
     }
   }, []);
   
-  // Save a template
+  // Save a template using RPC
   const saveTemplate = useCallback(async (template: any) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Log template for debugging
-      console.log('Saving template:', JSON.stringify(template, null, 2));
+      console.log('Saving template via RPC:', JSON.stringify(template, null, 2));
       
-      const { data, error } = await supabaseClient
-        .from('mapping_templates')
-        .insert(template)
-        .select()
-        .single();
+      // Extract the file extension for source file type
+      const sourceFileType = template.sourceFileType || 
+                            (template.filePattern ? template.filePattern.split('.').pop() : 'xlsx');
+      
+      // Use the RPC function to create or update template with source file type parameter
+      const { data, error } = template.id
+        ? await supabaseClient.rpc('update_mapping_template', {
+            p_id: template.id,
+            p_name: template.name,
+            p_description: template.description || '',
+            p_servicer_id: template.servicerId,
+            p_file_pattern: template.filePattern,
+            p_header_row: template.headerRow || 0,
+            p_table_prefix: template.tablePrefix || null,
+            p_sheet_mappings: template.sheetMappings,
+            p_source_file_type: sourceFileType
+          })
+        : await supabaseClient.rpc('create_mapping_template', {
+            p_name: template.name,
+            p_description: template.description || '',
+            p_servicer_id: template.servicerId,
+            p_file_pattern: template.filePattern,
+            p_header_row: template.headerRow || 0,
+            p_table_prefix: template.tablePrefix || null,
+            p_sheet_mappings: template.sheetMappings,
+            p_source_file_type: sourceFileType
+          });
       
       if (error) {
-        console.error('Supabase insert error:', error);
+        console.error('RPC error saving template:', error);
         throw error;
       }
+      
+      console.log('Template saved successfully via RPC:', data);
       
       // Refresh templates
       await loadTemplates();
@@ -553,6 +579,65 @@ export const useMappingTemplates = () => {
     }
   }, [loadTemplates]);
   
+  // Delete a template using RPC
+  const deleteTemplate = useCallback(async (templateId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Deleting template via RPC:', templateId);
+      
+      // Use the RPC function to delete template
+      const { data, error } = await supabaseClient
+        .rpc('delete_mapping_template', {
+          p_id: templateId
+        });
+      
+      if (error) {
+        console.error('RPC error deleting template:', error);
+        throw error;
+      }
+      
+      console.log('Template deleted successfully via RPC:', data);
+      
+      // Refresh templates
+      await loadTemplates();
+      
+      return data;
+    } catch (err) {
+      console.error('Error deleting mapping template:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete template');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [loadTemplates]);
+  
+  // Find a matching template using RPC
+  const findMatchingTemplate = useCallback(async (fileName: string) => {
+    try {
+      console.log('Finding matching template via RPC for:', fileName);
+      
+      // Use the RPC function to find matching template
+      const { data, error } = await supabaseClient
+        .rpc('find_matching_template', {
+          p_file_name: fileName
+        });
+      
+      if (error) {
+        console.error('RPC error finding template:', error);
+        throw error;
+      }
+      
+      console.log('Template match result via RPC:', data);
+      
+      return data;
+    } catch (err) {
+      console.error('Error finding matching template:', err);
+      return null;
+    }
+  }, []);
+  
   // Load templates on mount
   useEffect(() => {
     loadTemplates();
@@ -563,7 +648,9 @@ export const useMappingTemplates = () => {
     loading, 
     error, 
     loadTemplates, 
-    saveTemplate 
+    saveTemplate,
+    deleteTemplate,
+    findMatchingTemplate
   };
 };
 

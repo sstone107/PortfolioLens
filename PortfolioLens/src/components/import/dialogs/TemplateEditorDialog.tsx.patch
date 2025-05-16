@@ -1,0 +1,148 @@
+diff --git a/src/components/import/dialogs/TemplateEditorDialog.tsx b/src/components/import/dialogs/TemplateEditorDialog.tsx
+index modified b/src/components/import/dialogs/TemplateEditorDialog.tsx
+--- a/src/components/import/dialogs/TemplateEditorDialog.tsx
++++ b/src/components/import/dialogs/TemplateEditorDialog.tsx
+@@ -123,67 +123,116 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+   // Reset and initialize form when template changes
+   useEffect(() => {
+     if (template) {
++      console.log('[TemplateEditorDialog] Raw template received:', JSON.parse(JSON.stringify(template))); // Log a deep copy
++      
+       // Store the original template for change detection
+       setOriginalTemplate(JSON.parse(JSON.stringify(template)));
+       
+       // Basic template metadata
+       setName(template.name || '');
+       setDescription(template.description || '');
+       setFilePattern(template.filePattern || '');
+       setServicerId(template.servicerId || '');
+       
+-      // Process sheet mappings
++      // Process sheet mappings with enhanced robustness
+       let sheetMappings: SheetMapping[] = [];
+-      
+-      // Handle different formats of sheet mappings in template
+-      if (template.sheetMappings) {
+-        // If sheetMappings is already an array, use it directly
+-        if (Array.isArray(template.sheetMappings)) {
+-          sheetMappings = template.sheetMappings;
+-        } 
+-        // If sheetMappings is a string, try to parse it
+-        else if (typeof template.sheetMappings === 'string') {
+-          try {
+-            sheetMappings = JSON.parse(template.sheetMappings);
+-          } catch (e) {
+-            console.error('Failed to parse sheetMappings string:', e);
++      let rawMappingsData = template.sheetMappings;
++      
++      // Try multiple parsing strategies
++      const tryParseSheetMappings = () => {
++        // Strategy 1: Direct array use
++        if (Array.isArray(rawMappingsData)) {
++          console.log('[TemplateEditorDialog] Using direct array data');
++          return rawMappingsData;
++        }
++        
++        // Strategy 2: Object with sheets property
++        if (rawMappingsData && typeof rawMappingsData === 'object' && 'sheets' in rawMappingsData) {
++          console.log('[TemplateEditorDialog] Extracting from sheets property');
++          return rawMappingsData.sheets;
++        }
++        
++        // Strategy 3: String parsing (single JSON)
++        if (typeof rawMappingsData === 'string') {
++          try {
++            const parsed = JSON.parse(rawMappingsData);
++            console.log('[TemplateEditorDialog] Parsed from JSON string');
++            
++            // If parsed is an array, use directly
++            if (Array.isArray(parsed)) {
++              return parsed;
++            }
++            
++            // If parsed has sheets property, extract that
++            if (parsed && typeof parsed === 'object' && 'sheets' in parsed) {
++              return parsed.sheets;
++            }
++            
++            return [];
++          } catch (e) {
++            console.error('[TemplateEditorDialog] Failed to parse JSON string:', e);
++            
++            // Strategy 4: Double-encoded JSON (string within string)
++            try {
++              const parsed = JSON.parse(JSON.parse(rawMappingsData));
++              console.log('[TemplateEditorDialog] Parsed from double-encoded JSON string');
++              
++              if (Array.isArray(parsed)) {
++                return parsed;
++              }
++              
++              if (parsed && typeof parsed === 'object' && 'sheets' in parsed) {
++                return parsed.sheets;
++              }
++              
++              return [];
++            } catch (e2) {
++              console.error('[TemplateEditorDialog] Failed double-parse attempt:', e2);
++              return [];
++            }
+           }
+         }
++        
++        // No successful strategy, return empty array
++        console.warn('[TemplateEditorDialog] Could not parse sheet mappings, returning empty array');
++        return [];
++      };
++      
++      // Get the sheet mappings using our parsing strategies
++      sheetMappings = tryParseSheetMappings();
++      
++      // Process each sheet mapping to handle legacy format properties
++      sheetMappings = sheetMappings.map(sheet => {
++        const sheetMapping = {...sheet};
++        
++        // Handle legacy 'name' property if used in older data formats
++        if (!sheetMapping.originalName && (sheet as any).name) {
++          sheetMapping.originalName = (sheet as any).name;
++        }
++        
++        // Handle legacy 'columnMappings' array if that's used instead of 'columns'
++        if (!Array.isArray(sheetMapping.columns) && Array.isArray((sheet as any).columnMappings)) {
++          sheetMapping.columns = (sheet as any).columnMappings;
++        }
++        
++        // Ensure columns exists and is an array
++        if (!Array.isArray(sheetMapping.columns)) {
++          sheetMapping.columns = [];
++        }
++        
++        // Normalize columns to ensure skip is boolean
++        sheetMapping.columns = sheetMapping.columns.map(col => ({
++          ...col,
++          skip: typeof col.skip === 'boolean' ? col.skip : false
++        }));
++        
++        return sheetMapping;
++      });
++      
++      console.log('[TemplateEditorDialog] Processed sheetMappings before setSheets:', sheetMappings);
++      
++      // Set sheets state with processed mappings
++      if (sheetMappings.length === 0) {
++        console.warn('[TemplateEditorDialog] No sheets found in template');
+       }
+-      
+       setSheets(sheetMappings);
+       setSelectedSheetIndex(sheetMappings.length > 0 ? 0 : -1);
+       
+@@ -305,7 +354,7 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
+       const result = await editTemplate(template?.id || '', updatedTemplate);
+       
+       // Record the edit in audit log
+       try {
+-        const { data: { user } } = await supabaseClient.auth.getUser();
++        const { data: { user } } = await supabaseClient.auth.getUser();
+         if (user && hasChanges) {
+           await recordMetadataService.createAuditRecord({
+             userId: user.id,

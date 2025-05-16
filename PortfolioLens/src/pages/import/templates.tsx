@@ -38,6 +38,7 @@ import {
   Tooltip,
   Stack
 } from '@mui/material';
+import TemplateEditorDialog from '../../components/import/dialogs/TemplateEditorDialog';
 import HomeIcon from '@mui/icons-material/Home';
 import FolderIcon from '@mui/icons-material/Folder';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -73,6 +74,8 @@ const TemplateManagerPage: React.FC = () => {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [templateToEdit, setTemplateToEdit] = useState<MappingTemplate | null>(null);
   
   // User ID (would come from auth context in real app)
   const userId = 'current_user';
@@ -200,6 +203,35 @@ const TemplateManagerPage: React.FC = () => {
     }
   };
   
+  // Handle edit template click
+  const handleEditClick = (template: MappingTemplate) => {
+    setTemplateToEdit(template);
+    setEditDialogOpen(true);
+  };
+  
+  // Handle edit template success
+  const handleEditSuccess = (updatedTemplate: MappingTemplate) => {
+    // Update template in the list
+    setTemplates(templates.map(t => 
+      t.id === updatedTemplate.id ? updatedTemplate : t
+    ));
+    
+    // Log edit in audit
+    recordMetadataService.createAuditRecord({
+      userId,
+      action: 'template_update',
+      entityType: 'template',
+      entityId: updatedTemplate.id,
+      entityName: updatedTemplate.name,
+      details: {
+        description: updatedTemplate.description,
+        version: updatedTemplate.version
+      }
+    }).catch(err => console.error('Error logging template update:', err));
+    
+    setSuccess(`Template "${updatedTemplate.name}" updated successfully`);
+  };
+
   // Handle template duplication
   const handleDuplicate = async (template: MappingTemplate) => {
     try {
@@ -407,11 +439,18 @@ const TemplateManagerPage: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Tooltip title="Edit Template">
+                        <Tooltip title="Edit Template (Advanced Mode)">
                           <IconButton
                             size="small"
                             color="primary"
-                            onClick={() => navigate(`/import/templates/edit/${template.id}`)}
+                            onClick={() => handleEditClick(template)}
+                            sx={{
+                              bgcolor: 'primary.light',
+                              '&:hover': {
+                                bgcolor: 'primary.main',
+                                color: 'white'
+                              }
+                            }}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
@@ -581,6 +620,14 @@ const TemplateManagerPage: React.FC = () => {
           {success}
         </Alert>
       </Snackbar>
+      
+      {/* Enhanced Template Editor Dialog */}
+      <TemplateEditorDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        template={templateToEdit}
+        onSuccess={handleEditSuccess}
+      />
     </Container>
   );
 };

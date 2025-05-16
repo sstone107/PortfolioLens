@@ -32,13 +32,21 @@ import { findMatchingTemplate } from '../mappingLogic';
 
 interface FileUploadStepProps {
   onHeaderRowChange: (row: number) => void;
+  onFileLoaded?: () => void;
+  onSheetsLoaded?: (sheets: any[]) => void;
+  onTemplateApplied?: (template: any) => void;
+  onError?: (error: string) => void;
 }
 
 /**
  * Step 1: File Upload component
  */
 export const FileUploadStep: React.FC<FileUploadStepProps> = ({
-  onHeaderRowChange
+  onHeaderRowChange,
+  onFileLoaded,
+  onSheetsLoaded,
+  onTemplateApplied,
+  onError
 }) => {
   // Access batch import store
   const {
@@ -64,24 +72,38 @@ export const FileUploadStep: React.FC<FileUploadStepProps> = ({
       // Only auto-match if we have a file name and no template is already selected
       if (fileName && !selectedTemplateId && templates.length > 0) {
         try {
+          console.log(`Attempting to match template for file: ${fileName}`);
           const matchedTemplate = await findMatchingTemplate(fileName, templates);
           
           if (matchedTemplate) {
+            console.log(`Template automatically matched: ${matchedTemplate.name}`);
+            
             // Set the template in the store
             setSelectedTemplateId(matchedTemplate.id);
             
             // Update local state to show notification
             setAutoMatchedTemplate(matchedTemplate.name);
             setShowAutoMatchNotification(true);
+            
+            // Notify parent that template was applied to possibly skip steps
+            if (onTemplateApplied) {
+              console.log('Calling onTemplateApplied with matched template');
+              onTemplateApplied(matchedTemplate);
+            }
+          } else {
+            console.log('No matching template found for this file');
           }
         } catch (error) {
           console.error('Error auto-matching template:', error);
+          if (onError) {
+            onError('Error matching template: ' + (error instanceof Error ? error.message : String(error)));
+          }
         }
       }
     };
     
     autoMatchTemplate();
-  }, [fileName, selectedTemplateId, templates, setSelectedTemplateId]);
+  }, [fileName, selectedTemplateId, templates, setSelectedTemplateId, onTemplateApplied, onError]);
   
   // Handle header row change
   const handleHeaderRowChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,9 +117,20 @@ export const FileUploadStep: React.FC<FileUploadStepProps> = ({
   
   // Handle template selection
   const handleTemplateChange = (e: SelectChangeEvent) => {
-    setSelectedTemplateId(e.target.value || null);
+    const templateId = e.target.value || null;
+    setSelectedTemplateId(templateId);
+    
     // Clear auto-matched notification if user manually changes the template
     setAutoMatchedTemplate(null);
+    
+    // If user selected a template, notify parent component
+    if (templateId && onTemplateApplied) {
+      const selectedTemplate = templates.find(t => t.id === templateId);
+      if (selectedTemplate) {
+        console.log(`Template manually selected: ${selectedTemplate.name}`);
+        onTemplateApplied(selectedTemplate);
+      }
+    }
   };
   
   // Close auto-match notification
@@ -164,7 +197,7 @@ export const FileUploadStep: React.FC<FileUploadStepProps> = ({
               >
                 <MenuItem value="">None (Auto-detect)</MenuItem>
                 {templates.map(template => (
-                  <MenuItem key={template.id} value={template.id}>
+                  <MenuItem key={template.id || `template-${template.name}`} value={template.id}>
                     {template.name}
                     {autoMatchedTemplate === template.name && (
                       <AutoAwesomeIcon 
