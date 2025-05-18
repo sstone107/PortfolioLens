@@ -230,6 +230,7 @@ const TableMappingRow: React.FC<TableMappingRowProps> = ({
           ) : null}
           <Typography fontWeight={isSelected ? 'bold' : 'normal'} noWrap>
             {sheet.originalName}
+            {sheet.rowCount !== undefined && <span style={{ color: 'gray', fontSize: '0.8em' }}> ({sheet.rowCount} rows)</span>}
           </Typography>
         </Box>
         {sheet.error && (

@@ -37,6 +37,7 @@ export interface SheetMapping {
   wasCreatedNew?: boolean;
   suggestedName?: string;
   createNewValue?: string;
+  rowCount?: number; // Number of rows in the sheet (excluding header)
 }
 
 export interface MappingTemplate {

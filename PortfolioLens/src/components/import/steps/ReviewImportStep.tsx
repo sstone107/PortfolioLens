@@ -160,6 +160,11 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
     return sum + nonSkippedColumns;
   }, 0);
   
+  // Count total rows
+  const totalRows = importableSheets.reduce((sum, sheet) => {
+    return sum + (sheet.rowCount || 0);
+  }, 0);
+  
   // Handle import execution
   const handleExecuteImport = async () => {
     // Reset any previous results
@@ -786,6 +791,10 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
                 <strong>Total Fields:</strong> {totalColumns}
               </Typography>
               
+              <Typography variant="body1" gutterBottom>
+                <strong>Total Rows:</strong> {totalRows}
+              </Typography>
+              
               {needsReviewCount > 0 && (
                 <Alert severity="warning" icon={<WarningIcon />} sx={{ mt: 2 }}>
                   <AlertTitle>Attention Required</AlertTitle>
@@ -811,10 +820,19 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
               </ListItemIcon>
               <ListItemText 
                 primary={sheet.mappedName} 
-                secondary={`Source: ${sheet.originalName} • ${sheet.columns.filter(c => !c.skip).length} fields`}
+                secondary={`Source: ${sheet.originalName} • ${sheet.columns.filter(c => !c.skip).length} fields • Rows: ${sheet.rowCount || 0}`}
               />
               
-              {sheet.needsReview ? (
+              {sheet.rowCount === 0 ? (
+                <Tooltip title="This table has no data rows to import">
+                  <Chip 
+                    label="Empty" 
+                    color="default"
+                    size="small"
+                    icon={<WarningIcon />}
+                  />
+                </Tooltip>
+              ) : sheet.needsReview ? (
                 <Chip 
                   label="Needs Review" 
                   color="warning"

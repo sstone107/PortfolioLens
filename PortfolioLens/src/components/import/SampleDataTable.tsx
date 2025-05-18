@@ -80,6 +80,7 @@ export const SampleDataTable: React.FC<SampleDataTableProps> = ({
         </Typography>
         <Typography variant="caption" color="text.secondary">
           Showing {displayRows.length} of {sheet.firstRows.length} rows
+          {sheet.rowCount !== undefined && ` (Total: ${sheet.rowCount} rows)`}
         </Typography>
       </Box>
       

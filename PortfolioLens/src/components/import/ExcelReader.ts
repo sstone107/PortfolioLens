@@ -70,7 +70,8 @@ export const readExcelFile = async (
           columns: [],
           status: 'failed',
           error: 'Empty sheet',
-          firstRows: []
+          firstRows: [],
+          rowCount: 0 // Empty sheet has 0 data rows
         });
         return;
       }
@@ -112,7 +113,7 @@ export const readExcelFile = async (
         mappedName = `${tablePrefixOptions.prefix}${mappedName}`;
       }
       
-      // Add sheet to result
+      // Add sheet to result with rowCount property
       result.push({
         id: uuidv4(),
         originalName: sheetName,
@@ -123,12 +124,13 @@ export const readExcelFile = async (
         needsReview: true,
         columns,
         status: 'pending',
-        firstRows: previewData
+        firstRows: previewData,
+        rowCount: jsonData.length - 1 // Exclude header row
       });
     } catch (error) {
       console.error(`Error processing sheet ${sheetName}:`, error);
       
-      // Add error sheet to result
+      // Add error sheet to result with rowCount property
       result.push({
         id: uuidv4(),
         originalName: sheetName,
@@ -140,7 +142,8 @@ export const readExcelFile = async (
         columns: [],
         status: 'failed',
         error: `Failed to process sheet: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        firstRows: []
+        firstRows: [],
+        rowCount: 0 // No rows for error sheets
       });
     }
   });

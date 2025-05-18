@@ -37,6 +37,7 @@ const TablePreviewSection: React.FC<TablePreviewSectionProps> = ({
           <Typography variant="subtitle1" gutterBottom>
             Preview: {selectedSheet.originalName}
             {selectedSheet.skip ? ' (Skipped)' : selectedSheet.mappedName === '_create_new_' ? ' → New Table' : ` → ${getDisplayName(selectedSheet.mappedName)}`}
+            {selectedSheet.rowCount !== undefined && ` (${selectedSheet.rowCount} rows)`}
           </Typography>
           
           <SampleDataTable 
@@ -72,6 +73,7 @@ const TablePreviewSection: React.FC<TablePreviewSectionProps> = ({
             <Box key={sheet.id} sx={{ mt: 2 }}>
               <Typography variant="subtitle1" gutterBottom>
                 {sheet.originalName} {sheet.skip ? '(Skipped)' : sheet.mappedName === '_create_new_' ? '→ New Table' : `→ ${getDisplayName(sheet.mappedName)}`}
+                {sheet.rowCount !== undefined && ` (${sheet.rowCount} rows)`}
               </Typography>
               
               <SampleDataTable 
