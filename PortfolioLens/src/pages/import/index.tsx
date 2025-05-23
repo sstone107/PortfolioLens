@@ -24,6 +24,8 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SettingsIcon from '@mui/icons-material/Settings';
 import HistoryIcon from '@mui/icons-material/History';
 import SaveAltIcon from '@mui/icons-material/SaveAlt';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import GoogleDriveIcon from '@mui/icons-material/CloudSync';
 
 /**
  * Import home page component
@@ -66,6 +68,44 @@ const ImportHomePage: React.FC = () => {
       
       {/* Import options */}
       <Grid container spacing={3}>
+        {/* Google Drive Sync */}
+        <Grid item xs={12} md={4}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <GoogleDriveIcon sx={{ fontSize: 60, color: 'primary.main' }} />
+              </Box>
+              <Typography variant="h5" component="h2" gutterBottom align="center">
+                Google Drive Sync
+              </Typography>
+              <Typography color="text.secondary" sx={{ mb: 2 }}>
+                Automatically sync files from Google Drive folders. Configure multiple folders 
+                with custom patterns and templates.
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                Features:
+              </Typography>
+              <Box component="ul" sx={{ pl: 2 }}>
+                <li>Automatic file detection</li>
+                <li>Pattern matching</li>
+                <li>Scheduled syncs</li>
+                <li>Template-based imports</li>
+              </Box>
+            </CardContent>
+            <CardActions>
+              <Button 
+                variant="contained" 
+                fullWidth
+                color="primary"
+                startIcon={<GoogleDriveIcon />}
+                onClick={() => navigate('/import/google-drive-config')}
+              >
+                Configure Google Drive
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+        
         {/* Batch Import */}
         <Grid item xs={12} md={4}>
           <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

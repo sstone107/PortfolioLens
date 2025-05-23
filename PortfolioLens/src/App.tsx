@@ -25,6 +25,7 @@ import BatchImportPage from './pages/import/batch';
 import TemplateManagerPage from './pages/import/templates';
 import ImportHistoryList from './pages/import/history';
 import { ImportStatusPage } from './pages/import/status';
+import { GoogleDriveSyncConfig } from './pages/import/google-drive-config';
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { UserImpersonation } from "./pages/admin/UserImpersonation";
 import { ModuleVisibility } from "./pages/admin/ModuleVisibility";
@@ -406,6 +407,7 @@ function App() {
                     <Route path="templates" element={<TemplateManagerPage />} />
                     <Route path="history" element={<ImportHistoryList />} />
                     <Route path="status/:jobId" element={<ImportStatusPage />} />
+                    <Route path="google-drive-config" element={<GoogleDriveSyncConfig />} />
                   </Route>
                       
                       {/* Admin Module */}
