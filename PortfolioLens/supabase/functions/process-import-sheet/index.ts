@@ -33,13 +33,19 @@ function safeColumnName(name: string): string {
   return safeName.substring(0, 63)
 }
 
-// Coerce value to type
-function coerceValue(value: any, type: string): any {
+// Coerce value to type with enhanced handling
+function coerceValue(value: any, type: string, columnName?: string): any {
   if (value === null || value === undefined || value === '') {
     return null
   }
   
   try {
+    // Handle string preprocessing
+    if (typeof value === 'string') {
+      // Remove surrounding quotes if present
+      value = value.replace(/^["']|["']$/g, '').trim()
+    }
+    
     switch (type.toLowerCase()) {
       case 'text':
       case 'varchar':
@@ -53,6 +59,17 @@ function coerceValue(value: any, type: string): any {
       case 'decimal':
       case 'real':
       case 'double precision':
+        // Handle currency/number formats
+        if (typeof value === 'string') {
+          // Remove currency symbols, commas, and spaces
+          const cleanValue = value.replace(/[$,\s]/g, '')
+          const num = Number(cleanValue)
+          if (isNaN(num)) {
+            console.warn(`Cannot parse "${value}" as number for column ${columnName || 'unknown'}`)
+            return null
+          }
+          return num
+        }
         const num = Number(value)
         return isNaN(num) ? null : num
       
@@ -69,10 +86,22 @@ function coerceValue(value: any, type: string): any {
       case 'timestamptz':
       case 'timestamp with time zone':
       case 'timestamp without time zone':
+        // Handle Excel date serial numbers
+        if (typeof value === 'number' && value > 25569 && value < 100000) {
+          // Excel date (days since 1900-01-01)
+          const excelDate = new Date((value - 25569) * 86400 * 1000)
+          return excelDate.toISOString()
+        }
         const timestamp = new Date(value)
         return isNaN(timestamp.getTime()) ? null : timestamp.toISOString()
       
       case 'date':
+        // Handle Excel date serial numbers
+        if (typeof value === 'number' && value > 25569 && value < 100000) {
+          // Excel date (days since 1900-01-01)
+          const excelDate = new Date((value - 25569) * 86400 * 1000)
+          return excelDate.toISOString().split('T')[0]
+        }
         const date = new Date(value)
         if (isNaN(date.getTime())) return null
         // For date columns, return only the date portion (YYYY-MM-DD)
@@ -93,7 +122,7 @@ function coerceValue(value: any, type: string): any {
         return String(value)
     }
   } catch (error) {
-    console.error(`Error coercing value to ${type}:`, error)
+    console.error(`Error coercing value to ${type} for column ${columnName || 'unknown'}:`, error)
     return null
   }
 }
@@ -104,25 +133,35 @@ async function ensureTableAndColumns(
   columnMappings: Array<{ originalName: string; mappedName: string; dataType: string }>
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // First check if table exists
-    const { count } = await supabaseAdmin
-      .from(tableName)
-      .select('*', { count: 'exact', head: true })
-    
-    // If we get here without error, table exists
-    console.log(`Table ${tableName} exists`)
-    
-  } catch (error) {
-    // Table doesn't exist, create it
-    console.log(`Creating table ${tableName}`)
-    const { data: createResult, error: createError } = await supabaseAdmin.rpc('create_import_table', {
+    // Check if table exists using the proper function
+    const { data: tableExists, error: checkError } = await supabaseAdmin.rpc('table_exists', {
       p_table_name: tableName
     })
     
-    if (createError || !createResult?.success) {
-      console.error('Failed to create table:', createError || createResult?.error)
-      return { success: false, error: createError?.message || createResult?.error }
+    if (checkError) {
+      console.error('Error checking table existence:', checkError)
+      return { success: false, error: checkError.message }
     }
+    
+    if (!tableExists) {
+      // Table doesn't exist, create it
+      console.log(`Creating table ${tableName}`)
+      const { data: createResult, error: createError } = await supabaseAdmin.rpc('create_import_table', {
+        p_table_name: tableName
+      })
+      
+      if (createError || !createResult?.success) {
+        console.error('Failed to create table:', createError || createResult?.error)
+        return { success: false, error: createError?.message || createResult?.error }
+      }
+      
+      console.log(`Table ${tableName} created successfully`)
+    } else {
+      console.log(`Table ${tableName} already exists`)
+    }
+  } catch (error) {
+    console.error('Unexpected error in table check:', error)
+    return { success: false, error: error.message }
   }
   
   // Ensure import tracking columns exist
@@ -162,10 +201,16 @@ async function ensureTableAndColumns(
     }
     
     // Refresh schema cache after adding columns
+    console.log('Refreshing schema cache...')
     const { error: refreshError } = await supabaseAdmin.rpc('refresh_schema_cache')
     if (refreshError) {
       console.warn('Failed to refresh schema cache:', refreshError)
     }
+    
+    // Add a small delay to allow schema cache to update
+    // This is a workaround for PostgREST schema cache lag
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    console.log('Schema cache refresh complete')
   }
   
   return { success: true }
@@ -246,8 +291,10 @@ async function processSheetData(
         
         // Log the first row to see what columns we have
         if (i === 0 && j === 0) {
-          console.log(`Sample row keys for ${sheetName}:`, Object.keys(row).slice(0, 15))
-          console.log(`Found loan numbers:`)
+          console.log(`\n=== Processing First Row of ${sheetName} ===`)
+          console.log(`Row has ${Object.keys(row).length} columns`)
+          console.log(`Sample column names:`, Object.keys(row).slice(0, 15))
+          console.log(`\nLoan number extraction:`)
           console.log(`  Investor: ${investorLoanNumber}`)
           console.log(`  Seller: ${sellerLoanNumber}`)
           console.log(`  Current Servicer: ${currentServicerLoanNumber}`)
@@ -261,12 +308,12 @@ async function processSheetData(
         for (const mapping of columnMappings) {
           const value = row[mapping.originalName]
           const columnName = safeColumnName(mapping.mappedName)
-          insertRow[columnName] = coerceValue(value, mapping.dataType || 'text')
+          insertRow[columnName] = coerceValue(value, mapping.dataType || 'text', columnName)
           
           // If the original mapped name started with a number and was transformed,
           // also check if there's a value under the original name
           if (mapping.mappedName !== columnName && !value && row[mapping.mappedName]) {
-            insertRow[columnName] = coerceValue(row[mapping.mappedName], mapping.dataType || 'text')
+            insertRow[columnName] = coerceValue(row[mapping.mappedName], mapping.dataType || 'text', columnName)
           }
         }
         
@@ -437,8 +484,27 @@ async function processSheetData(
           
           if (insertError) {
             failed += batch.length
-            errors.push(`Batch ${i + 1}-${i + batch.length}: ${insertError.message}`)
-            console.error(`Insert error for ${targetTable}:`, insertError)
+            const errorMsg = insertError.message || insertError.details || JSON.stringify(insertError)
+            errors.push(`Batch ${i + 1}-${i + batch.length}: ${errorMsg}`)
+            console.error(`Insert error for ${targetTable}:`, JSON.stringify(insertError, null, 2))
+            
+            // Log sample of failed data for debugging
+            console.log('\n=== Failed Insert Data Sample ===')
+            console.log(`Failed to insert ${insertData.length} rows into ${targetTable}`)
+            console.log(`Error details: ${errorMsg}`)
+            
+            if (insertData.length > 0) {
+              console.log('\nFirst failed row:')
+              const firstRow = insertData[0]
+              Object.entries(firstRow).slice(0, 10).forEach(([key, value]) => {
+                const valueType = value === null ? 'null' : typeof value
+                console.log(`  ${key}: "${value}" (${valueType})`)
+              })
+              
+              // Log all column names for debugging
+              console.log('\nAll columns in data:')
+              console.log(Object.keys(firstRow))
+            }
           } else {
             processed += batch.length
           }
@@ -577,7 +643,8 @@ serve(async (req) => {
       .eq('id', jobId)
       .single()
     
-    let targetTable = `in_${safeColumnName(sheetName)}`
+    // Always use ln_ prefix for imported tables
+    let targetTable = `ln_${safeColumnName(sheetName)}`
     let columnMappings = []
     
     if (job?.template_id) {
@@ -594,7 +661,41 @@ serve(async (req) => {
         )
         
         if (sheetMapping) {
-          targetTable = sheetMapping.mappedName || targetTable
+          // Check if this sheet should be skipped
+          if (sheetMapping.skip === true) {
+            console.log(`Sheet "${sheetName}" is marked to skip in template`)
+            
+            // Update sheet status to skipped
+            await supabaseAdmin
+              .from('import_sheet_status')
+              .update({
+                status: 'skipped',
+                completed_at: new Date().toISOString(),
+                error_message: 'Sheet marked as skip in template'
+              })
+              .eq('job_id', jobId)
+              .eq('sheet_name', sheetName)
+            
+            return new Response(
+              JSON.stringify({ 
+                success: true, 
+                skipped: true,
+                message: `Sheet "${sheetName}" skipped as per template configuration`
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+          
+          // Use template's mapped name but ensure ln_ prefix
+          if (sheetMapping.mappedName) {
+            // If template already has ln_ prefix, use it as is
+            if (sheetMapping.mappedName.startsWith('ln_')) {
+              targetTable = sheetMapping.mappedName
+            } else {
+              // Otherwise, add ln_ prefix
+              targetTable = `ln_${sheetMapping.mappedName}`
+            }
+          }
           columnMappings = sheetMapping.columns || []
         }
       }
@@ -611,6 +712,63 @@ serve(async (req) => {
     }
     
     console.log(`Target table: ${targetTable}, Column mappings: ${columnMappings.length}`)
+    
+    // Enhanced logging for debugging data issues
+    if (allData.length > 0) {
+      console.log('\n=== Data Analysis for Debugging ===')
+      const firstRow = allData[0]
+      console.log(`First row has ${Object.keys(firstRow).length} columns`)
+      
+      // Check for problematic column names
+      const problematicCols = Object.keys(firstRow).filter(key => 
+        /^\d/.test(key) || // Starts with number
+        key.includes('$') || // Contains currency symbol
+        key.includes(',') || // Contains comma
+        key.includes('"') || // Contains quotes
+        key.includes("'") || // Contains single quotes
+        key.length > 63 // Too long
+      )
+      
+      if (problematicCols.length > 0) {
+        console.log(`⚠️  Found ${problematicCols.length} problematic column names:`)
+        problematicCols.slice(0, 10).forEach(col => {
+          console.log(`  - "${col}" -> "${safeColumnName(col)}"`)
+        })
+      }
+      
+      // Analyze data types in first few rows
+      console.log('\n=== Sample Data Values ===')
+      const sampleSize = Math.min(3, allData.length)
+      for (let i = 0; i < sampleSize; i++) {
+        console.log(`\nRow ${i + 1}:`)
+        const row = allData[i]
+        
+        // Sample a few interesting columns
+        const interestingCols = Object.entries(row).filter(([key, value]) => {
+          return value !== null && value !== '' && (
+            key.toLowerCase().includes('date') ||
+            key.toLowerCase().includes('amount') ||
+            key.toLowerCase().includes('rate') ||
+            key.toLowerCase().includes('number') ||
+            /^\d/.test(key) || // Columns starting with numbers
+            (typeof value === 'string' && (value.includes('$') || value.includes(',')))
+          )
+        }).slice(0, 10)
+        
+        interestingCols.forEach(([key, value]) => {
+          const valueType = value === null ? 'null' : 
+                           value === '' ? 'empty' :
+                           typeof value
+          console.log(`  ${key}: "${value}" (${valueType})`)
+        })
+      }
+      
+      // Check column mappings
+      console.log('\n=== Column Mappings Preview ===')
+      columnMappings.slice(0, 10).forEach(mapping => {
+        console.log(`  ${mapping.originalName} -> ${mapping.mappedName} (${mapping.dataType})`)
+      })
+    }
     
     // Update target table
     await supabaseAdmin
