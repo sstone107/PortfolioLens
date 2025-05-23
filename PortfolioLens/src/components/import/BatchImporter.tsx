@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import MemoryIcon from '@mui/icons-material/Memory';
 import WifiOffIcon from '@mui/icons-material/WifiOff';
+import ErrorIcon from '@mui/icons-material/Error';
 import { useBatchImportStore } from '../../store/batchImportStore';
 import FileUploadStep from './steps/FileUploadStep';
 import TableMappingStepVirtualized from './steps/TableMappingStepVirtualized';
@@ -26,6 +27,7 @@ import ColumnMappingStepVirtualized from './steps/ColumnMappingStepVirtualized';
 import ReviewImportStep from './steps/ReviewImportStep';
 import { normalizeTableName } from './utils/stringUtils';
 import { clearSimilarityCaches } from './services/SimilarityService';
+import { checkEdgeFunctionHealth } from './utils/edgeFunctionHealthCheck';
 
 // Step definitions
 const steps = [
@@ -51,6 +53,15 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
   const [activeStep, setActiveStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [clientSideProcessing, setClientSideProcessing] = useState(false);
+  
+  // Edge Function health check
+  const [edgeFunctionHealth, setEdgeFunctionHealth] = useState<{
+    available: boolean;
+    corsWorking: boolean;
+    endpointAccessible: boolean;
+    authenticated: boolean;
+    error?: string;
+  } | null>(null);
   
   // Performance tracking
   const [memoryWarning, setMemoryWarning] = useState(false);
@@ -86,6 +97,52 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
       clearSimilarityCaches();
     };
   }, [reset]);
+
+  // Check Edge Function health on mount (only once)
+  useEffect(() => {
+    // Skip health check in development if disabled via localStorage
+    if (localStorage.getItem('skipEdgeFunctionHealthCheck') === 'true') {
+      console.log('Edge Function health check skipped (localStorage flag set)');
+      return;
+    }
+
+    const checkHealth = async () => {
+      try {
+        console.log('🔍 Checking Edge Function health...');
+        const health = await checkEdgeFunctionHealth();
+        setEdgeFunctionHealth(health);
+        
+        if (health.available && health.authenticated) {
+          console.log('✅ Edge Function is available and authentication is working');
+        } else if (health.available && !health.authenticated) {
+          console.log('✅ Edge Function is available (authentication will be handled by supabase.functions.invoke)');
+          if (!health.corsWorking) {
+            console.log('ℹ️ CORS preflight failed but this is normal - the function will work via supabase.functions.invoke()');
+          }
+        } else {
+          console.warn('❌ Edge Function health check failed:', health);
+          if (!health.endpointAccessible) {
+            console.error('🚨 Edge Function appears to not be deployed (404 error)');
+          } else if (!health.corsWorking && !health.authenticated) {
+            console.error('🚨 Edge Function is deployed but cannot be accessed (CORS and auth both failed)');
+          }
+        }
+      } catch (error) {
+        console.error('Edge Function health check error:', error);
+        setEdgeFunctionHealth({
+          available: false,
+          corsWorking: false,
+          endpointAccessible: false,
+          authenticated: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    };
+    
+    // Run health check after a short delay to avoid startup noise
+    const timeoutId = setTimeout(checkHealth, 1000);
+    return () => clearTimeout(timeoutId);
+  }, []);
   
   // Monitor memory usage
   useEffect(() => {
@@ -495,6 +552,29 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
               Use Server Processing
             </Button>
           )}
+        </Alert>
+      )}
+      
+      {/* Edge Function availability warning */}
+      {edgeFunctionHealth && !edgeFunctionHealth.available && (
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2 }}
+          icon={<ErrorIcon />}
+        >
+          <Typography variant="body2" component="div">
+            <strong>Import Function Unavailable:</strong> The server-side import processor is not accessible.
+            {!edgeFunctionHealth.endpointAccessible && (
+              <><br />• The import Edge Function is not deployed or responding (404 error)</>
+            )}
+            {!edgeFunctionHealth.corsWorking && (
+              <><br />• CORS configuration is not working properly</>
+            )}
+            {edgeFunctionHealth.error && (
+              <><br />• Error: {edgeFunctionHealth.error}</>
+            )}
+            <br /><strong>Solution:</strong> Deploy the missing Edge Function using the deployment instructions in the project repository.
+          </Typography>
         </Alert>
       )}
       

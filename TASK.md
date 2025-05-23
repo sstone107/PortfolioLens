@@ -1,6 +1,20 @@
 # PortfolioLens Project Tasks
 
 ## Current Tasks (2025-05-07)
+- [ ] [BUG] Supabase Edge Function `process-import-job` returns 404 on POST (2025-05-22)
+  - **Description:** When executing a batch import, the frontend POSTs to `/functions/v1/process-import-job`, but receives a 404 Not Found. The OPTIONS preflight succeeds, but the POST fails. Supabase logs confirm the 404. Root cause is the Edge Function is not deployed or not accessible at the expected endpoint.
+  - **Steps to Reproduce:**
+    1. Upload a file in the batch import workflow.
+    2. Proceed to execute the import.
+    3. Observe network request to `/functions/v1/process-import-job` fails with 404.
+  - **Expected:** The POST request should succeed and trigger the import job.
+  - **Actual:** The POST request returns 404 Not Found.
+  - **Acceptance Criteria:**
+    - The Edge Function is deployed and accessible at the correct endpoint.
+    - Import jobs can be triggered successfully from the frontend.
+    - Add a regression test to verify Edge Function availability.
+  - **Priority:** High (blocks import workflow)
+
 - [x] Initialize project setup and create Task Master structure
 - [ ] Work on Task ID: 2 - Authentication and Permission System
   - [x] Set Up Supabase Auth

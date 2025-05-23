@@ -61,18 +61,23 @@ export class RecordMetadataService {
         throw error;
       }
       
-      // Also create an audit log entry
-      await this.createAuditRecord({
-        userId: activity.userId,
-        action: 'import',
-        entityType: 'sheet',
-        entityName: activity.fileName,
-        details: {
-          status: activity.status,
-          tablesCreated: activity.tablesCreated,
-          rowsAffected: activity.rowsAffected
-        }
-      });
+      // Try to create an audit log entry (non-critical)
+      try {
+        await this.createAuditRecord({
+          userId: activity.userId,
+          action: 'import',
+          entityType: 'sheet',
+          entityName: activity.fileName,
+          details: {
+            status: activity.status,
+            tablesCreated: activity.tablesCreated,
+            rowsAffected: activity.rowsAffected
+          }
+        });
+      } catch (auditError) {
+        console.warn('📝 Audit logging failed (non-critical):', auditError);
+        console.warn('💡 Import will continue successfully without audit record');
+      }
       
       return id;
     } catch (error) {
@@ -89,7 +94,8 @@ export class RecordMetadataService {
       const id = uuidv4();
       const timestamp = new Date();
       
-      const record = {
+      // Schema variant 1: Enhanced schema (Migration 023)
+      const enhancedRecord = {
         id,
         user_id: audit.userId,
         action: audit.action,
@@ -100,19 +106,69 @@ export class RecordMetadataService {
         details: audit.details
       };
       
+      // Schema variant 2: Legacy schema (Migration 001)
+      const legacyRecord = {
+        id,
+        user_id: audit.userId,
+        action: audit.action,
+        table_name: audit.entityType,
+        record_id: audit.entityId,
+        new_values: audit.details,
+        created_at: timestamp.toISOString()
+      };
+      
+      // Schema variant 3: Minimal fallback
+      const minimalRecord = {
+        id,
+        user_id: audit.userId,
+        action: audit.action
+      };
+      
+      // Try enhanced schema first
       const { error } = await supabaseClient
         .from('audit_logs')
-        .insert(record);
+        .insert(enhancedRecord);
       
       if (error) {
-        console.error('Error creating audit record:', error);
-        throw error;
+        // Check if it's a schema cache issue - try legacy schema
+        if (error.code === 'PGRST204' || error.message?.includes('column')) {
+          console.warn('📝 audit_logs enhanced schema failed - trying legacy schema');
+          
+          const { error: legacyError } = await supabaseClient
+            .from('audit_logs')
+            .insert(legacyRecord);
+            
+          if (legacyError) {
+            console.warn('📝 audit_logs legacy schema failed - trying minimal fallback');
+            
+            const { error: minimalError } = await supabaseClient
+              .from('audit_logs')
+              .insert(minimalRecord);
+              
+            if (minimalError) {
+              console.error('Error creating audit record (all schemas failed):', minimalError);
+              console.warn('🚨 Audit logging failed completely - continuing without audit record');
+              console.warn('💡 Try refreshing the schema cache: npm run refresh-schema');
+              return '';
+            } else {
+              console.log('✅ Audit record created successfully with minimal schema');
+            }
+          } else {
+            console.log('✅ Audit record created successfully with legacy schema');
+          }
+        } else {
+          console.error('Error creating audit record:', error);
+          console.warn('🚨 Audit logging failed - continuing without audit record');
+          return '';
+        }
+      } else {
+        console.log('✅ Audit record created successfully with enhanced schema');
       }
       
       return id;
     } catch (error) {
       console.error('Error in createAuditRecord:', error);
-      // Non-critical error, just log it
+      // Non-critical error, just log it and continue
       return '';
     }
   }

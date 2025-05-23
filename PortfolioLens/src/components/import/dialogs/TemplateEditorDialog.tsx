@@ -48,14 +48,15 @@ import UndoIcon from '@mui/icons-material/Undo';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
-import TableChartIcon from '@mui/icons-material/TableChart';
 import InfoIcon from '@mui/icons-material/Info';
+import TableChartIcon from '@mui/icons-material/TableChart';
 import ErrorIcon from '@mui/icons-material/Error';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { MappingTemplate, SheetMapping, ColumnMapping } from '../../../store/batchImportStore';
 import { editTemplate } from '../mappingLogic';
 import { supabaseClient } from '../../../utility/supabaseClient';
 import { recordMetadataService } from '../services/RecordMetadataService';
+import { safeColumnName, needsColumnTransformation } from '../utils/columnNameUtils';
 import { normalizeForDb } from '../utils/stringUtils';
 import { normalizeDataType } from '../services/mappingEngine';
 
@@ -630,6 +631,11 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
                                 return (
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                     <Typography variant="body2" sx={{ mr: 1 }}>{selected}</Typography>
+                                    {needsColumnTransformation(selected) && (
+                                      <Tooltip title={`Will be saved as: ${safeColumnName(selected)}`}>
+                                        <WarningIcon fontSize="small" color="warning" sx={{ ml: 0.5 }} />
+                                      </Tooltip>
+                                    )}
                                     <Tooltip title="Custom field, not in standard list">
                                       <InfoIcon fontSize="small" color="info" />
                                     </Tooltip>
@@ -639,6 +645,19 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
                               
                               if (selected === "") return <em>Select field...</em>;
                               if (selected === "_create_new_") return <em>Create New Field</em>;
+                              
+                              // Check if the selected field needs transformation
+                              if (needsColumnTransformation(selected)) {
+                                return (
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="body2">{selected}</Typography>
+                                    <Tooltip title={`Will be saved as: ${safeColumnName(selected)}`}>
+                                      <WarningIcon fontSize="small" color="warning" sx={{ ml: 0.5 }} />
+                                    </Tooltip>
+                                  </Box>
+                                );
+                              }
+                              
                               return selected;
                             }}
                           >
@@ -668,15 +687,28 @@ const TemplateEditorDialog: React.FC<TemplateEditorDialogProps> = ({
                         
                         {/* New field name input */}
                         {isNewField && (
-                          <TextField
-                            value={column.createNewValue || ''}
-                            onChange={(e) => handleColumnUpdate(selectedSheetIndex, colIndex, 'createNewValue', e.target.value)}
-                            size="small"
-                            error={hasError}
-                            helperText={hasError ? validationErrors[`${selectedSheetIndex}-${colIndex}`] : ''}
-                            placeholder="new_field_name"
-                            sx={{ mt: hasError ? 3 : 0 }}
-                          />
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                            <TextField
+                              value={column.createNewValue || ''}
+                              onChange={(e) => handleColumnUpdate(selectedSheetIndex, colIndex, 'createNewValue', e.target.value)}
+                              size="small"
+                              error={hasError}
+                              helperText={
+                                hasError 
+                                  ? validationErrors[`${selectedSheetIndex}-${colIndex}`] 
+                                  : (column.createNewValue && needsColumnTransformation(column.createNewValue)
+                                      ? `Will be saved as: ${safeColumnName(column.createNewValue)}`
+                                      : '')
+                              }
+                              placeholder="new_field_name"
+                              sx={{ mt: hasError ? 3 : 0 }}
+                            />
+                            {column.createNewValue && needsColumnTransformation(column.createNewValue) && (
+                              <Tooltip title="Column name will be transformed to be PostgreSQL-compatible">
+                                <WarningIcon fontSize="small" color="warning" sx={{ mt: 1 }} />
+                              </Tooltip>
+                            )}
+                          </Box>
                         )}
                       </Box>
                     </TableCell>

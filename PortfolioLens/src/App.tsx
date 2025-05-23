@@ -23,6 +23,8 @@ import { ModuleType } from "./types/adminTypes";
 import ImportHomePage from './pages/import/index';
 import BatchImportPage from './pages/import/batch';
 import TemplateManagerPage from './pages/import/templates';
+import ImportHistoryList from './pages/import/history';
+import { ImportStatusPage } from './pages/import/status';
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { UserImpersonation } from "./pages/admin/UserImpersonation";
 import { ModuleVisibility } from "./pages/admin/ModuleVisibility";
@@ -402,6 +404,8 @@ function App() {
                     <Route index element={<ImportHomePage />} />
                     <Route path="batch" element={<BatchImportPage />} />
                     <Route path="templates" element={<TemplateManagerPage />} />
+                    <Route path="history" element={<ImportHistoryList />} />
+                    <Route path="status/:jobId" element={<ImportStatusPage />} />
                   </Route>
                       
                       {/* Admin Module */}

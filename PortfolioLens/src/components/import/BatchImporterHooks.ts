@@ -662,6 +662,7 @@ export const useBatchImport = () => {
     sheets, 
     setImportResults, 
     fileData, 
+    fileName,
     headerRow, 
     setProgress 
   } = useBatchImportStore();
@@ -670,7 +671,7 @@ export const useBatchImport = () => {
   const [error, setError] = useState<string | null>(null);
   
   // Execute import
-  const executeImport = useCallback(async () => {
+  const executeImport = useCallback(async (templateId?: string, navigate?: (path: string) => void) => {
     if (!fileData) {
       setError('No file data available');
       return false;
@@ -687,8 +688,160 @@ export const useBatchImport = () => {
         percent: 5
       });
       
-      // Process import in worker
-      const results = await importDataInWorker(fileData, sheets, headerRow);
+      // First create an import job record in the database
+      // Get current user
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Create import job entry using RPC
+      // Use the actual file name, not the sheet name
+      const filename = fileName || 'import_file.xlsx';
+      const { data: jobData, error: jobError } = await supabaseClient.rpc('create_import_job', {
+        p_filename: filename,
+        p_bucket_path: `${user.id}/${filename}`,
+        p_template_id: templateId || null
+      });
+      
+      if (jobError) {
+        throw new Error(`Failed to create import job: ${jobError.message}`);
+      }
+      
+      if (!jobData) {
+        throw new Error('Failed to create import job: No data returned');
+      }
+      
+      // --- DIAGNOSTIC: Try to fetch the job immediately from client-side ---
+      console.log(`[DIAGNOSTIC] Attempting to fetch job ${jobData.id} from client-side immediately after RPC.`);
+      const { data: clientFetchedJob, error: clientFetchError } = await supabaseClient
+        .from('import_jobs')
+        .select('*')
+        .eq('id', jobData.id)
+        .single();
+
+      if (clientFetchError) {
+        console.error(`[DIAGNOSTIC] Error fetching job ${jobData.id} from client-side:`, clientFetchError);
+        // Potentially throw or handle, but for now, just log and continue to see if Edge Function fails
+      }
+      if (!clientFetchedJob) {
+        console.warn(`[DIAGNOSTIC] Job ${jobData.id} NOT FOUND from client-side immediately after RPC.`);
+      } else {
+        console.log(`[DIAGNOSTIC] Successfully fetched job ${jobData.id} from client-side:`, clientFetchedJob);
+      }
+      // --- END DIAGNOSTIC ---
+      
+      // Create a Blob from the ArrayBuffer
+      const blob = new Blob([fileData], { type: 'application/octet-stream' });
+      const file = new File([blob], filename, { type: 'application/octet-stream' });
+      
+      // Upload the file to storage
+      const filePath = `${user.id}/${filename}`;
+      const { error: uploadError } = await supabaseClient.storage
+        .from('imports')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+      
+      if (uploadError) {
+        throw new Error(`Failed to upload file: ${uploadError.message}`);
+      }
+      
+      // Update progress
+      setProgress({
+        stage: 'importing',
+        message: 'File uploaded, processing data...',
+        percent: 30
+      });
+      
+      // Call the Edge Function to process the import
+      const { error: functionError } = await supabaseClient.functions.invoke('process-import-job', {
+        body: {
+          job_id: jobData.id,
+          filename: filename,
+          user_id: user.id
+        }
+      });
+      
+      if (functionError) {
+        throw new Error(`Failed to process import: ${functionError.message}`);
+      }
+      
+      // Poll the job status until it's completed or failed
+      let jobStatus = 'pending';
+      let pollCount = 0;
+      const maxPolls = 30; // Maximum number of poll attempts
+      
+      while (jobStatus === 'pending' || jobStatus === 'processing') {
+        // Wait for 2 seconds between polls
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Check job status using RPC
+        const { data: job, error: statusError } = await supabaseClient.rpc('get_import_job_status', {
+          p_job_id: jobData.id
+        });
+        
+        if (statusError) {
+          throw new Error(`Failed to get job status: ${statusError.message}`);
+        }
+        
+        if (!job) {
+          throw new Error('Import job not found');
+        }
+        
+        jobStatus = job.status;
+        
+        // Update progress based on job percent_complete
+        setProgress({
+          stage: jobStatus,
+          message: jobStatus === 'processing' 
+            ? `Processing data (${job.percent_complete || 0}%)...` 
+            : jobStatus === 'completed'
+            ? 'Import completed successfully'
+            : 'Import in progress...',
+          percent: jobStatus === 'completed' 
+            ? 100 
+            : Math.min(30 + ((job.percent_complete || 0) * 0.7), 99) // Scale 0-100% to 30-99%
+        });
+        
+        // Exit if job is completed or failed
+        if (jobStatus === 'completed' || jobStatus === 'error') {
+          break;
+        }
+        
+        // Prevent infinite polling
+        pollCount++;
+        if (pollCount >= maxPolls) {
+          throw new Error('Import is taking longer than expected. Please check the jobs page for status.');
+        }
+      }
+      
+      // Handle job completion
+      if (jobStatus === 'error') {
+        const { data: job } = await supabaseClient
+          .from('import_jobs')
+          .select('*')
+          .eq('id', jobData.id)
+          .single();
+          
+        throw new Error(`Import failed: ${job?.error_message || 'Unknown error'}`);
+      }
+      
+      // Get final job data for results using RPC
+      const { data: finalJob } = await supabaseClient.rpc('get_import_job_status', {
+        p_job_id: jobData.id
+      });
+      
+      // Create results from job data
+      const results = {
+        successSheets: [],
+        failedSheets: [],
+        totalRows: finalJob?.row_counts?.total || 0,
+        importedRows: finalJob?.row_counts?.processed || 0,
+        errors: [],
+        createdTables: finalJob?.row_counts?.tables || []
+      };
       
       // Update results in store
       setImportResults({
@@ -696,16 +849,23 @@ export const useBatchImport = () => {
         ...results
       });
       
-      // Update progress
+      // Update progress to completed
       setProgress({
         stage: 'complete',
         message: 'Import completed successfully',
         percent: 100
       });
       
+      // Redirect to history page if navigate function provided
+      if (navigate) {
+        setTimeout(() => {
+          navigate('/import/history');
+        }, 1500); // Give user time to see success message
+      }
+      
       return true;
     } catch (err) {
-      // // console.error('Error executing import:', err);
+      console.error('Error executing import:', err);
       setError(err instanceof Error ? err.message : 'Failed to import data');
       
       // Update progress to failed state
@@ -719,7 +879,7 @@ export const useBatchImport = () => {
     } finally {
       setLoading(false);
     }
-  }, [fileData, sheets, headerRow, importDataInWorker, setImportResults, setProgress]);
+  }, [fileData, fileName, sheets, headerRow, importDataInWorker, setImportResults, setProgress]);
   
   return { executeImport, loading, error };
 };

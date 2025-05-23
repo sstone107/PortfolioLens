@@ -27,6 +27,7 @@ import {
   DialogContent,
   DialogActions,
   CircularProgress,
+  LinearProgress,
   Chip,
   FormControl,
   InputLabel,
@@ -47,8 +48,10 @@ import { useBatchImportStore, MappingTemplate } from '../../../store/batchImport
 import { useBatchImport, useMappingTemplates } from '../BatchImporterHooks';
 import { supabaseClient } from '../../../utility/supabaseClient';
 import { recordMetadataService } from '../services/RecordMetadataService';
+import { useBackgroundImport } from '../hooks/useBackgroundImport';
 import { saveTemplate as saveTemplateDirectly } from '../mappingLogic';
 import { v4 as uuidv4 } from 'uuid';
+import { useNavigate } from 'react-router-dom';
 
 // Servicer interface
 interface Servicer {
@@ -143,7 +146,9 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
   
   // Import functionality
   const { executeImport, loading, error } = useBatchImport();
+  const { executeBackgroundImport, isImporting } = useBackgroundImport();
   const { saveTemplate, loading: templateSaving, loadTemplates } = useMappingTemplates();
+  const navigate = useNavigate();
   
   // Filter sheets that aren't skipped
   const importableSheets = sheets.filter(sheet => !sheet.skip);
@@ -170,8 +175,24 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
     // Reset any previous results
     resetImportResults();
     
-    // Execute the import
-    const success = await executeImport();
+    try {
+      // Use the new background import
+      const jobId = await executeBackgroundImport({
+        templateId: templateId || undefined
+      });
+      
+      if (jobId) {
+        // Navigate to the status page
+        navigate(`/import/status/${jobId}`);
+      }
+    } catch (error) {
+      console.error('Import failed:', error);
+    }
+    
+    return;
+    
+    // Old code - kept for reference but not executed
+    const success = await executeImport(templateId || undefined, navigate);
     
     // Log the import activity if successful
     if (success) {
@@ -184,7 +205,7 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
           await recordMetadataService.logImportActivity({
             userId: user.id,
             fileName,
-            templateId: selectedTemplateId || undefined,
+            templateId: templateId || undefined,
             status: importResults.failedSheets.length > 0 ? 'partial' : 'success',
             tablesCreated: importResults.createdTables || [],
             rowsAffected: importResults.importedRows || 0,
@@ -922,6 +943,85 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
               </ul>
             </Alert>
           )}
+          
+          {/* Information about Edge Function processing */}
+          <Box mt={2} p={1} bgcolor="rgba(255, 255, 255, 0.2)" borderRadius={1}>
+            <Typography variant="subtitle2" gutterBottom>
+              Background Processing Complete
+            </Typography>
+            <Typography variant="body2">
+              Your data was processed by the server using our Edge Function technology.
+              You can view more details and status information on the Background Jobs page.
+            </Typography>
+          </Box>
+        </Paper>
+      )}
+      
+      {/* Loading state with detailed progress */}
+      {loading && progress.stage === 'importing' && (
+        <Paper sx={{ p: 2, mb: 3, bgcolor: 'info.light' }}>
+          <Typography variant="h6" gutterBottom color="info.contrastText">
+            Import In Progress
+          </Typography>
+          
+          <Box sx={{ mb: 2 }}>
+            <LinearProgress 
+              variant="determinate" 
+              value={progress.percent || 0} 
+              sx={{ mb: 1 }} 
+            />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="info.contrastText">
+                {progress.message || 'Processing...'}
+              </Typography>
+              <Typography variant="body2" color="info.contrastText">
+                {progress.percent || 0}%
+              </Typography>
+            </Box>
+          </Box>
+          
+          <Alert severity="info">
+            <AlertTitle>Background Processing</AlertTitle>
+            Your data is being processed on the server. You can leave this page and return later - the import will continue in the background.
+          </Alert>
+        </Paper>
+      )}
+      
+      {/* Error state with detailed information */}
+      {error && (
+        <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.light' }}>
+          <Typography variant="h6" gutterBottom color="error.contrastText">
+            Import Failed
+          </Typography>
+          
+          <Alert severity="error" sx={{ mb: 2 }}>
+            <AlertTitle>Error Details</AlertTitle>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+              {error}
+            </Typography>
+          </Alert>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+            <Button 
+              variant="outlined" 
+              color="inherit"
+              onClick={() => onError(null)} // Clear error
+            >
+              Dismiss
+            </Button>
+            
+            <Button 
+              variant="contained" 
+              color="error"
+              onClick={() => {
+                // Reset error and try again
+                onError(null);
+                handleExecuteImport();
+              }}
+            >
+              Retry Import
+            </Button>
+          </Box>
         </Paper>
       )}
       
@@ -957,11 +1057,11 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
         <Button
           variant="contained"
           color="primary"
-          startIcon={loading ? <CircularProgress size={20} /> : <PlayArrowIcon />}
+          startIcon={loading || isImporting ? <CircularProgress size={20} /> : <PlayArrowIcon />}
           onClick={handleExecuteImport}
-          disabled={!canImport || loading || progress.stage === 'importing'}
+          disabled={!canImport || loading || isImporting || progress.stage === 'importing'}
         >
-          {loading ? 'Importing...' : 'Execute Import'}
+          {loading || isImporting ? 'Importing...' : 'Execute Import'}
         </Button>
       </Stack>
       

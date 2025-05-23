@@ -87,8 +87,11 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
         }
       });
       
-      // Update store with file info
-      setFile(result.fileName, result.fileType, result.fileSize);
+      // Read file as ArrayBuffer for background import
+      const fileArrayBuffer = await file.arrayBuffer();
+      
+      // Update store with file info and raw data
+      setFile(result.fileName, result.fileType, fileArrayBuffer, result.fileSize);
       
       // Update sheets data
       setSheets(result.sheets);

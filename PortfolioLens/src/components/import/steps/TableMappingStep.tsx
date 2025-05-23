@@ -339,13 +339,13 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
           // Don't apply prefix to existing tables - use the table name as-is
           const safeTableName = normalizeTableName(bestMatch.tableName);
 
-          // // console.log(`Using safe table name: ${bestMatch.tableName} → ${safeTableName}`);
-          // // console.log(`Perfect match auto-mapping debug:`, {
-            sheetName: sheet.originalName,
-            matchedTable: bestMatch.tableName,
-            safeTableName,
-            confidence: bestMatch.confidence
-          });
+          // console.log(`Using safe table name: ${bestMatch.tableName} → ${safeTableName}`);
+          // console.log(`Perfect match auto-mapping debug:`, {
+          //   sheetName: sheet.originalName,
+          //   matchedTable: bestMatch.tableName,
+          //   safeTableName,
+          //   confidence: bestMatch.confidence
+          // });
 
           updateSheet(sheet.id, {
             mappedName: safeTableName,
@@ -936,7 +936,7 @@ export const TableMappingStep: React.FC<TableMappingStepProps> = ({
                 
                 {/* Mapped Table Name */}
                 <TableCell>
-                  {// // console.log(`Rendering table cell for sheet ${sheet.id}, mappedName=${sheet.mappedName}, isNewTable=${sheet.isNewTable}`)}
+                  {/* console.log(`Rendering table cell for sheet ${sheet.id}, mappedName=${sheet.mappedName}, isNewTable=${sheet.isNewTable}`) */}
                   {/* Check if this table is in create new mode using either indicator */}
                   {/* Support both special mappedName and isNewTable flag for compatibility */}
                   {/* MEGA IMPORTANT: If we want to edit a table name we MUST switch to this mode (force with the New button) */}
