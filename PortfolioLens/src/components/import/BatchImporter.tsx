@@ -27,7 +27,7 @@ import ColumnMappingStepVirtualized from './steps/ColumnMappingStepVirtualized';
 import ReviewImportStep from './steps/ReviewImportStep';
 import { normalizeTableName } from './utils/stringUtils';
 import { clearSimilarityCaches } from './services/SimilarityService';
-import { checkEdgeFunctionHealth } from './utils/edgeFunctionHealthCheck';
+import { checkEdgeFunctionHealth, EdgeFunctionHealthResult } from './utils/edgeFunctionHealthCheck';
 
 // Step definitions
 const steps = [
@@ -55,13 +55,7 @@ export const BatchImporter: React.FC<BatchImporterProps> = ({
   const [clientSideProcessing, setClientSideProcessing] = useState(false);
   
   // Edge Function health check
-  const [edgeFunctionHealth, setEdgeFunctionHealth] = useState<{
-    available: boolean;
-    corsWorking: boolean;
-    endpointAccessible: boolean;
-    authenticated: boolean;
-    error?: string;
-  } | null>(null);
+  const [edgeFunctionHealth, setEdgeFunctionHealth] = useState<EdgeFunctionHealthResult | null>(null);
   
   // Performance tracking
   const [memoryWarning, setMemoryWarning] = useState(false);

@@ -30,6 +30,7 @@ import {
   Download as DownloadIcon,
   Visibility as VisibilityIcon,
   Info as InfoIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { supabaseClient } from '../../utility/supabaseClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -102,7 +103,7 @@ const ImportJobStats = ({ record }: { record: any }) => {
   );
 };
 
-const ImportJobActions = ({ record }: { record: any }) => {
+const ImportJobActions = ({ record, onRefresh, identity }: { record: any; onRefresh: () => void; identity?: any }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [templateName, setTemplateName] = useState<string>('');
   const { open } = useNotification();
@@ -129,27 +130,49 @@ const ImportJobActions = ({ record }: { record: any }) => {
     }
   };
   
+  const handleCancelJob = async () => {
+    if (!window.confirm('Are you sure you want to cancel this import?')) return;
+    
+    try {
+      // Import the service
+      const { importManager } = await import('../../services/importManagerService');
+      await importManager.cancelImport(record.id);
+      
+      open?.({ type: 'success', message: 'Import cancelled successfully' });
+      onRefresh();
+    } catch (error) {
+      open?.({ type: 'error', message: `Failed to cancel import: ${error}` });
+    }
+  };
+
   const handleDownloadFile = async () => {
     try {
-      const { data, error } = await supabaseClient
+      // If no bucket_path, cannot download
+      if (!record.bucket_path) {
+        open?.({ type: 'error', message: 'File not available for download' });
+        return;
+      }
+
+      // Create a proper signed URL for download
+      const { data: urlData, error: urlError } = await supabaseClient
         .storage
         .from('imports')
-        .download(record.bucket_path);
+        .createSignedUrl(record.bucket_path, 3600); // 1 hour expiry
       
-      if (error) throw error;
+      if (urlError) throw urlError;
       
-      // Create download link
-      const url = URL.createObjectURL(data);
+      // Open in new window or trigger download
       const a = document.createElement('a');
-      a.href = url;
+      a.href = urlData.signedUrl;
       a.download = record.filename;
+      a.target = '_blank';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
       
-      open?.({ type: 'success', message: 'File downloaded successfully' });
+      open?.({ type: 'success', message: 'File download started' });
     } catch (error) {
+      console.error('Download error:', error);
       open?.({ type: 'error', message: `Failed to download file: ${error}` });
     }
   };
@@ -164,13 +187,26 @@ const ImportJobActions = ({ record }: { record: any }) => {
         >
           <VisibilityIcon fontSize="small" />
         </IconButton>
-        <IconButton
-          size="small"
-          onClick={handleDownloadFile}
-          title="Download Original File"
-        >
-          <DownloadIcon fontSize="small" />
-        </IconButton>
+        {['pending', 'processing'].includes(record.status) && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            onClick={handleCancelJob}
+            startIcon={<CancelIcon />}
+          >
+            Cancel
+          </Button>
+        )}
+        {record.bucket_path && (
+          <IconButton
+            size="small"
+            onClick={handleDownloadFile}
+            title="Download Original File"
+          >
+            <DownloadIcon fontSize="small" />
+          </IconButton>
+        )}
       </Box>
       
       {/* Details Dialog */}
@@ -193,6 +229,14 @@ const ImportJobActions = ({ record }: { record: any }) => {
                 Status
               </Typography>
               <ImportJobStatus record={record} />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="body2" color="text.secondary">
+                Uploaded By
+              </Typography>
+              <Typography variant="body1">
+                {identity?.id === record.user_id ? `You (${identity?.email})` : 'Another User'}
+              </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
               <Typography variant="body2" color="text.secondary">
@@ -299,19 +343,22 @@ export const ImportHistoryList = () => {
   const { open } = useNotification();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userMap, setUserMap] = useState<Record<string, any>>({});
   
   useEffect(() => {
     fetchJobs();
-    
-    // Set up auto-refresh for processing jobs
+  }, []);
+
+  // Set up auto-refresh for processing jobs
+  useEffect(() => {
     const interval = setInterval(() => {
-      if (jobs.some(job => job.status === 'processing')) {
+      if (jobs.some(job => ['processing', 'pending'].includes(job.status))) {
         fetchJobs();
       }
-    }, 5000);
+    }, 3000); // Check every 3 seconds
     
     return () => clearInterval(interval);
-  }, []);
+  }, [jobs]); // Re-create interval when jobs change
   
   const fetchJobs = async () => {
     try {
@@ -322,7 +369,40 @@ export const ImportHistoryList = () => {
       
       if (error) throw error;
       
-      setJobs(data || []);
+      // Check for stale processing jobs
+      const jobs = data || [];
+      const staleJobs = jobs.filter(job => {
+        if (!['processing', 'pending'].includes(job.status)) return false;
+        
+        const createdAt = new Date(job.created_at);
+        const now = new Date();
+        const ageMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60);
+        
+        // Mark as stale if processing for more than 30 minutes
+        return ageMinutes > 30;
+      });
+      
+      // Update stale jobs
+      if (staleJobs.length > 0) {
+        const staleIds = staleJobs.map(j => j.id);
+        await supabaseClient
+          .from('import_jobs')
+          .update({ 
+            status: 'error',
+            error_message: 'Import timed out after 30 minutes'
+          })
+          .in('id', staleIds);
+        
+        // Re-fetch after updating stale jobs
+        const { data: refreshedData } = await supabaseClient
+          .from('import_jobs')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        setJobs(refreshedData || []);
+      } else {
+        setJobs(jobs);
+      }
     } catch (error) {
       open?.({ type: 'error', message: `Failed to fetch import jobs: ${error}` });
     } finally {
@@ -356,6 +436,7 @@ export const ImportHistoryList = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>File Name</TableCell>
+                  <TableCell>Uploaded By</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Progress</TableCell>
                   <TableCell>Statistics</TableCell>
@@ -369,6 +450,11 @@ export const ImportHistoryList = () => {
                   <TableRow key={job.id}>
                     <TableCell>
                       <Typography variant="body2">{job.filename}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {identity?.id === job.user_id ? 'You' : 'Another User'}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       <ImportJobStatus record={job} />
@@ -393,13 +479,13 @@ export const ImportHistoryList = () => {
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
-                      <ImportJobActions record={job} />
+                      <ImportJobActions record={job} onRefresh={fetchJobs} identity={identity} />
                     </TableCell>
                   </TableRow>
                 ))}
                 {jobs.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={8} align="center">
                       <Typography variant="body2" color="text.secondary" sx={{ py: 4 }}>
                         No import jobs found. Start by importing some data.
                       </Typography>

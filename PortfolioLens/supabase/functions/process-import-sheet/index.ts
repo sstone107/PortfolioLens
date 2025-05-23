@@ -556,7 +556,22 @@ serve(async (req) => {
   }
 
   try {
-    const { jobId, sheetName } = await req.json()
+    const body = await req.json()
+    
+    // Handle test request from health check
+    if (body.test === true) {
+      return new Response(
+        JSON.stringify({ status: 'ok', test: true }),
+        { 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json' 
+          } 
+        }
+      )
+    }
+    
+    const { jobId, sheetName } = body
     
     if (!jobId || !sheetName) {
       throw new Error('Missing required parameters: jobId and sheetName')

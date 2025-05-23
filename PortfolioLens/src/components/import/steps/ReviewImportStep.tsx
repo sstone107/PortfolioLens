@@ -48,7 +48,7 @@ import { useBatchImportStore, MappingTemplate } from '../../../store/batchImport
 import { useBatchImport, useMappingTemplates } from '../BatchImporterHooks';
 import { supabaseClient } from '../../../utility/supabaseClient';
 import { recordMetadataService } from '../services/RecordMetadataService';
-import { useBackgroundImport } from '../hooks/useBackgroundImport';
+import { useServerSideImport } from '../hooks/useServerSideImport';
 import { saveTemplate as saveTemplateDirectly } from '../mappingLogic';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
@@ -146,7 +146,7 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
   
   // Import functionality
   const { executeImport, loading, error } = useBatchImport();
-  const { executeBackgroundImport, isImporting } = useBackgroundImport();
+  const { executeServerSideImport, isImporting } = useServerSideImport();
   const { saveTemplate, loading: templateSaving, loadTemplates } = useMappingTemplates();
   const navigate = useNavigate();
   
@@ -176,22 +176,23 @@ export const ReviewImportStep: React.FC<ReviewImportStepProps> = ({
     resetImportResults();
     
     try {
-      // Use the new background import
-      const jobId = await executeBackgroundImport({
+      // Use the new server-side import
+      const jobId = await executeServerSideImport({
         templateId: templateId || undefined
       });
       
       if (jobId) {
-        // Navigate to the status page
+        // Navigate to the status page with the job ID
         navigate(`/import/status/${jobId}`);
       }
     } catch (error) {
       console.error('Import failed:', error);
+      onError(error instanceof Error ? error.message : 'Import failed');
     }
-    
-    return;
-    
-    // Old code - kept for reference but not executed
+  };
+  
+  // This is the old synchronous import code - now removed
+  const handleOldImport = async () => {
     const success = await executeImport(templateId || undefined, navigate);
     
     // Log the import activity if successful

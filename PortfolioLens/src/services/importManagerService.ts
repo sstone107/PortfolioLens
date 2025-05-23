@@ -7,7 +7,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 export interface ImportJob {
   id: string;
   filename: string;
-  status: 'uploading' | 'parsing' | 'processing' | 'completed' | 'failed';
+  status: 'uploading' | 'parsing' | 'processing' | 'completed' | 'error' | 'pending';
   progress: number;
   current_sheet?: string;
   sheets_completed?: number;
@@ -15,6 +15,9 @@ export interface ImportJob {
   created_at: Date;
   estimated_completion?: Date;
   error_message?: string;
+  bucket_path?: string;
+  user_id?: string;
+  completed_at?: Date;
 }
 
 export interface ImportLog {
@@ -249,7 +252,7 @@ class ImportManagerService {
         await supabase
           .from('import_jobs')
           .update({
-            status: 'failed',
+            status: 'error',
             error_message: message.error
           })
           .eq('id', jobId);
@@ -269,7 +272,7 @@ class ImportManagerService {
     await supabase
       .from('import_jobs')
       .update({
-        status: 'failed',
+        status: 'error',
         error_message: 'Worker error: ' + error.message
       })
       .eq('id', jobId);
@@ -378,26 +381,49 @@ class ImportManagerService {
 
   // Cancel import
   async cancelImport(jobId: string) {
-    // Send cancel message to worker
-    const worker = this.workers.get(jobId);
-    if (worker) {
-      worker.postMessage({ type: 'CANCEL', jobId });
+    try {
+      // Send cancel message to worker
+      const worker = this.workers.get(jobId);
+      if (worker) {
+        worker.postMessage({ type: 'CANCEL', jobId });
+      }
+
+      // Get current user to ensure we can only cancel our own jobs
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Update job status - use 'error' instead of 'failed'
+      const { error: updateError } = await supabase
+        .from('import_jobs')
+        .update({
+          status: 'error',
+          error_message: 'Import cancelled by user',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', jobId)
+        .eq('user_id', user.id); // Ensure user owns this job
+
+      if (updateError) {
+        console.error('Failed to update job status:', updateError);
+        throw updateError;
+      }
+
+      // Try to log but don't fail if it doesn't work
+      try {
+        await this.logToJob(jobId, 'warning', 'Import cancelled by user');
+      } catch (logError) {
+        console.warn('Failed to log cancellation:', logError);
+      }
+
+      // Clean up
+      this.cleanupWorker(jobId);
+      this.jobs.delete(jobId);
+    } catch (error) {
+      console.error('Failed to cancel import:', error);
+      throw error;
     }
-
-    // Update job status
-    await supabase
-      .from('import_jobs')
-      .update({
-        status: 'failed',
-        error_message: 'Import cancelled by user'
-      })
-      .eq('id', jobId);
-
-    await this.logToJob(jobId, 'warning', 'Import cancelled by user');
-
-    // Clean up
-    this.cleanupWorker(jobId);
-    this.jobs.delete(jobId);
   }
 
   // Get active jobs
@@ -435,7 +461,7 @@ class ImportManagerService {
 
     for (const [jobId, job] of this.jobs.entries()) {
       if (
-        ['completed', 'failed'].includes(job.status) &&
+        ['completed', 'error'].includes(job.status) &&
         job.created_at < cutoffDate
       ) {
         // Clean up subscriptions
